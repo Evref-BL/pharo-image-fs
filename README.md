@@ -67,6 +67,15 @@ Start the Pharo-side projection endpoint in the image:
 PharoImageFSProjectionHTTPServer startOn: 9013
 ```
 
+Stop it from Pharo with:
+
+```smalltalk
+PharoImageFSProjectionHTTPServer stopOn: 9013
+```
+
+Use `PharoImageFSProjectionHTTPServer stopAll` to stop every projection server
+started through this API.
+
 Then mount the image from a terminal:
 
 ```sh

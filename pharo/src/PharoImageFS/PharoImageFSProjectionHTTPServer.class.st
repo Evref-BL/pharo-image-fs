@@ -6,16 +6,62 @@ Class {
 	#superclass : 'Object',
 	#instVars : [
 		'backend',
-		'server'
+		'server',
+		'port'
+	],
+	#classVars : [
+		'ServersByPort'
 	],
 	#category : 'PharoImageFS',
 	#package : 'PharoImageFS'
 }
 
+{ #category : 'registry' }
+PharoImageFSProjectionHTTPServer class >> register: aProjectionServer on: portNumber [
+
+	self serversByPort at: portNumber put: aProjectionServer.
+	^ aProjectionServer
+]
+
+{ #category : 'registry' }
+PharoImageFSProjectionHTTPServer class >> serverOn: portNumber [
+
+	^ self serversByPort at: portNumber ifAbsent: [ nil ]
+]
+
+{ #category : 'registry' }
+PharoImageFSProjectionHTTPServer class >> serversByPort [
+
+	ServersByPort ifNil: [ ServersByPort := Dictionary new ].
+	^ ServersByPort
+]
+
 { #category : 'instance creation' }
 PharoImageFSProjectionHTTPServer class >> startOn: portNumber [
 
-	^ self new startOn: portNumber
+	self stopOn: portNumber.
+	^ self register: (self new startOn: portNumber) on: portNumber
+]
+
+{ #category : 'registry' }
+PharoImageFSProjectionHTTPServer class >> stopAll [
+
+	self serversByPort values copy do: [ :each | each stop ].
+	self serversByPort removeAll
+]
+
+{ #category : 'registry' }
+PharoImageFSProjectionHTTPServer class >> stopOn: portNumber [
+
+	(self serverOn: portNumber) ifNotNil: [ :projectionServer | projectionServer stop ]
+]
+
+{ #category : 'registry' }
+PharoImageFSProjectionHTTPServer class >> unregister: aProjectionServer [
+
+	aProjectionServer port ifNil: [ ^ self ].
+	(self serverOn: aProjectionServer port) == aProjectionServer ifFalse: [ ^ self ].
+	self serversByPort removeKey: aProjectionServer port ifAbsent: [ ]
 ]
 
 { #category : 'accessing' }
@@ -77,6 +123,12 @@ PharoImageFSProjectionHTTPServer >> operationForRequest: aRequest [
 	^ segments second
 ]
 
+{ #category : 'accessing' }
+PharoImageFSProjectionHTTPServer >> port [
+
+	^ port
+]
+
 { #category : 'private - json' }
 PharoImageFSProjectionHTTPServer >> requestDictionaryFrom: aRequest [
 
@@ -108,7 +160,8 @@ PharoImageFSProjectionHTTPServer >> server [
 { #category : 'running' }
 PharoImageFSProjectionHTTPServer >> startOn: portNumber [
 
-	server ifNotNil: [ server stop ].
+	server ifNotNil: [ self stop ].
+	port := portNumber.
 	server := ZnServer on: portNumber.
 	server onRequestRespond: [ :request | self handleRequest: request ].
 	server start
@@ -129,7 +182,9 @@ PharoImageFSProjectionHTTPServer >> stop [
 
 	server ifNotNil: [
 			server stop.
-			server := nil ]
+			server := nil ].
+	self class unregister: self.
+	port := nil
 ]
 
 { #category : 'private - json' }
