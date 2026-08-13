@@ -1,5 +1,5 @@
 "
-Image-side projection backend for pharo-image-fs. It owns Pharo semantics and answers the narrow filesystem projection protocol used by the Go mount daemon.
+Image-side projection backend for pharo-image-fs. It owns Pharo semantics and answers the narrow filesystem projection protocol used by the Go mount daemon. It has no dependency on MCP-Pharo.
 "
 Class {
 	#name : 'PharoImageFSProjectionBackend',

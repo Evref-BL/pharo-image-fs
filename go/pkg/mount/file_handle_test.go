@@ -54,6 +54,8 @@ func TestFileHandleRejectsReadOnlyWrite(t *testing.T) {
 type fakeClient struct {
 	entries         map[string][]protocol.Entry
 	stats           map[string]protocol.Entry
+	writeResult     protocol.WriteResult
+	writeErr        error
 	writtenPath     string
 	writtenContents []byte
 }
@@ -76,9 +78,13 @@ func (c *fakeClient) Read(context.Context, string) ([]byte, error) {
 }
 
 func (c *fakeClient) Write(_ context.Context, path string, contents []byte) (protocol.WriteResult, error) {
+	if c.writeErr != nil {
+		return protocol.WriteResult{}, c.writeErr
+	}
+
 	c.writtenPath = path
 	c.writtenContents = append([]byte(nil), contents...)
-	return protocol.WriteResult{}, nil
+	return c.writeResult, nil
 }
 
 func dirStreamNames(t *testing.T, stream fs.DirStream) []string {

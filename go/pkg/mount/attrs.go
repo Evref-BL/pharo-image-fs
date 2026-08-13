@@ -23,6 +23,14 @@ func fillAttr(out *fuse.Attr, entry protocol.Entry) {
 	out.Nlink = 1
 }
 
+func writableEntryForPath(projectionPath string, entry protocol.Entry) protocol.Entry {
+	if entry.Kind == protocol.Directory && isWritableProjectionPath(projectionPath) {
+		entry.Writable = true
+	}
+
+	return entry
+}
+
 func stableAttrFor(entry protocol.Entry) fs.StableAttr {
 	return fs.StableAttr{Mode: stableModeFor(entry)}
 }
@@ -43,6 +51,9 @@ func modeForEntry(entry protocol.Entry) uint32 {
 func modeForKind(kind protocol.EntryKind, writable bool) uint32 {
 	switch kind {
 	case protocol.Directory:
+		if writable {
+			return syscall.S_IFDIR | 0o755
+		}
 		return syscall.S_IFDIR | 0o555
 	default:
 		if writable {

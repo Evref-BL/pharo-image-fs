@@ -2,6 +2,7 @@ package mount
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"time"
 
@@ -47,7 +48,9 @@ func Mount(mountPoint string, client protocol.Client, config Config) (*fuse.Serv
 		},
 	}
 
-	return fs.Mount(mountPoint, NewRoot(client), options)
+	root := NewRoot(client)
+	root.logger = log.New(os.Stderr, "pharo-image-fs: ", log.LstdFlags)
+	return fs.Mount(mountPoint, root, options)
 }
 
 func ensureMountPoint(mountPoint string) error {

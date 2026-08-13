@@ -17,8 +17,13 @@ type Node struct {
 	fs.Inode
 	client  protocol.Client
 	overlay *Overlay
+	logger  projectionLogger
 	path    string
 	entry   protocol.Entry
+}
+
+type projectionLogger interface {
+	Printf(format string, args ...any)
 }
 
 var _ fs.InodeEmbedder = (*Node)(nil)
@@ -47,6 +52,7 @@ func NewRoot(client protocol.Client) *Node {
 func (n *Node) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
 	childPath := joinProjectionPath(n.path, name)
 	if entry, ok := n.overlay.Stat(childPath); ok {
+		entry = writableEntryForPath(childPath, entry)
 		fillEntry(out, entry)
 		return n.NewInode(ctx, n.childNode(childPath, entry), stableAttrFor(entry)), 0
 	}
@@ -56,6 +62,7 @@ func (n *Node) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*fs
 		return nil, errnoFor(err)
 	}
 
+	entry = writableEntryForPath(childPath, entry)
 	fillEntry(out, entry)
 	return n.NewInode(ctx, n.childNode(childPath, entry), stableAttrFor(entry)), 0
 }
@@ -73,6 +80,7 @@ func (n *Node) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
 	entries = mergeEntries(entries, n.overlay.EntriesIn(n.path))
 	dirEntries := make([]fuse.DirEntry, 0, len(entries))
 	for _, entry := range entries {
+		entry = writableEntryForPath(joinProjectionPath(n.path, entry.Name), entry)
 		dirEntries = append(dirEntries, fuse.DirEntry{
 			Name: entry.Name,
 			Mode: stableModeFor(entry),
@@ -86,6 +94,7 @@ func (n *Node) Getattr(ctx context.Context, _ fs.FileHandle, out *fuse.AttrOut) 
 	entry := n.entry
 	if n.path != "/" {
 		if overlayEntry, ok := n.overlay.Stat(n.path); ok {
+			overlayEntry = writableEntryForPath(n.path, overlayEntry)
 			fillAttr(&out.Attr, overlayEntry)
 			return 0
 		}
@@ -94,7 +103,7 @@ func (n *Node) Getattr(ctx context.Context, _ fs.FileHandle, out *fuse.AttrOut) 
 		if err != nil {
 			return errnoFor(err)
 		}
-		entry = refreshedEntry
+		entry = writableEntryForPath(n.path, refreshedEntry)
 	}
 
 	fillAttr(&out.Attr, entry)
@@ -130,13 +139,15 @@ func (n *Node) Open(ctx context.Context, flags uint32) (fs.FileHandle, uint32, s
 		contents: contents,
 		writable: writable,
 		dirty:    openFlagsTruncate(flags),
+		flush:    n.writeProjection,
 	}
 
 	return handle, fuse.FOPEN_DIRECT_IO, 0
 }
 
 func (n *Node) Access(_ context.Context, mask uint32) syscall.Errno {
-	if mask&2 != 0 && !n.entry.Writable {
+	entry := writableEntryForPath(n.path, n.entry)
+	if mask&2 != 0 && !entry.Writable {
 		return syscall.EROFS
 	}
 
@@ -208,7 +219,7 @@ func (n *Node) Rename(ctx context.Context, name string, newParent fs.InodeEmbedd
 	}
 
 	if isProjectedTonelFilePath(newPath) {
-		if _, err := n.client.Write(ctx, newPath, contents); err != nil {
+		if err := n.writeProjection(ctx, newPath, contents); err != nil {
 			return errnoFor(err)
 		}
 		n.overlay.Delete(oldPath)
@@ -236,9 +247,40 @@ func (n *Node) childNode(childPath string, entry protocol.Entry) *Node {
 	return &Node{
 		client:  n.client,
 		overlay: n.overlay,
+		logger:  n.logger,
 		path:    childPath,
 		entry:   entry,
 	}
+}
+
+func (n *Node) writeProjection(ctx context.Context, projectionPath string, contents []byte) error {
+	result, err := n.client.Write(ctx, projectionPath, contents)
+	if err != nil {
+		n.logf("write %s failed: %v", projectionPath, err)
+		return err
+	}
+
+	n.logDiagnostics(projectionPath, result.Diagnostics)
+	return nil
+}
+
+func (n *Node) logDiagnostics(projectionPath string, diagnostics []protocol.Diagnostic) {
+	if len(diagnostics) == 0 {
+		return
+	}
+
+	n.logf("write %s returned %d diagnostic(s)", projectionPath, len(diagnostics))
+	for _, diagnostic := range diagnostics {
+		n.logf("diagnostic %s: %s", diagnostic.Rule, diagnosticLineFor(diagnostic))
+	}
+}
+
+func (n *Node) logf(format string, args ...any) {
+	if n.logger == nil {
+		return
+	}
+
+	n.logger.Printf(format, args...)
 }
 
 func mergeEntries(projected []protocol.Entry, overlay []protocol.Entry) []protocol.Entry {
