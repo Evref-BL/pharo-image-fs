@@ -12,52 +12,15 @@ Use this alongside [MCP-Pharo](https://github.com/Evref-BL/MCP) when available:
 better interface for semantic operations such as refactorings, test runs,
 critique runs, and repository operations.
 
-## What the mount exposes
-
-```text
-/
-  tonel/
-    <package>/
-      <Class>.class.st
-      <Class>.extension.st
-
-  critiques/
-    <Class>.json
-    <Class>/
-      <selector>.json
-```
-
-- `/tonel` is the code editing surface. It mirrors Tonel class and extension
-  files from the live image.
-- `/critiques` is read-only diagnostic feedback from the live image.
-
 ## Requirements
 
 - macOS with [macFUSE](https://macfuse.github.io/) installed
 - Go
-- a Pharo image with the `PharoImageFS` package loaded
+- a Pharo image where the `PharoImageFS` package can be loaded
 
-The current daemon uses macFUSE. The architecture keeps the Go mount layer
-separate from Pharo semantics so other backends can be added later.
+## Usage
 
-macFUSE supports two backends:
-
-- the kernel backend, which is the established default and may require enabling
-  the macFUSE kernel extension in macOS Recovery;
-- the FSKit backend, available in recent macFUSE releases on macOS 26+, which
-  runs in user space and avoids the kernel-extension approval path for supported
-  file systems.
-
-Use the FSKit backend on macOS 26+ with:
-
-```sh
-daemon/pharo-image-fs --mount-option backend=fskit --endpoint http://127.0.0.1:9013/projection /tmp/pharo-image-fs
-```
-
-If FSKit is unavailable or does not work for your setup, omit the
-`--mount-option backend=fskit` option to use macFUSE's default backend.
-
-## Load the Pharo backend
+### Load the Pharo backend
 
 Load the project in a Pharo image:
 
@@ -74,7 +37,7 @@ The baseline groups are:
 - `Tests`: backend tests
 - `default`: `Core` and `Tests`
 
-## Build the daemon
+### Build the daemon
 
 From a checkout of this repository:
 
@@ -82,7 +45,7 @@ From a checkout of this repository:
 go -C daemon build -o pharo-image-fs ./cmd/pharo-image-fs
 ```
 
-## Start the projection
+### Start the projection
 
 Start the Pharo-side projection endpoint in the image:
 
@@ -99,13 +62,23 @@ PharoImageFSProjectionHTTPServer stopOn: 9013
 Use `PharoImageFSProjectionHTTPServer stopAll` to stop every projection server
 started through this API.
 
-Then mount the image from a terminal:
+Then mount the image from a terminal. The mountpoint path is created when it is
+missing. If the path already exists, it must be a directory.
 
 ```sh
 daemon/pharo-image-fs --endpoint http://127.0.0.1:9013/projection /tmp/pharo-image-fs
 ```
 
-The mountpoint directory is created automatically when missing.
+Use the same port in both commands. For example, if the Pharo endpoint runs on
+`9023`, mount with:
+
+```sh
+daemon/pharo-image-fs --endpoint http://127.0.0.1:9023/projection /tmp/pharo-image-fs
+```
+
+If the daemon reports `mountpoint is not a directory`, the chosen mountpoint path
+already exists as a non-directory. Choose another path or remove/rename the
+existing file before mounting.
 
 Unmount with the normal macOS unmount command:
 
@@ -119,7 +92,18 @@ If macFUSE reports the mount as busy, use:
 diskutil unmount /tmp/pharo-image-fs
 ```
 
-## Use the mounted image
+macFUSE uses its kernel backend by default. On macOS 26+ with a recent macFUSE,
+you can opt into the FSKit backend, which runs in user space and avoids the
+kernel-extension approval path for supported file systems:
+
+```sh
+daemon/pharo-image-fs --mount-option backend=fskit --endpoint http://127.0.0.1:9013/projection /tmp/pharo-image-fs
+```
+
+If FSKit is unavailable or does not work for your setup, omit the
+`--mount-option backend=fskit` option to use macFUSE's default backend.
+
+### Use the mounted image
 
 Read and search Pharo code with normal file tools:
 
@@ -147,7 +131,7 @@ filesystem operations. macFUSE/go-fuse metadata caches are intentionally short;
 an already-open file handle can still contain the contents read when it was
 opened.
 
-## Supported code operations
+### Supported code operations
 
 `/tonel` accepts full-file writes for:
 
@@ -182,6 +166,25 @@ supported.
 
 `/critiques` is read-only.
 
+## What the mount exposes
+
+```text
+/
+  tonel/
+    <package>/
+      <Class>.class.st
+      <Class>.extension.st
+
+  critiques/
+    <Class>.json
+    <Class>/
+      <selector>.json
+```
+
+- `/tonel` is the code editing surface. It mirrors Tonel class and extension
+  files from the live image.
+- `/critiques` is read-only diagnostic feedback from the live image.
+
 ## Projection protocol
 
 The Go daemon talks to the Pharo endpoint through a narrow JSON protocol:
@@ -196,20 +199,6 @@ The Go daemon talks to the Pharo endpoint through a narrow JSON protocol:
 The daemon does not parse or validate Pharo code. It owns mount lifecycle,
 filesystem callbacks, transport, timeouts, and generic errors. The Pharo backend
 owns source rendering, write transactions, compilation, critiques, and export.
-
-## Project layout
-
-```text
-daemon/
-  cmd/pharo-image-fs/   Go mount daemon entry point
-  pkg/mount/            Filesystem-facing daemon code
-  pkg/protocol/         Daemon-to-Pharo projection protocol
-
-src/
-  BaselineOfPharoImageFS/
-  PharoImageFS/
-  PharoImageFS-Tests/
-```
 
 ## Development goals
 
