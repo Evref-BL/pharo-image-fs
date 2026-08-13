@@ -1,16 +1,63 @@
 package mount
 
-import "fmt"
+import (
+	"fmt"
+	"os"
+	"time"
+
+	"github.com/Evref-BL/pharo-image-fs/go/pkg/protocol"
+	"github.com/hanwen/go-fuse/v2/fs"
+	"github.com/hanwen/go-fuse/v2/fuse"
+)
 
 // Run starts the pharo-image-fs mount daemon.
-//
-// The first implementation target is macFUSE on macOS. The current scaffold
-// intentionally does not bind to a FUSE library yet; the next step is to define
-// the projection protocol and wire a read-only filesystem around it.
 func Run(args []string) error {
-	if len(args) == 0 {
-		return fmt.Errorf("usage: pharo-image-fs <mountpoint>")
+	config, err := ParseConfig(args)
+	if err != nil {
+		return err
 	}
 
-	return fmt.Errorf("mount daemon is not implemented yet")
+	client, err := protocol.NewHTTPClient(config.Endpoint)
+	if err != nil {
+		return err
+	}
+
+	server, err := Mount(config.MountPoint, client, config)
+	if err != nil {
+		return err
+	}
+	server.Wait()
+	return nil
+}
+
+// Mount mounts the Pharo projection filesystem at mountPoint.
+func Mount(mountPoint string, client protocol.Client, config Config) (*fuse.Server, error) {
+	if err := ensureMountPoint(mountPoint); err != nil {
+		return nil, err
+	}
+
+	timeout := time.Second
+	options := &fs.Options{
+		AttrTimeout:     &timeout,
+		EntryTimeout:    &timeout,
+		NegativeTimeout: &timeout,
+		MountOptions: fuse.MountOptions{
+			Name:  "pharo-image-fs",
+			Debug: config.Debug,
+		},
+	}
+
+	return fs.Mount(mountPoint, NewRoot(client), options)
+}
+
+func ensureMountPoint(mountPoint string) error {
+	info, err := os.Stat(mountPoint)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("mountpoint is not a directory: %s", mountPoint)
+	}
+
+	return nil
 }

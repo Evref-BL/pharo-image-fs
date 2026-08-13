@@ -60,3 +60,21 @@ cd go
 go build ./...
 ```
 
+Run the daemon:
+
+```sh
+mkdir -p /tmp/pharo-image-fs
+go run ./cmd/pharo-image-fs --endpoint http://127.0.0.1:9013/projection /tmp/pharo-image-fs
+```
+
+The endpoint is the Pharo-side projection protocol root. The daemon calls these
+JSON endpoints under it:
+
+- `POST /list` with `{ "path": "/tonel" }`
+- `POST /stat` with `{ "path": "/tonel/MCP/MCP.class.st" }`
+- `POST /read` with `{ "path": "/tonel/MCP/MCP.class.st" }`
+- `POST /write` with `{ "path": "/tonel/MCP/MCP.class.st", "text": "..." }`
+
+The first daemon slice supports direct reads and direct full-file writes to
+existing writable projected files. Editor-safe temporary-file create/rename save
+patterns are a separate namespace-mutation step.
