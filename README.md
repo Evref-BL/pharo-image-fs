@@ -28,12 +28,29 @@ compilation, transactional writes, Tonel export/sync, and critique feedback.
 
 ## Requirements
 
-- macOS with macFUSE installed and enabled
+- macOS with [macFUSE](https://macfuse.github.io/) installed
 - Go
 - a Pharo image with the `PharoImageFS` package loaded
 
 The current daemon uses macFUSE. The architecture keeps the Go mount layer
 separate from Pharo semantics so other backends can be added later.
+
+macFUSE supports two backends:
+
+- the kernel backend, which is the established default and may require enabling
+  the macFUSE kernel extension in macOS Recovery;
+- the FSKit backend, available in recent macFUSE releases on macOS 26+, which
+  runs in user space and avoids the kernel-extension approval path for supported
+  file systems.
+
+Use the FSKit backend on macOS 26+ with:
+
+```sh
+./go/pharo-image-fs --mount-option backend=fskit --endpoint http://127.0.0.1:9013/projection /tmp/pharo-image-fs
+```
+
+If FSKit is unavailable or does not work for your setup, omit the
+`--mount-option backend=fskit` option to use macFUSE's default backend.
 
 ## Load the Pharo backend
 

@@ -43,8 +43,9 @@ func Mount(mountPoint string, client protocol.Client, config Config) (*fuse.Serv
 		EntryTimeout:    &timeout,
 		NegativeTimeout: &timeout,
 		MountOptions: fuse.MountOptions{
-			Name:  "pharo-image-fs",
-			Debug: config.Debug,
+			Name:    "pharo-image-fs",
+			Debug:   config.Debug,
+			Options: config.MountOptions,
 		},
 	}
 

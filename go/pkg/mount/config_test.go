@@ -30,6 +30,29 @@ func TestParseConfigAcceptsEndpoint(t *testing.T) {
 	}
 }
 
+func TestParseConfigAcceptsRepeatedMountOptions(t *testing.T) {
+	config, err := ParseConfig([]string{
+		"--mount-option",
+		"backend=fskit",
+		"--mount-option",
+		"volname=Pharo Image",
+		"/tmp/mount",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(config.MountOptions) != 2 {
+		t.Fatalf("unexpected mount options: %#v", config.MountOptions)
+	}
+	if config.MountOptions[0] != "backend=fskit" {
+		t.Fatalf("unexpected first mount option: %s", config.MountOptions[0])
+	}
+	if config.MountOptions[1] != "volname=Pharo Image" {
+		t.Fatalf("unexpected second mount option: %s", config.MountOptions[1])
+	}
+}
+
 func TestEnsureMountPointCreatesMissingDirectory(t *testing.T) {
 	mountPoint := filepath.Join(t.TempDir(), "missing", "mount")
 	if err := ensureMountPoint(mountPoint); err != nil {
