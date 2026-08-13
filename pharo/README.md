@@ -1,7 +1,7 @@
 # Pharo backend
 
-This directory will contain the Pharo packages that implement live-image
-projection semantics for `pharo-image-fs`.
+This directory contains the Pharo packages that implement live-image projection
+semantics for `pharo-image-fs`.
 
 The Pharo backend owns:
 
@@ -19,7 +19,8 @@ Start a local projection endpoint with:
 PharoImageFSProjectionHTTPServer startOn: 9013
 ```
 
-V1 supports full-file writes for existing and new Tonel class files, plus
-existing and new Tonel extension files. It supports direct deletion of projected
-class and extension files. It supports same-package class-file rename and keeps
-extension-file rename unsupported until those image semantics are made safe.
+The backend supports full-file writes for existing and new Tonel class files,
+plus existing and new Tonel extension files. It supports direct deletion of
+projected class and extension files. It supports same-package class-file rename
+and keeps extension-file rename unsupported until those image semantics are made
+safe.

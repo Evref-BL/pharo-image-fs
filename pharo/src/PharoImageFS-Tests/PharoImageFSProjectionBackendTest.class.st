@@ -328,7 +328,7 @@ PharoImageFSProjectionBackendTest >> testRenameExtensionTonelFileSignalsUnsuppor
 		should: [ self newBackend rename: '/tonel/PharoImageFS-Tests/Old.extension.st' to: '/tonel/PharoImageFS-Tests/New.extension.st' ]
 		raise: Error
 		whoseDescriptionIncludes: 'Projection path is not writable yet:'
-		description: 'Extension file rename has no safe V1 semantics.'
+		description: 'Extension file rename is intentionally unsupported.'
 ]
 
 { #category : 'tests' }
