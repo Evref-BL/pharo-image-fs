@@ -18,6 +18,7 @@ type FileHandle struct {
 	contents []byte
 	writable bool
 	dirty    bool
+	flush    func(context.Context, string, []byte) error
 }
 
 var _ fs.FileReader = (*FileHandle)(nil)
@@ -66,12 +67,21 @@ func (h *FileHandle) Flush(ctx context.Context) syscall.Errno {
 		return 0
 	}
 
-	_, err := h.client.Write(ctx, h.path, h.contents)
+	err := h.flushContents(ctx)
 	if err != nil {
 		return errnoFor(err)
 	}
 	h.dirty = false
 	return 0
+}
+
+func (h *FileHandle) flushContents(ctx context.Context) error {
+	if h.flush != nil {
+		return h.flush(ctx, h.path, h.contents)
+	}
+
+	_, err := h.client.Write(ctx, h.path, h.contents)
+	return err
 }
 
 func (h *FileHandle) Setattr(_ context.Context, in *fuse.SetAttrIn, out *fuse.AttrOut) syscall.Errno {

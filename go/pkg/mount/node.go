@@ -2,6 +2,8 @@ package mount
 
 import (
 	"context"
+	"path"
+	"sort"
 	"strings"
 	"syscall"
 
@@ -13,9 +15,10 @@ import (
 // Node is one lazily resolved projected filesystem node.
 type Node struct {
 	fs.Inode
-	client protocol.Client
-	path   string
-	entry  protocol.Entry
+	client  protocol.Client
+	overlay *Overlay
+	path    string
+	entry   protocol.Entry
 }
 
 var _ fs.InodeEmbedder = (*Node)(nil)
@@ -24,12 +27,16 @@ var _ fs.NodeReaddirer = (*Node)(nil)
 var _ fs.NodeGetattrer = (*Node)(nil)
 var _ fs.NodeOpener = (*Node)(nil)
 var _ fs.NodeAccesser = (*Node)(nil)
+var _ fs.NodeCreater = (*Node)(nil)
+var _ fs.NodeUnlinker = (*Node)(nil)
+var _ fs.NodeRenamer = (*Node)(nil)
 
 // NewRoot answers the root node for a projection client.
 func NewRoot(client protocol.Client) *Node {
 	return &Node{
-		client: client,
-		path:   "/",
+		client:  client,
+		overlay: NewOverlay(),
+		path:    "/",
 		entry: protocol.Entry{
 			Name: "/",
 			Kind: protocol.Directory,
@@ -39,17 +46,18 @@ func NewRoot(client protocol.Client) *Node {
 
 func (n *Node) Lookup(ctx context.Context, name string, out *fuse.EntryOut) (*fs.Inode, syscall.Errno) {
 	childPath := joinProjectionPath(n.path, name)
+	if entry, ok := n.overlay.Stat(childPath); ok {
+		fillEntry(out, entry)
+		return n.NewInode(ctx, n.childNode(childPath, entry), stableAttrFor(entry)), 0
+	}
+
 	entry, err := n.client.Stat(ctx, childPath)
 	if err != nil {
 		return nil, errnoFor(err)
 	}
 
 	fillEntry(out, entry)
-	return n.NewInode(ctx, &Node{
-		client: n.client,
-		path:   childPath,
-		entry:  entry,
-	}, stableAttrFor(entry)), 0
+	return n.NewInode(ctx, n.childNode(childPath, entry), stableAttrFor(entry)), 0
 }
 
 func (n *Node) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
@@ -62,6 +70,7 @@ func (n *Node) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
 		return nil, errnoFor(err)
 	}
 
+	entries = mergeEntries(entries, n.overlay.EntriesIn(n.path))
 	dirEntries := make([]fuse.DirEntry, 0, len(entries))
 	for _, entry := range entries {
 		dirEntries = append(dirEntries, fuse.DirEntry{
@@ -76,6 +85,11 @@ func (n *Node) Readdir(ctx context.Context) (fs.DirStream, syscall.Errno) {
 func (n *Node) Getattr(ctx context.Context, _ fs.FileHandle, out *fuse.AttrOut) syscall.Errno {
 	entry := n.entry
 	if n.path != "/" {
+		if overlayEntry, ok := n.overlay.Stat(n.path); ok {
+			fillAttr(&out.Attr, overlayEntry)
+			return 0
+		}
+
 		refreshedEntry, err := n.client.Stat(ctx, n.path)
 		if err != nil {
 			return errnoFor(err)
@@ -99,11 +113,15 @@ func (n *Node) Open(ctx context.Context, flags uint32) (fs.FileHandle, uint32, s
 
 	contents := []byte{}
 	if !openFlagsTruncate(flags) {
-		readContents, err := n.client.Read(ctx, n.path)
-		if err != nil {
-			return nil, 0, errnoFor(err)
+		if overlayContents, ok := n.overlay.Read(n.path); ok {
+			contents = overlayContents
+		} else {
+			readContents, err := n.client.Read(ctx, n.path)
+			if err != nil {
+				return nil, 0, errnoFor(err)
+			}
+			contents = readContents
 		}
-		contents = readContents
 	}
 
 	handle := &FileHandle{
@@ -125,10 +143,135 @@ func (n *Node) Access(_ context.Context, mask uint32) syscall.Errno {
 	return 0
 }
 
+func (n *Node) Create(ctx context.Context, name string, flags uint32, _ uint32, out *fuse.EntryOut) (*fs.Inode, fs.FileHandle, uint32, syscall.Errno) {
+	if n.entry.Kind != protocol.Directory {
+		return nil, nil, 0, syscall.ENOTDIR
+	}
+
+	childPath := joinProjectionPath(n.path, name)
+	if !isWritableProjectionPath(childPath) {
+		return nil, nil, 0, syscall.EROFS
+	}
+
+	if _, ok := n.overlay.Stat(childPath); ok {
+		return nil, nil, 0, syscall.EEXIST
+	}
+	if _, err := n.client.Stat(ctx, childPath); err == nil {
+		return nil, nil, 0, syscall.EEXIST
+	} else if !protocol.NotFound(err) {
+		return nil, nil, 0, errnoFor(err)
+	}
+
+	n.overlay.Create(childPath, nil)
+	entry, _ := n.overlay.Stat(childPath)
+	fillEntry(out, entry)
+
+	writable := openFlagsAreWritable(flags)
+	handle := &FileHandle{
+		path:     childPath,
+		contents: []byte{},
+		writable: writable,
+		flush:    n.overlay.Write,
+	}
+
+	return n.NewInode(ctx, n.childNode(childPath, entry), stableAttrFor(entry)), handle, fuse.FOPEN_DIRECT_IO, 0
+}
+
+func (n *Node) Unlink(_ context.Context, name string) syscall.Errno {
+	childPath := joinProjectionPath(n.path, name)
+	if n.overlay.Delete(childPath) {
+		return 0
+	}
+
+	if isWritableProjectionPath(childPath) {
+		return syscall.ENOTSUP
+	}
+
+	return syscall.EROFS
+}
+
+func (n *Node) Rename(ctx context.Context, name string, newParent fs.InodeEmbedder, newName string, flags uint32) syscall.Errno {
+	if flags != 0 {
+		return syscall.ENOTSUP
+	}
+
+	targetParent, ok := newParent.(*Node)
+	if !ok {
+		return syscall.EINVAL
+	}
+
+	oldPath := joinProjectionPath(n.path, name)
+	newPath := joinProjectionPath(targetParent.path, newName)
+	contents, ok := n.overlay.Read(oldPath)
+	if !ok {
+		return syscall.ENOTSUP
+	}
+
+	if isProjectedTonelFilePath(newPath) {
+		if _, err := n.client.Write(ctx, newPath, contents); err != nil {
+			return errnoFor(err)
+		}
+		n.overlay.Delete(oldPath)
+		n.overlay.Delete(newPath)
+		return 0
+	}
+
+	if !isWritableProjectionPath(newPath) {
+		return syscall.EROFS
+	}
+
+	n.overlay.Move(oldPath, newPath)
+	return 0
+}
+
 func joinProjectionPath(parentPath string, name string) string {
 	if parentPath == "/" {
 		return "/" + name
 	}
 
 	return strings.TrimRight(parentPath, "/") + "/" + name
+}
+
+func (n *Node) childNode(childPath string, entry protocol.Entry) *Node {
+	return &Node{
+		client:  n.client,
+		overlay: n.overlay,
+		path:    childPath,
+		entry:   entry,
+	}
+}
+
+func mergeEntries(projected []protocol.Entry, overlay []protocol.Entry) []protocol.Entry {
+	byName := map[string]protocol.Entry{}
+	for _, entry := range projected {
+		byName[entry.Name] = entry
+	}
+
+	merged := make([]protocol.Entry, 0, len(projected)+len(overlay))
+	merged = append(merged, projected...)
+	overlayOnly := make([]protocol.Entry, 0, len(overlay))
+	for _, entry := range overlay {
+		if _, exists := byName[entry.Name]; exists {
+			continue
+		}
+		overlayOnly = append(overlayOnly, entry)
+	}
+	sort.Slice(overlayOnly, func(i int, j int) bool {
+		return overlayOnly[i].Name < overlayOnly[j].Name
+	})
+	for _, entry := range overlayOnly {
+		merged = append(merged, entry)
+	}
+
+	return merged
+}
+
+func isWritableProjectionPath(projectionPath string) bool {
+	return projectionPath == "/tonel" || strings.HasPrefix(projectionPath, "/tonel/")
+}
+
+func isProjectedTonelFilePath(projectionPath string) bool {
+	return strings.HasPrefix(projectionPath, "/tonel/") &&
+		(strings.HasSuffix(path.Base(projectionPath), ".class.st") ||
+			strings.HasSuffix(path.Base(projectionPath), ".extension.st"))
 }

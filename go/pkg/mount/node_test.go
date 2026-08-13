@@ -1,9 +1,13 @@
 package mount
 
 import (
+	"context"
+	"syscall"
 	"testing"
 
 	"github.com/Evref-BL/pharo-image-fs/go/pkg/protocol"
+	"github.com/hanwen/go-fuse/v2/fs"
+	"github.com/hanwen/go-fuse/v2/fuse"
 )
 
 func TestRootReaddirUsesProjectionClient(t *testing.T) {
@@ -26,4 +30,93 @@ func TestRootReaddirUsesProjectionClient(t *testing.T) {
 	if len(names) != 2 || names[0] != "tonel" || names[1] != "critiques" {
 		t.Fatalf("unexpected entries: %#v", names)
 	}
+}
+
+func TestCreateReaddirAndUnlinkUseOverlay(t *testing.T) {
+	client := &fakeClient{}
+	node := writableTonelDirectoryNode(client)
+
+	var out fuse.EntryOut
+	_, handle, _, errno := node.Create(t.Context(), ".PharoImageFSProjectionBackend.class.st.tmp", syscall.O_RDWR, 0o644, &out)
+	if errno != 0 {
+		t.Fatalf("create errno: %v", errno)
+	}
+
+	if _, errno := handle.(*FileHandle).Write(t.Context(), []byte("temporary contents"), 0); errno != 0 {
+		t.Fatalf("write errno: %v", errno)
+	}
+	if errno := handle.(*FileHandle).Flush(t.Context()); errno != 0 {
+		t.Fatalf("flush errno: %v", errno)
+	}
+
+	stream, errno := node.Readdir(t.Context())
+	if errno != 0 {
+		t.Fatalf("readdir errno: %v", errno)
+	}
+
+	names := dirStreamNames(t, stream)
+	if len(names) != 1 || names[0] != ".PharoImageFSProjectionBackend.class.st.tmp" {
+		t.Fatalf("unexpected entries: %#v", names)
+	}
+
+	if errno := node.Unlink(t.Context(), ".PharoImageFSProjectionBackend.class.st.tmp"); errno != 0 {
+		t.Fatalf("unlink errno: %v", errno)
+	}
+}
+
+func TestRenameOverlayFileToTonelFileWritesProjection(t *testing.T) {
+	client := &fakeClient{
+		stats: map[string]protocol.Entry{
+			"/tonel/PharoImageFS/PharoImageFSProjectionBackend.class.st": {
+				Name:     "PharoImageFSProjectionBackend.class.st",
+				Kind:     protocol.File,
+				Writable: true,
+			},
+		},
+	}
+	node := writableTonelDirectoryNode(client)
+
+	var out fuse.EntryOut
+	_, handle, _, errno := node.Create(t.Context(), ".PharoImageFSProjectionBackend.class.st.tmp", syscall.O_RDWR, 0o644, &out)
+	if errno != 0 {
+		t.Fatalf("create errno: %v", errno)
+	}
+
+	if _, errno := handle.(*FileHandle).Write(t.Context(), []byte("updated source"), 0); errno != 0 {
+		t.Fatalf("write errno: %v", errno)
+	}
+	if errno := handle.(*FileHandle).Flush(t.Context()); errno != 0 {
+		t.Fatalf("flush errno: %v", errno)
+	}
+
+	errno = node.Rename(
+		t.Context(),
+		".PharoImageFSProjectionBackend.class.st.tmp",
+		node,
+		"PharoImageFSProjectionBackend.class.st",
+		0)
+	if errno != 0 {
+		t.Fatalf("rename errno: %v", errno)
+	}
+
+	if client.writtenPath != "/tonel/PharoImageFS/PharoImageFSProjectionBackend.class.st" {
+		t.Fatalf("unexpected written path: %s", client.writtenPath)
+	}
+	if string(client.writtenContents) != "updated source" {
+		t.Fatalf("unexpected written contents: %q", client.writtenContents)
+	}
+}
+
+func writableTonelDirectoryNode(client protocol.Client) *Node {
+	root := NewRoot(client)
+	fs.NewNodeFS(root, nil)
+
+	entry := protocol.Entry{
+		Name:     "PharoImageFS",
+		Kind:     protocol.Directory,
+		Writable: true,
+	}
+	node := root.childNode("/tonel/PharoImageFS", entry)
+	root.NewInode(context.Background(), node, stableAttrFor(entry))
+	return node
 }

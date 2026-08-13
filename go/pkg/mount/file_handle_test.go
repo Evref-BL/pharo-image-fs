@@ -2,6 +2,7 @@ package mount
 
 import (
 	"context"
+	"net/http"
 	"syscall"
 	"testing"
 
@@ -52,6 +53,7 @@ func TestFileHandleRejectsReadOnlyWrite(t *testing.T) {
 
 type fakeClient struct {
 	entries         map[string][]protocol.Entry
+	stats           map[string]protocol.Entry
 	writtenPath     string
 	writtenContents []byte
 }
@@ -60,8 +62,13 @@ func (c *fakeClient) List(_ context.Context, path string) ([]protocol.Entry, err
 	return c.entries[path], nil
 }
 
-func (c *fakeClient) Stat(context.Context, string) (protocol.Entry, error) {
-	return protocol.Entry{}, nil
+func (c *fakeClient) Stat(_ context.Context, path string) (protocol.Entry, error) {
+	entry, ok := c.stats[path]
+	if !ok {
+		return protocol.Entry{}, &protocol.Error{StatusCode: http.StatusNotFound}
+	}
+
+	return entry, nil
 }
 
 func (c *fakeClient) Read(context.Context, string) ([]byte, error) {
