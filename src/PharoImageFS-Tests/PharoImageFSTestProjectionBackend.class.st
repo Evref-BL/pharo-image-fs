@@ -6,7 +6,10 @@ Class {
 	#superclass : 'PharoImageFSProjectionBackend',
 	#instVars : [
 		'exportedPackageNames',
-		'remainingExportFailures'
+		'remainingExportFailures',
+		'loadedClassDefinitionCount',
+		'loadedMethodSelectors',
+		'unloadedMethodSelectors'
 	],
 	#category : 'PharoImageFS-Tests',
 	#package : 'PharoImageFS-Tests'
@@ -27,6 +30,18 @@ PharoImageFSTestProjectionBackend >> exportedPackageNames [
 	^ exportedPackageNames asArray
 ]
 
+{ #category : 'accessing' }
+PharoImageFSTestProjectionBackend >> loadedClassDefinitionCount [
+
+	^ loadedClassDefinitionCount
+]
+
+{ #category : 'accessing' }
+PharoImageFSTestProjectionBackend >> loadedMethodSelectors [
+
+	^ loadedMethodSelectors asArray
+]
+
 { #category : 'testing' }
 PharoImageFSTestProjectionBackend >> failNextExport [
 
@@ -44,11 +59,47 @@ PharoImageFSTestProjectionBackend >> initialize [
 
 	super initialize.
 	exportedPackageNames := OrderedCollection new.
-	remainingExportFailures := 0
+	remainingExportFailures := 0.
+	self resetAppliedDefinitions
+]
+
+{ #category : 'private - writing' }
+PharoImageFSTestProjectionBackend >> loadClassDefinition: classDefinition [
+
+	loadedClassDefinitionCount := loadedClassDefinitionCount + 1.
+	super loadClassDefinition: classDefinition
+]
+
+{ #category : 'private - writing' }
+PharoImageFSTestProjectionBackend >> loadMethodDefinition: methodDefinition [
+
+	loadedMethodSelectors add: methodDefinition selector.
+	super loadMethodDefinition: methodDefinition
 ]
 
 { #category : 'private - repositories' }
 PharoImageFSTestProjectionBackend >> repositoryOwningPackageNamed: packageName ifAbsent: absentBlock [
 
 	^ PackageOrganizer default packageNamed: packageName ifAbsent: absentBlock
+]
+
+{ #category : 'testing' }
+PharoImageFSTestProjectionBackend >> resetAppliedDefinitions [
+
+	loadedClassDefinitionCount := 0.
+	loadedMethodSelectors := OrderedCollection new.
+	unloadedMethodSelectors := OrderedCollection new
+]
+
+{ #category : 'private - writing' }
+PharoImageFSTestProjectionBackend >> unloadMethodDefinition: methodDefinition [
+
+	unloadedMethodSelectors add: methodDefinition selector.
+	super unloadMethodDefinition: methodDefinition
+]
+
+{ #category : 'accessing' }
+PharoImageFSTestProjectionBackend >> unloadedMethodSelectors [
+
+	^ unloadedMethodSelectors asArray
 ]

@@ -39,6 +39,12 @@ PharoImageFSProjectionBackendTest >> classTonelSourceWithDeadBlock [
 ]
 
 { #category : 'private' }
+PharoImageFSProjectionBackendTest >> classTonelSourceWithChangedAnswerAndExtraMethod [
+
+	^ self classTonelSourceWithExtraMethod copyReplaceAll: '^ 42' with: '^ 43'
+]
+
+{ #category : 'private' }
 PharoImageFSProjectionBackendTest >> classTonelSourceWithExtraMethod [
 
 	^ self classTonelSource , '
@@ -247,6 +253,22 @@ PharoImageFSProjectionBackendTest >> testExistingClassRewriteRemovesAbsentMethod
 	self assert: backend exportedPackageNames equals: {
 			self fixturePackageName.
 			self fixturePackageName }
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testExistingClassRewriteOnlyLoadsChangedDefinitions [
+
+	| backend class |
+	backend := self newBackend.
+	backend write: self classTonelSourceWithExtraMethod at: self originalClassTonelPath.
+	backend resetAppliedDefinitions.
+	backend write: self classTonelSourceWithChangedAnswerAndExtraMethod at: self originalClassTonelPath.
+	class := Smalltalk globals at: self originalClassName asSymbol.
+	self assert: class new answer equals: 43.
+	self assert: class new extraAnswer equals: 99.
+	self assert: backend loadedClassDefinitionCount equals: 0.
+	self assert: backend loadedMethodSelectors equals: #( answer ).
+	self assert: backend unloadedMethodSelectors equals: #(  )
 ]
 
 { #category : 'tests' }

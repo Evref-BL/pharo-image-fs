@@ -7,6 +7,11 @@ diff, patch, editors, and other filesystem tools against a mounted projection.
 Pharo remains authoritative for Pharo semantics: source projection, parsing,
 compilation, transactional writes, Tonel export/sync, and critique feedback.
 
+Use this alongside [MCP-Pharo](https://github.com/Evref-BL/MCP) when available:
+`pharo-image-fs` is the normal file-editing surface, while MCP tools remain the
+better interface for semantic operations such as refactorings, test runs,
+critique runs, and repository operations.
+
 ## What the mount exposes
 
 ```text
@@ -135,6 +140,13 @@ cat /tmp/pharo-image-fs/critiques/PharoImageFSProjectionBackend.json
 cat /tmp/pharo-image-fs/critiques/PharoImageFSProjectionBackend/write:at:.json
 ```
 
+The projection is lazy and backed by the live image. Directory listings, stat
+requests, and reads ask Pharo for the current state as the filesystem needs
+them, so image-side changes become visible through the mount on later
+filesystem operations. macFUSE/go-fuse metadata caches are intentionally short;
+an already-open file handle can still contain the contents read when it was
+opened.
+
 ## Supported code operations
 
 `/tonel` accepts full-file writes for:
@@ -148,6 +160,10 @@ cat /tmp/pharo-image-fs/critiques/PharoImageFSProjectionBackend/write:at:.json
 Editor-safe temporary-file save patterns are supported. Temporary files stay
 local to the daemon until they are renamed over a real projected Tonel path,
 where the full file is sent to Pharo as one transactional write.
+
+The write protocol sends full Tonel file contents, but the Pharo backend parses
+the old and new definitions and only applies definitions that changed. Unchanged
+methods are left untouched.
 
 Deleting projected code files is supported for `.class.st` and `.extension.st`.
 Class-file deletion removes the class from the image. Extension-file deletion

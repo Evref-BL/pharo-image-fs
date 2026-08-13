@@ -26,27 +26,29 @@ PharoImageFSProjectionBackend >> addSourceIntervalFromCritique: aCritique to: da
 { #category : 'private - writing' }
 PharoImageFSProjectionBackend >> applyClassTonelText: textString replacing: previousTextString className: className packageName: packageName originalPath: aString [
 
-	| classDefinition definitions methodDefinitions previousDefinitions previousMethodDefinitions |
+	| changedMethodDefinitions classDefinition definitions methodDefinitions previousClassDefinition previousDefinitions previousMethodDefinitions |
 	definitions := self parseTonelDefinitionsFrom: textString originalPath: aString.
 	previousDefinitions := self parseTonelDefinitionsFrom: previousTextString originalPath: aString.
 	classDefinition := self classDefinitionFrom: definitions originalPath: aString.
+	previousClassDefinition := self classDefinitionFrom: previousDefinitions originalPath: aString.
 	self
 		validateClassDefinition: classDefinition
 		className: className
 		packageName: packageName
 		originalPath: aString.
-	methodDefinitions := self methodDefinitionsFrom: definitions.
-	self validateBlockingCritiquesForMethodDefinitions: methodDefinitions originalPath: aString.
 	previousMethodDefinitions := self methodDefinitionsFrom: previousDefinitions.
-	classDefinition load.
+	methodDefinitions := self methodDefinitionsFrom: definitions.
+	changedMethodDefinitions := self methodDefinitionsChangedFrom: previousMethodDefinitions in: methodDefinitions.
+	self validateBlockingCritiquesForMethodDefinitions: changedMethodDefinitions originalPath: aString.
+	classDefinition = previousClassDefinition ifFalse: [ self loadClassDefinition: classDefinition ].
 	self unloadMethodDefinitionsAbsentFrom: methodDefinitions in: previousMethodDefinitions.
-	methodDefinitions do: [ :methodDefinition | methodDefinition load ]
+	changedMethodDefinitions do: [ :methodDefinition | self loadMethodDefinition: methodDefinition ]
 ]
 
 { #category : 'private - writing' }
 PharoImageFSProjectionBackend >> applyExtensionTonelText: textString replacing: previousTextString className: className packageName: packageName originalPath: aString [
 
-	| definitions methodDefinitions previousDefinitions previousMethodDefinitions |
+	| changedMethodDefinitions definitions methodDefinitions previousDefinitions previousMethodDefinitions |
 	definitions := self parseTonelDefinitionsFrom: textString originalPath: aString.
 	previousDefinitions := self parseTonelDefinitionsFrom: previousTextString originalPath: aString.
 	self
@@ -55,10 +57,11 @@ PharoImageFSProjectionBackend >> applyExtensionTonelText: textString replacing: 
 		packageName: packageName
 		originalPath: aString.
 	methodDefinitions := self methodDefinitionsFrom: definitions.
-	self validateBlockingCritiquesForMethodDefinitions: methodDefinitions originalPath: aString.
 	previousMethodDefinitions := self methodDefinitionsFrom: previousDefinitions.
+	changedMethodDefinitions := self methodDefinitionsChangedFrom: previousMethodDefinitions in: methodDefinitions.
+	self validateBlockingCritiquesForMethodDefinitions: changedMethodDefinitions originalPath: aString.
 	self unloadMethodDefinitionsAbsentFrom: methodDefinitions in: previousMethodDefinitions.
-	methodDefinitions do: [ :methodDefinition | methodDefinition load ]
+	changedMethodDefinitions do: [ :methodDefinition | self loadMethodDefinition: methodDefinition ]
 ]
 
 { #category : 'private - writing' }
@@ -74,8 +77,8 @@ PharoImageFSProjectionBackend >> applyNewClassTonelText: textString className: c
 		originalPath: aString.
 	methodDefinitions := self methodDefinitionsFrom: definitions.
 	self validateBlockingCritiquesForMethodDefinitions: methodDefinitions originalPath: aString.
-	classDefinition load.
-	methodDefinitions do: [ :methodDefinition | methodDefinition load ]
+	self loadClassDefinition: classDefinition.
+	methodDefinitions do: [ :methodDefinition | self loadMethodDefinition: methodDefinition ]
 ]
 
 { #category : 'private - writing' }
@@ -91,7 +94,7 @@ PharoImageFSProjectionBackend >> applyNewExtensionTonelText: textString classNam
 	methodDefinitions := self methodDefinitionsFrom: definitions.
 	methodDefinitions ifEmpty: [ Error signal: 'Extension file must contain at least one method for ' , aString ].
 	self validateBlockingCritiquesForMethodDefinitions: methodDefinitions originalPath: aString.
-	methodDefinitions do: [ :methodDefinition | methodDefinition load ]
+	methodDefinitions do: [ :methodDefinition | self loadMethodDefinition: methodDefinition ]
 ]
 
 { #category : 'private - critiques' }
@@ -497,6 +500,18 @@ PharoImageFSProjectionBackend >> listTonelSegments: segments originalPath: aStri
 	^ self tonelEntriesForPackage: package
 ]
 
+{ #category : 'private - writing' }
+PharoImageFSProjectionBackend >> loadClassDefinition: classDefinition [
+
+	classDefinition load
+]
+
+{ #category : 'private - writing' }
+PharoImageFSProjectionBackend >> loadMethodDefinition: methodDefinition [
+
+	methodDefinition load
+]
+
 { #category : 'private - critiques' }
 PharoImageFSProjectionBackend >> methodCritiqueDataForClass: aClass selector: aSelector [
 
@@ -513,6 +528,28 @@ PharoImageFSProjectionBackend >> methodCritiqueDataForClass: aClass selector: aS
 PharoImageFSProjectionBackend >> methodDefinitionsFrom: definitions [
 
 	^ definitions select: #isMethodDefinition
+]
+
+{ #category : 'private - writing' }
+PharoImageFSProjectionBackend >> methodDefinitionsChangedFrom: oldMethodDefinitions in: newMethodDefinitions [
+
+	| oldDefinitionsByIdentity |
+	oldDefinitionsByIdentity := self methodDefinitionsByIdentityFor: oldMethodDefinitions.
+	^ newMethodDefinitions reject: [ :methodDefinition |
+		  (oldDefinitionsByIdentity
+			   at: (self methodIdentityFor: methodDefinition)
+			   ifAbsent: [ nil ])
+			  = methodDefinition ]
+]
+
+{ #category : 'private - writing' }
+PharoImageFSProjectionBackend >> methodDefinitionsByIdentityFor: methodDefinitions [
+
+	| definitionsByIdentity |
+	definitionsByIdentity := Dictionary new.
+	methodDefinitions do: [ :methodDefinition |
+		definitionsByIdentity at: (self methodIdentityFor: methodDefinition) put: methodDefinition ].
+	^ definitionsByIdentity
 ]
 
 { #category : 'private - writing' }
@@ -689,7 +726,7 @@ PharoImageFSProjectionBackend >> removeCompiledMethods: compiledMethods [
 { #category : 'private - writing' }
 PharoImageFSProjectionBackend >> removeMethodDefinitions: methodDefinitions [
 
-	methodDefinitions do: [ :methodDefinition | methodDefinition unload ]
+	methodDefinitions do: [ :methodDefinition | self unloadMethodDefinition: methodDefinition ]
 ]
 
 { #category : 'accessing' }
@@ -985,7 +1022,13 @@ PharoImageFSProjectionBackend >> unloadMethodDefinitionsAbsentFrom: newMethodDef
 	| newIdentities |
 	newIdentities := newMethodDefinitions collect: [ :methodDefinition | self methodIdentityFor: methodDefinition ] as: Set.
 	oldMethodDefinitions do: [ :methodDefinition |
-		(newIdentities includes: (self methodIdentityFor: methodDefinition)) ifFalse: [ methodDefinition unload ] ]
+		(newIdentities includes: (self methodIdentityFor: methodDefinition)) ifFalse: [ self unloadMethodDefinition: methodDefinition ] ]
+]
+
+{ #category : 'private - writing' }
+PharoImageFSProjectionBackend >> unloadMethodDefinition: methodDefinition [
+
+	methodDefinition unload
 ]
 
 { #category : 'private - critiques' }
