@@ -107,6 +107,12 @@ PharoImageFSProjectionBackendTest >> decodedJsonFrom: aString [
 ]
 
 { #category : 'private' }
+PharoImageFSProjectionBackendTest >> ensureTargetPackage [
+
+	PackageOrganizer default ensurePackage: self targetPackageName
+]
+
+{ #category : 'private' }
 PharoImageFSProjectionBackendTest >> extensionTonelSource [
 
 	^ 'Extension { #name : ''PharoImageFSProjectionExtensionTarget'' }
@@ -178,6 +184,12 @@ PharoImageFSProjectionBackendTest >> renamedClassTonelPath [
 PharoImageFSProjectionBackendTest >> targetPackageName [
 
 	^ 'PharoImageFS-ProjectionTargetFixture'
+]
+
+{ #category : 'private' }
+PharoImageFSProjectionBackendTest >> targetPackageTonelPath [
+
+	^ '/tonel/' , self targetPackageName , '/' , self originalClassName , '.class.st'
 ]
 
 { #category : 'running' }
@@ -279,6 +291,38 @@ PharoImageFSProjectionBackendTest >> testListRootExposesTonelAndCritiques [
 	| names |
 	names := (self newBackend list: '/') collect: [ :entry | entry name ].
 	self assert: names asArray equals: #( 'tonel' 'critiques' )
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testMoveAndRenameClassTonelFileSignalsUnsupportedWrite [
+
+	self ensureTargetPackage.
+	self
+		should: [
+				| backend |
+				backend := self newBackend.
+				backend write: self classTonelSource at: self originalClassTonelPath.
+				backend rename: self originalClassTonelPath to: '/tonel/' , self targetPackageName , '/' , self renamedClassName , '.class.st' ]
+		raise: Error
+		whoseDescriptionIncludes: 'Projection class move and rename in one operation is not supported yet:'
+		description: 'Combined class move and rename needs explicit transactional semantics.'
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testMoveClassTonelFileAcrossPackagesMovesClass [
+
+	| backend class |
+	self ensureTargetPackage.
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	backend rename: self originalClassTonelPath to: self targetPackageTonelPath.
+	class := Smalltalk globals at: self originalClassName asSymbol.
+	self assert: class package name equals: self targetPackageName.
+	self assert: class new answer equals: 42.
+	self assert: backend exportedPackageNames equals: {
+			self fixturePackageName.
+			self fixturePackageName.
+			self targetPackageName }
 ]
 
 { #category : 'tests' }

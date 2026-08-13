@@ -357,6 +357,12 @@ PharoImageFSProjectionBackend >> entryNamed: aString in: entries ifAbsent: absen
 	^ entries detect: [ :each | each name = aString ] ifNone: absentBlock
 ]
 
+{ #category : 'private - moving' }
+PharoImageFSProjectionBackend >> executeClassMoveNamed: className toPackage: packageName [
+
+	(RBMoveClassTransformation move: className toPackage: packageName) execute
+]
+
 { #category : 'private - renaming' }
 PharoImageFSProjectionBackend >> executeClassRenameFrom: oldClassName to: newClassName [
 
@@ -394,6 +400,12 @@ PharoImageFSProjectionBackend >> exportPackageNamed: packageName [
 	repository codeDirectory ensureCreateDirectory.
 	self exportIcePackage: icePackage to: repository codeDirectory.
 	icePackage beClean
+]
+
+{ #category : 'private - repositories' }
+PharoImageFSProjectionBackend >> exportPackagesNamed: packageNames [
+
+	packageNames do: [ :packageName | self exportPackageNamed: packageName ]
 ]
 
 { #category : 'private - reading' }
@@ -510,6 +522,37 @@ PharoImageFSProjectionBackend >> methodIdentityFor: aMethodDefinition [
 		  aMethodDefinition className asString.
 		  aMethodDefinition classIsMeta.
 		  aMethodDefinition selector }
+]
+
+{ #category : 'private - moving' }
+PharoImageFSProjectionBackend >> moveTonelClassFileNamed: fileName packageName: sourcePackageName toPackageName: targetPackageName originalPath: sourcePath targetPath: targetPath [
+
+	| class className failureMessage |
+	className := self classNameFromFileName: fileName suffix: '.class.st'.
+	className ifNil: [ self signalUnsupportedWrite: sourcePath ].
+	class := self classForName: className packageName: sourcePackageName originalPath: sourcePath.
+	self repositoryOwningPackageNamed: sourcePackageName ifAbsent: [ Error signal: 'No Iceberg repository owns package ' , sourcePackageName ].
+	self repositoryOwningPackageNamed: targetPackageName ifAbsent: [ Error signal: 'No Iceberg repository owns package ' , targetPackageName ].
+	self packageNamed: targetPackageName ifAbsent: [ self signalNotFound: targetPath ].
+	[
+		self executeClassMoveNamed: className toPackage: targetPackageName.
+		self exportPackagesNamed: {
+				sourcePackageName.
+				targetPackageName } ]
+		on: Error
+		do: [ :error |
+				failureMessage := error messageText ifNil: [ error asString ].
+				[
+					class package name asString = targetPackageName ifTrue: [
+						self executeClassMoveNamed: className toPackage: sourcePackageName ].
+					self exportPackagesNamed: {
+							targetPackageName.
+							sourcePackageName } ]
+					on: Error
+					do: [ :rollbackError |
+							Error signal: 'Projection class move failed and rollback failed. Move error: ' , failureMessage , '. Rollback error: '
+								, (rollbackError messageText ifNil: [ rollbackError asString ]) ].
+				Error signal: failureMessage ]
 ]
 
 { #category : 'private - packages' }
@@ -652,16 +695,26 @@ PharoImageFSProjectionBackend >> removeMethodDefinitions: methodDefinitions [
 { #category : 'accessing' }
 PharoImageFSProjectionBackend >> rename: sourcePath to: targetPath [
 
-	| sourceSegments targetSegments |
+	| sourceClassName sourceSegments targetClassName targetSegments |
 	sourceSegments := self pathSegmentsFor: sourcePath.
 	targetSegments := self pathSegmentsFor: targetPath.
 	(sourceSegments size = 3 and: [
 		 sourceSegments first = 'tonel' and: [
 			 targetSegments size = 3 and: [ targetSegments first = 'tonel' ] ] ]) ifFalse: [ self signalUnsupportedWrite: sourcePath ].
-	sourceSegments second = targetSegments second ifFalse: [
-		Error signal: 'Projection rename across packages is not supported yet: ' , sourcePath , ' to ' , targetPath ].
 	(sourceSegments third endsWith: '.class.st') ifTrue: [
 			(targetSegments third endsWith: '.class.st') ifFalse: [ self signalUnsupportedWrite: sourcePath ].
+			sourceClassName := self classNameFromFileName: sourceSegments third suffix: '.class.st'.
+			targetClassName := self classNameFromFileName: targetSegments third suffix: '.class.st'.
+			sourceClassName = targetClassName ifTrue: [
+					sourceSegments second = targetSegments second ifTrue: [ ^ self ].
+					^ self
+						  moveTonelClassFileNamed: sourceSegments third
+						  packageName: sourceSegments second
+						  toPackageName: targetSegments second
+						  originalPath: sourcePath
+						  targetPath: targetPath ].
+			sourceSegments second = targetSegments second ifFalse: [
+					Error signal: 'Projection class move and rename in one operation is not supported yet: ' , sourcePath , ' to ' , targetPath ].
 			^ self
 				  renameTonelClassFileNamed: sourceSegments third
 				  toFileNamed: targetSegments third

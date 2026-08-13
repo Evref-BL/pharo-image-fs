@@ -22,5 +22,6 @@ PharoImageFSProjectionHTTPServer startOn: 9013
 The backend supports full-file writes for existing and new Tonel class files,
 plus existing and new Tonel extension files. It supports direct deletion of
 projected class and extension files. It supports same-package class-file rename
-and keeps extension-file rename unsupported until those image semantics are made
-safe.
+and same-name class-file moves across package directories. It keeps combined
+class move plus rename and extension-file rename unsupported until those image
+semantics are made safe.
