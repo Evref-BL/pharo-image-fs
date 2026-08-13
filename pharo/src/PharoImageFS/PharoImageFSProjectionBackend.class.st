@@ -186,7 +186,7 @@ PharoImageFSProjectionBackend >> classNamed: className originalPath: aString [
 { #category : 'private - classes' }
 PharoImageFSProjectionBackend >> classNames [
 
-	^ (Smalltalk allClasses collect: [ :class | class name asString ]) asArray sorted
+	^ (Smalltalk globals allClasses collect: [ :class | class name asString ] as: Array) sorted
 ]
 
 { #category : 'private - writing' }
@@ -213,7 +213,7 @@ PharoImageFSProjectionBackend >> critiqueDataForCompiledMethod: aCompiledMethod 
 { #category : 'private - critiques' }
 PharoImageFSProjectionBackend >> critiqueDictionariesFor: critiques [
 
-	^ (critiques collect: [ :critique | self dictionaryForCritique: critique ]) asArray sorted: [ :left :right |
+	^ (critiques collect: [ :critique | self dictionaryForCritique: critique ] as: Array) sorted: [ :left :right |
 			  (left at: #title ifAbsent: [ '' ]) = (right at: #title ifAbsent: [ '' ])
 				  ifTrue: [ (left at: #rule ifAbsent: [ '' ]) <= (right at: #rule ifAbsent: [ '' ]) ]
 				  ifFalse: [ (left at: #title ifAbsent: [ '' ]) <= (right at: #title ifAbsent: [ '' ]) ] ]
@@ -409,7 +409,9 @@ PharoImageFSProjectionBackend >> extensionTextForClassName: className package: a
 	methods := self extensionMethodsForClassName: className inPackage: aPackage.
 	methods isEmpty ifTrue: [ self signalNotFound: aString ].
 	writer := TonelWriter new.
-	methodDefinitions := (methods collect: [ :method | method asRingDefinition asMCMethodDefinition ]) asArray sorted: [ :first :second |
+	methodDefinitions := (methods collect: [ :method | method asRingDefinition asMCMethodDefinition ] as: Array) sorted: [
+		                     :first
+		                     :second |
 		                     first selector < second selector or: [ first selector = second selector and: [ first classIsMeta ] ] ].
 	^ String streamContents: [ :stream |
 			  | definition |
@@ -519,7 +521,7 @@ PharoImageFSProjectionBackend >> packageNamed: aString ifAbsent: absentBlock [
 { #category : 'private - packages' }
 PharoImageFSProjectionBackend >> packageNames [
 
-	^ (PackageOrganizer default packages collect: [ :each | each name asString ]) asArray sorted
+	^ (PackageOrganizer default packages collect: [ :each | each name asString ] as: Array) sorted
 ]
 
 { #category : 'private - writing' }
@@ -902,7 +904,7 @@ PharoImageFSProjectionBackend >> tonelEntriesForPackage: aPackage [
 	| entries extensionClassNames |
 	entries := OrderedCollection new.
 	aPackage definedClasses do: [ :class | entries add: (self fileNamed: class name asString , '.class.st' size: 0 writable: true) ].
-	extensionClassNames := (aPackage extensionMethods collect: [ :method | method methodClass instanceSide name asString ]) asSet.
+	extensionClassNames := aPackage extensionMethods collect: [ :method | method methodClass instanceSide name asString ] as: Set.
 	extensionClassNames do: [ :className | entries add: (self fileNamed: className , '.extension.st' size: 0 writable: true) ].
 	^ entries asArray sorted: [ :first :second | first name <= second name ]
 ]
@@ -928,7 +930,7 @@ PharoImageFSProjectionBackend >> tonelRootEntries [
 PharoImageFSProjectionBackend >> unloadMethodDefinitionsAbsentFrom: newMethodDefinitions in: oldMethodDefinitions [
 
 	| newIdentities |
-	newIdentities := (newMethodDefinitions collect: [ :methodDefinition | self methodIdentityFor: methodDefinition ]) asSet.
+	newIdentities := newMethodDefinitions collect: [ :methodDefinition | self methodIdentityFor: methodDefinition ] as: Set.
 	oldMethodDefinitions do: [ :methodDefinition |
 		(newIdentities includes: (self methodIdentityFor: methodDefinition)) ifFalse: [ methodDefinition unload ] ]
 ]
@@ -987,13 +989,14 @@ PharoImageFSProjectionBackend >> validateExtensionDefinitions: definitions class
 { #category : 'private - renaming' }
 PharoImageFSProjectionBackend >> validateRenameReferencesForClass: aClass packageName: packageName originalPath: aString [
 
-	| outsidePackages referencingPackages |
-	referencingPackages := ((SystemNavigation default allReferencesTo: aClass binding) collect: [ :method | method package name asString ]) asSet.
-	outsidePackages := referencingPackages reject: [ :each | each = packageName ].
-	outsidePackages ifNotEmpty: [
-		Error signal:
-			'Projection class rename would update references outside package ' , packageName , ' for ' , aString , ': '
-			, (self commaSeparated: outsidePackages asArray sorted) ]
+	| referencingPackages |
+	referencingPackages := (SystemNavigation default allReferencesTo: aClass binding)
+		                       collect: [ :method | method package name asString ]
+		                       as: Set.
+	referencingPackages remove: packageName ifAbsent: [ ].
+	referencingPackages ifNotEmpty: [
+			Error signal: 'Projection class rename would update references outside package ' , packageName , ' for ' , aString , ': '
+				, (self commaSeparated: referencingPackages asArray sorted) ]
 ]
 
 { #category : 'accessing' }
@@ -1036,7 +1039,9 @@ PharoImageFSProjectionBackend >> writeTonelClassText: textString fileName: fileN
 	className := self classNameFromFileName: fileName suffix: '.class.st'.
 	className ifNil: [ self signalUnsupportedWrite: aString ].
 	self repositoryOwningPackageNamed: packageName ifAbsent: [ Error signal: 'No Iceberg repository owns package ' , packageName ].
-	classDefinition := self classDefinitionFrom: (self parseTonelDefinitionsFrom: textString originalPath: aString) originalPath: aString.
+	classDefinition := self
+		                   classDefinitionFrom: (self parseTonelDefinitionsFrom: textString originalPath: aString)
+		                   originalPath: aString.
 	classDefinition packageName asString = packageName ifFalse: [
 			Error signal:
 				'Class definition package ' , classDefinition packageName asString , ' does not match projection path package ' , packageName
@@ -1051,9 +1056,7 @@ PharoImageFSProjectionBackend >> writeTonelClassText: textString fileName: fileN
 	classExists := class notNil.
 	(classExists and: [ class package name asString ~= packageName ]) ifTrue: [
 		Error signal: 'Class ' , className , ' already exists in package ' , class package name asString , ' for ' , aString ].
-	previousText := classExists
-		                ifTrue: [ self readTonelClassFileNamed: fileName packageName: packageName originalPath: aString ]
-		                ifFalse: [ nil ].
+	previousText := classExists ifTrue: [ self readTonelClassFileNamed: fileName packageName: packageName originalPath: aString ].
 	[
 		classExists
 			ifTrue: [
@@ -1101,9 +1104,8 @@ PharoImageFSProjectionBackend >> writeTonelExtensionText: textString fileName: f
 	self repositoryOwningPackageNamed: packageName ifAbsent: [ Error signal: 'No Iceberg repository owns package ' , packageName ].
 	package := self packageNamed: packageName ifAbsent: [ self signalNotFound: aString ].
 	extensionExists := (self extensionMethodsForClassName: className inPackage: package) notEmpty.
-	previousText := extensionExists
-		                ifTrue: [ self readTonelExtensionFileNamed: fileName packageName: packageName originalPath: aString ]
-		                ifFalse: [ nil ].
+	previousText := extensionExists ifTrue: [
+		                self readTonelExtensionFileNamed: fileName packageName: packageName originalPath: aString ].
 	methodDefinitions := self methodDefinitionsFrom: (self parseTonelDefinitionsFrom: textString originalPath: aString).
 	[
 		extensionExists
