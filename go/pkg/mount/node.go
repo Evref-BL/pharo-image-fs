@@ -177,12 +177,23 @@ func (n *Node) Create(ctx context.Context, name string, flags uint32, _ uint32, 
 	entry, _ := n.overlay.Stat(childPath)
 	fillEntry(out, entry)
 
+	flush := n.overlay.Write
+	if isProjectedTonelFilePath(childPath) {
+		flush = func(ctx context.Context, path string, contents []byte) error {
+			if err := n.writeProjection(ctx, path, contents); err != nil {
+				return err
+			}
+			n.overlay.Delete(path)
+			return nil
+		}
+	}
+
 	writable := openFlagsAreWritable(flags)
 	handle := &FileHandle{
 		path:     childPath,
 		contents: []byte{},
 		writable: writable,
-		flush:    n.overlay.Write,
+		flush:    flush,
 	}
 
 	return n.NewInode(ctx, n.childNode(childPath, entry), stableAttrFor(entry)), handle, fuse.FOPEN_DIRECT_IO, 0
@@ -199,6 +210,9 @@ func (n *Node) Unlink(ctx context.Context, name string) syscall.Errno {
 	}
 
 	if err := n.client.Delete(ctx, childPath); err != nil {
+		if protocol.NotFound(err) {
+			return 0
+		}
 		n.logf("delete %s failed: %v", childPath, err)
 		return errnoFor(err)
 	}

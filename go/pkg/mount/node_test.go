@@ -91,6 +91,34 @@ func TestCreateReaddirAndUnlinkUseOverlay(t *testing.T) {
 	}
 }
 
+func TestCreateProjectedTonelFileWritesProjectionOnFlush(t *testing.T) {
+	client := &fakeClient{}
+	node := writableTonelDirectoryNode(client)
+
+	var out fuse.EntryOut
+	_, handle, _, errno := node.Create(t.Context(), "NewClass.class.st", syscall.O_RDWR, 0o644, &out)
+	if errno != 0 {
+		t.Fatalf("create errno: %v", errno)
+	}
+
+	if _, errno := handle.(*FileHandle).Write(t.Context(), []byte("new source"), 0); errno != 0 {
+		t.Fatalf("write errno: %v", errno)
+	}
+	if errno := handle.(*FileHandle).Flush(t.Context()); errno != 0 {
+		t.Fatalf("flush errno: %v", errno)
+	}
+
+	if client.writtenPath != "/tonel/PharoImageFS/NewClass.class.st" {
+		t.Fatalf("unexpected written path: %s", client.writtenPath)
+	}
+	if string(client.writtenContents) != "new source" {
+		t.Fatalf("unexpected written contents: %q", client.writtenContents)
+	}
+	if _, ok := node.overlay.Stat("/tonel/PharoImageFS/NewClass.class.st"); ok {
+		t.Fatalf("projected file stayed in overlay after successful write")
+	}
+}
+
 func TestRenameOverlayFileToTonelFileWritesProjection(t *testing.T) {
 	client := &fakeClient{
 		stats: map[string]protocol.Entry{
@@ -248,6 +276,18 @@ func TestUnlinkProjectedTonelFileUsesProjectionProtocol(t *testing.T) {
 
 	if client.deletedPath != "/tonel/PharoImageFS/PharoImageFSProjectionBackend.class.st" {
 		t.Fatalf("unexpected deleted path: %s", client.deletedPath)
+	}
+}
+
+func TestUnlinkProjectedTonelFileIgnoresProjectionNotFound(t *testing.T) {
+	client := &fakeClient{
+		deleteErr: &protocol.Error{StatusCode: http.StatusNotFound},
+	}
+	node := writableTonelDirectoryNode(client)
+
+	errno := node.Unlink(t.Context(), "PharoImageFSProjectionBackend.class.st")
+	if errno != 0 {
+		t.Fatalf("unlink errno: %v", errno)
 	}
 }
 

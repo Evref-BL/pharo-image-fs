@@ -20,5 +20,6 @@ PharoImageFSProjectionHTTPServer startOn: 9013
 ```
 
 V1 supports full-file writes for existing and new Tonel class files, plus
-existing and new Tonel extension files. It deliberately rejects direct deletion
-or rename of projected code files until those image semantics are made safe.
+existing and new Tonel extension files. It supports direct deletion of projected
+class and extension files. It supports same-package class-file rename and keeps
+extension-file rename unsupported until those image semantics are made safe.

@@ -189,6 +189,15 @@ PharoImageFSProjectionBackend >> classNames [
 	^ (Smalltalk allClasses collect: [ :class | class name asString ]) asArray sorted
 ]
 
+{ #category : 'private - writing' }
+PharoImageFSProjectionBackend >> commaSeparated: strings [
+
+	^ String streamContents: [ :stream |
+		  strings do: [ :each |
+			  stream position > 0 ifTrue: [ stream nextPutAll: ', ' ].
+			  stream nextPutAll: each ] ]
+]
+
 { #category : 'private - critiques' }
 PharoImageFSProjectionBackend >> critiqueDataForBehavior: aBehavior [
 
@@ -230,6 +239,10 @@ PharoImageFSProjectionBackend >> critiqueRootEntries [
 { #category : 'accessing' }
 PharoImageFSProjectionBackend >> delete: aString [
 
+	| segments |
+	segments := self pathSegmentsFor: aString.
+	segments isEmpty ifTrue: [ self signalUnsupportedWrite: aString ].
+	segments first = 'tonel' ifTrue: [ ^ self deleteTonelSegments: segments allButFirst originalPath: aString ].
 	self signalUnsupportedWrite: aString
 ]
 
@@ -238,6 +251,83 @@ PharoImageFSProjectionBackend >> deleteResponseForPath: aString [
 
 	self delete: aString.
 	^ Dictionary new
+]
+
+{ #category : 'private - deleting' }
+PharoImageFSProjectionBackend >> deleteTonelClassFileNamed: fileName packageName: packageName originalPath: aString [
+
+	| class className failureMessage previousText |
+	className := self classNameFromFileName: fileName suffix: '.class.st'.
+	className ifNil: [ self signalUnsupportedWrite: aString ].
+	self repositoryOwningPackageNamed: packageName ifAbsent: [ Error signal: 'No Iceberg repository owns package ' , packageName ].
+	class := self classForName: className packageName: packageName originalPath: aString.
+	previousText := TonelWriter sourceCodeOf: class.
+	[
+		class removeFromSystem.
+		self exportPackageNamed: packageName ]
+		on: Error
+		do: [ :error |
+				failureMessage := error messageText ifNil: [ error asString ].
+				[
+					self
+						restoreClassTonelText: previousText
+						className: className
+						packageName: packageName
+						originalPath: aString ]
+					on: Error
+					do: [ :rollbackError |
+							Error signal: 'Projection delete failed and rollback failed. Delete error: ' , failureMessage , '. Rollback error: '
+								, (rollbackError messageText ifNil: [ rollbackError asString ]) ].
+				Error signal: failureMessage ]
+]
+
+{ #category : 'private - deleting' }
+PharoImageFSProjectionBackend >> deleteTonelExtensionFileNamed: fileName packageName: packageName originalPath: aString [
+
+	| className failureMessage methods package previousText |
+	className := self classNameFromFileName: fileName suffix: '.extension.st'.
+	className ifNil: [ self signalUnsupportedWrite: aString ].
+	self classNamed: className originalPath: aString.
+	self repositoryOwningPackageNamed: packageName ifAbsent: [ Error signal: 'No Iceberg repository owns package ' , packageName ].
+	package := self packageNamed: packageName ifAbsent: [ self signalNotFound: aString ].
+	methods := self extensionMethodsForClassName: className inPackage: package.
+	methods ifEmpty: [ self signalNotFound: aString ].
+	previousText := self extensionTextForClassName: className package: package originalPath: aString.
+	[
+		self removeCompiledMethods: methods.
+		self exportPackageNamed: packageName ]
+		on: Error
+		do: [ :error |
+				failureMessage := error messageText ifNil: [ error asString ].
+				[
+					self
+						applyNewExtensionTonelText: previousText
+						className: className
+						packageName: packageName
+						originalPath: aString.
+					self exportPackageNamed: packageName ]
+					on: Error
+					do: [ :rollbackError |
+							Error signal: 'Projection delete failed and rollback failed. Delete error: ' , failureMessage , '. Rollback error: '
+								, (rollbackError messageText ifNil: [ rollbackError asString ]) ].
+				Error signal: failureMessage ]
+]
+
+{ #category : 'private - deleting' }
+PharoImageFSProjectionBackend >> deleteTonelSegments: segments originalPath: aString [
+
+	segments size = 2 ifFalse: [ self signalUnsupportedWrite: aString ].
+	(segments second endsWith: '.class.st') ifTrue: [
+			^ self
+				  deleteTonelClassFileNamed: segments second
+				  packageName: segments first
+				  originalPath: aString ].
+	(segments second endsWith: '.extension.st') ifTrue: [
+			^ self
+				  deleteTonelExtensionFileNamed: segments second
+				  packageName: segments first
+				  originalPath: aString ].
+	self signalUnsupportedWrite: aString
 ]
 
 { #category : 'private - critiques' }
@@ -265,6 +355,14 @@ PharoImageFSProjectionBackend >> directoryNamed: aString [
 PharoImageFSProjectionBackend >> entryNamed: aString in: entries ifAbsent: absentBlock [
 
 	^ entries detect: [ :each | each name = aString ] ifNone: absentBlock
+]
+
+{ #category : 'private - renaming' }
+PharoImageFSProjectionBackend >> executeClassRenameFrom: oldClassName to: newClassName [
+
+	[ (ReRenameClassRefactoring rename: oldClassName asSymbol to: newClassName asSymbol) execute ]
+		on: ProvideAnswerNotification
+		do: [ :notification | notification resume: true ]
 ]
 
 { #category : 'private - repositories' }
@@ -537,6 +635,12 @@ PharoImageFSProjectionBackend >> removeClassNamed: className ifPresentInPackage:
 	class removeFromSystem
 ]
 
+{ #category : 'private - deleting' }
+PharoImageFSProjectionBackend >> removeCompiledMethods: compiledMethods [
+
+	compiledMethods do: [ :method | method asRingDefinition asMCMethodDefinition unload ]
+]
+
 { #category : 'private - writing' }
 PharoImageFSProjectionBackend >> removeMethodDefinitions: methodDefinitions [
 
@@ -546,6 +650,22 @@ PharoImageFSProjectionBackend >> removeMethodDefinitions: methodDefinitions [
 { #category : 'accessing' }
 PharoImageFSProjectionBackend >> rename: sourcePath to: targetPath [
 
+	| sourceSegments targetSegments |
+	sourceSegments := self pathSegmentsFor: sourcePath.
+	targetSegments := self pathSegmentsFor: targetPath.
+	(sourceSegments size = 3 and: [
+		 sourceSegments first = 'tonel' and: [
+			 targetSegments size = 3 and: [ targetSegments first = 'tonel' ] ] ]) ifFalse: [ self signalUnsupportedWrite: sourcePath ].
+	sourceSegments second = targetSegments second ifFalse: [
+		Error signal: 'Projection rename across packages is not supported yet: ' , sourcePath , ' to ' , targetPath ].
+	(sourceSegments third endsWith: '.class.st') ifTrue: [
+			(targetSegments third endsWith: '.class.st') ifFalse: [ self signalUnsupportedWrite: sourcePath ].
+			^ self
+				  renameTonelClassFileNamed: sourceSegments third
+				  toFileNamed: targetSegments third
+				  packageName: sourceSegments second
+				  originalPath: sourcePath
+				  targetPath: targetPath ].
 	self signalUnsupportedWrite: sourcePath
 ]
 
@@ -556,12 +676,67 @@ PharoImageFSProjectionBackend >> renameResponseForPath: sourcePath to: targetPat
 	^ Dictionary new
 ]
 
+{ #category : 'private - renaming' }
+PharoImageFSProjectionBackend >> renameTonelClassFileNamed: sourceFileName toFileNamed: targetFileName packageName: packageName originalPath: sourcePath targetPath: targetPath [
+
+	| class failureMessage newClassName oldClassName |
+	oldClassName := self classNameFromFileName: sourceFileName suffix: '.class.st'.
+	newClassName := self classNameFromFileName: targetFileName suffix: '.class.st'.
+	oldClassName ifNil: [ self signalUnsupportedWrite: sourcePath ].
+	newClassName ifNil: [ self signalUnsupportedWrite: targetPath ].
+	oldClassName = newClassName ifTrue: [ ^ self ].
+	class := self classForName: oldClassName packageName: packageName originalPath: sourcePath.
+	(Smalltalk globals includesKey: newClassName asSymbol) ifTrue: [
+		Error signal: 'Cannot rename class ' , oldClassName , ' to existing global ' , newClassName , ' for ' , targetPath ].
+	self validateRenameReferencesForClass: class packageName: packageName originalPath: sourcePath.
+	[
+		self executeClassRenameFrom: oldClassName to: newClassName.
+		self exportPackageNamed: packageName ]
+		on: Error
+		do: [ :error |
+				failureMessage := error messageText ifNil: [ error asString ].
+				[
+					(Smalltalk globals includesKey: newClassName asSymbol) ifTrue: [
+						self executeClassRenameFrom: newClassName to: oldClassName ].
+					self exportPackageNamed: packageName ]
+					on: Error
+					do: [ :rollbackError |
+							Error signal: 'Projection rename failed and rollback failed. Rename error: ' , failureMessage , '. Rollback error: '
+								, (rollbackError messageText ifNil: [ rollbackError asString ]) ].
+				Error signal: failureMessage ]
+]
+
 { #category : 'private - repositories' }
 PharoImageFSProjectionBackend >> repositoryOwningPackageNamed: packageName ifAbsent: absentBlock [
 
 	^ IceRepository repositories
 		  detect: [ :repository | repository loadedPackages anySatisfy: [ :package | package packageName asString = packageName ] ]
 		  ifNone: absentBlock
+]
+
+{ #category : 'private - deleting' }
+PharoImageFSProjectionBackend >> restoreClassTonelText: textString className: className packageName: packageName originalPath: aString [
+
+	| currentClass currentText |
+	currentClass := Smalltalk at: className asSymbol ifAbsent: [ nil ].
+	currentClass
+		ifNil: [
+				self
+					applyNewClassTonelText: textString
+					className: className
+					packageName: packageName
+					originalPath: aString ]
+		ifNotNil: [
+				currentClass package name asString = packageName ifFalse: [
+					Error signal: 'Cannot rollback class ' , className , ' because it now belongs to package ' , currentClass package name asString ].
+				currentText := TonelWriter sourceCodeOf: currentClass.
+				self
+					applyClassTonelText: textString
+					replacing: currentText
+					className: className
+					packageName: packageName
+					originalPath: aString ].
+	self exportPackageNamed: packageName
 ]
 
 { #category : 'private - writing' }
@@ -809,6 +984,18 @@ PharoImageFSProjectionBackend >> validateExtensionDefinitions: definitions class
 						, aString ] ]
 ]
 
+{ #category : 'private - renaming' }
+PharoImageFSProjectionBackend >> validateRenameReferencesForClass: aClass packageName: packageName originalPath: aString [
+
+	| outsidePackages referencingPackages |
+	referencingPackages := ((SystemNavigation default allReferencesTo: aClass binding) collect: [ :method | method package name asString ]) asSet.
+	outsidePackages := referencingPackages reject: [ :each | each = packageName ].
+	outsidePackages ifNotEmpty: [
+		Error signal:
+			'Projection class rename would update references outside package ' , packageName , ' for ' , aString , ': '
+			, (self commaSeparated: outsidePackages asArray sorted) ]
+]
+
 { #category : 'accessing' }
 PharoImageFSProjectionBackend >> write: textString at: aString [
 
@@ -829,12 +1016,37 @@ PharoImageFSProjectionBackend >> writeResponseForPath: aString text: textString 
 ]
 
 { #category : 'private - writing' }
+PharoImageFSProjectionBackend >> writeTonelClassRenameFromDefinition: classDefinition toClassName: className packageName: packageName originalPath: aString [
+
+	| oldClassName sourcePath |
+	oldClassName := classDefinition className asString.
+	sourcePath := '/tonel/' , packageName , '/' , oldClassName , '.class.st'.
+	^ self
+		  renameTonelClassFileNamed: oldClassName , '.class.st'
+		  toFileNamed: className , '.class.st'
+		  packageName: packageName
+		  originalPath: sourcePath
+		  targetPath: aString
+]
+
+{ #category : 'private - writing' }
 PharoImageFSProjectionBackend >> writeTonelClassText: textString fileName: fileName packageName: packageName originalPath: aString [
 
-	| class classExists className failureMessage previousText |
+	| class classDefinition classExists className failureMessage previousText |
 	className := self classNameFromFileName: fileName suffix: '.class.st'.
 	className ifNil: [ self signalUnsupportedWrite: aString ].
 	self repositoryOwningPackageNamed: packageName ifAbsent: [ Error signal: 'No Iceberg repository owns package ' , packageName ].
+	classDefinition := self classDefinitionFrom: (self parseTonelDefinitionsFrom: textString originalPath: aString) originalPath: aString.
+	classDefinition packageName asString = packageName ifFalse: [
+			Error signal:
+				'Class definition package ' , classDefinition packageName asString , ' does not match projection path package ' , packageName
+				, ' for ' , aString ].
+	classDefinition className asString = className ifFalse: [
+			^ self
+				  writeTonelClassRenameFromDefinition: classDefinition
+				  toClassName: className
+				  packageName: packageName
+				  originalPath: aString ].
 	class := Smalltalk at: className asSymbol ifAbsent: [ nil ].
 	classExists := class notNil.
 	(classExists and: [ class package name asString ~= packageName ]) ifTrue: [

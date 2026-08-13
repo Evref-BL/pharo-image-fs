@@ -12,14 +12,14 @@ Class {
 PharoImageFSProjectionBackendTest >> classTonelSource [
 
 	^ 'Class {
-	#name : ''PharoImageFSProjectionTestClass'',
+	#name : ''' , self originalClassName , ''',
 	#superclass : ''Object'',
 	#category : ''PharoImageFS-Tests'',
 	#package : ''PharoImageFS-Tests''
 }
 
 { #category : ''accessing'' }
-PharoImageFSProjectionTestClass >> answer [
+' , self originalClassName , ' >> answer [
 
 	^ 42
 ]
@@ -32,6 +32,20 @@ PharoImageFSProjectionBackendTest >> createExtensionTargetClass [
 	((Object << #PharoImageFSProjectionExtensionTarget)
 		 slots: {  };
 		 package: self targetPackageName) install
+]
+
+{ #category : 'private' }
+PharoImageFSProjectionBackendTest >> createReferenceUserClass [
+
+	| class |
+	class := ((Object << self referenceUserClassName asSymbol)
+		          slots: {  };
+		          package: self fixturePackageName) install.
+	class
+		compile: 'probeClass
+
+	^ ' , self originalClassName
+		classified: 'accessing'
 ]
 
 { #category : 'private' }
@@ -60,15 +74,46 @@ PharoImageFSProjectionBackendTest >> newBackend [
 ]
 
 { #category : 'private' }
+PharoImageFSProjectionBackendTest >> originalClassName [
+
+	^ 'PharoImageFSProjection' , 'TestClass'
+]
+
+{ #category : 'private' }
+PharoImageFSProjectionBackendTest >> originalClassTonelPath [
+
+	^ '/tonel/' , self fixturePackageName , '/' , self originalClassName , '.class.st'
+]
+
+{ #category : 'private' }
+PharoImageFSProjectionBackendTest >> referenceUserClassName [
+
+	^ 'PharoImageFSProjection' , 'ReferenceUser'
+]
+
+{ #category : 'private' }
 PharoImageFSProjectionBackendTest >> removeClassNamed: className [
 
-	Smalltalk globals at: className asSymbol ifPresent: [ :class | class removeFromSystem ]
+	(Smalltalk globals includesKey: className asSymbol) ifFalse: [ ^ self ].
+	(Smalltalk globals at: className asSymbol) removeFromSystem
 ]
 
 { #category : 'private' }
 PharoImageFSProjectionBackendTest >> removePackageNamed: packageName [
 
 	(PackageOrganizer default packageNamed: packageName ifAbsent: [ nil ]) ifNotNil: [ :package | package removeFromSystem ]
+]
+
+{ #category : 'private' }
+PharoImageFSProjectionBackendTest >> renamedClassName [
+
+	^ 'PharoImageFSProjection' , 'RenamedTestClass'
+]
+
+{ #category : 'private' }
+PharoImageFSProjectionBackendTest >> renamedClassTonelPath [
+
+	^ '/tonel/' , self fixturePackageName , '/' , self renamedClassName , '.class.st'
 ]
 
 { #category : 'private' }
@@ -81,19 +126,41 @@ PharoImageFSProjectionBackendTest >> targetPackageName [
 PharoImageFSProjectionBackendTest >> tearDown [
 
 	[
-		self removeClassNamed: 'PharoImageFSProjectionTestClass'.
+		self removeClassNamed: self originalClassName.
+		self removeClassNamed: self renamedClassName.
+		self removeClassNamed: self referenceUserClassName.
 		self removeClassNamed: 'PharoImageFSProjectionExtensionTarget'.
 		self removePackageNamed: self targetPackageName ] ensure: [ super tearDown ]
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testDeleteSignalsUnsupportedWrite [
+PharoImageFSProjectionBackendTest >> testDeleteRemovesClassTonelFile [
 
-	self
-		should: [ self newBackend delete: '/tonel/PharoImageFS-Tests/SomeClass.class.st' ]
-		raise: Error
-		whoseDescriptionIncludes: 'Projection path is not writable yet:'
-		description: 'V1 does not delete projected code files directly.'
+	| backend |
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	backend delete: self originalClassTonelPath.
+	self deny: (Smalltalk globals includesKey: self originalClassName asSymbol).
+	self assert: backend exportedPackageNames equals: {
+			self fixturePackageName.
+			self fixturePackageName }
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testDeleteRemovesExtensionTonelFile [
+
+	| backend targetClass |
+	self createExtensionTargetClass.
+	backend := self newBackend.
+	backend
+		write: self extensionTonelSource
+		at: '/tonel/' , self fixturePackageName , '/PharoImageFSProjectionExtensionTarget.extension.st'.
+	backend delete: '/tonel/' , self fixturePackageName , '/PharoImageFSProjectionExtensionTarget.extension.st'.
+	targetClass := Smalltalk globals at: #PharoImageFSProjectionExtensionTarget.
+	self deny: (targetClass includesSelector: #projectedExtensionAnswer).
+	self assert: backend exportedPackageNames equals: {
+			self fixturePackageName.
+			self fixturePackageName }
 ]
 
 { #category : 'tests' }
@@ -105,13 +172,46 @@ PharoImageFSProjectionBackendTest >> testListRootExposesTonelAndCritiques [
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testRenameSignalsUnsupportedWrite [
+PharoImageFSProjectionBackendTest >> testRenameClassTonelFileRenamesClassAndReferences [
+
+	| backend referenceUser renamedClass |
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	self createReferenceUserClass.
+	backend rename: self originalClassTonelPath to: self renamedClassTonelPath.
+	renamedClass := Smalltalk globals at: self renamedClassName asSymbol.
+	referenceUser := Smalltalk globals at: self referenceUserClassName asSymbol.
+	self deny: (Smalltalk globals includesKey: self originalClassName asSymbol).
+	self assert: renamedClass new answer equals: 42.
+	self assert: referenceUser new probeClass equals: renamedClass.
+	self assert: backend exportedPackageNames equals: {
+			self fixturePackageName.
+			self fixturePackageName }
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testRenameExtensionTonelFileSignalsUnsupportedWrite [
 
 	self
-		should: [ self newBackend rename: '/tonel/PharoImageFS-Tests/Old.class.st' to: '/tonel/PharoImageFS-Tests/New.class.st' ]
+		should: [ self newBackend rename: '/tonel/PharoImageFS-Tests/Old.extension.st' to: '/tonel/PharoImageFS-Tests/New.extension.st' ]
 		raise: Error
 		whoseDescriptionIncludes: 'Projection path is not writable yet:'
-		description: 'V1 does not rename projected code files directly.'
+		description: 'Extension file rename has no safe V1 semantics.'
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testWriteClassTonelFileWithDifferentPathRenamesClass [
+
+	| backend renamedClass |
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	backend write: self classTonelSource at: self renamedClassTonelPath.
+	renamedClass := Smalltalk globals at: self renamedClassName asSymbol.
+	self deny: (Smalltalk globals includesKey: self originalClassName asSymbol).
+	self assert: renamedClass new answer equals: 42.
+	self assert: backend exportedPackageNames equals: {
+			self fixturePackageName.
+			self fixturePackageName }
 ]
 
 { #category : 'tests' }
@@ -119,8 +219,8 @@ PharoImageFSProjectionBackendTest >> testWriteCreatesNewClassFromTonelFile [
 
 	| backend class |
 	backend := self newBackend.
-	backend write: self classTonelSource at: '/tonel/' , self fixturePackageName , '/PharoImageFSProjectionTestClass.class.st'.
-	class := Smalltalk globals at: #PharoImageFSProjectionTestClass.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	class := Smalltalk globals at: self originalClassName asSymbol.
 	self assert: class package name equals: self fixturePackageName.
 	self assert: class new answer equals: 42.
 	self assert: backend exportedPackageNames equals: { self fixturePackageName }

@@ -99,8 +99,13 @@ the daemon. Temporary files stay local to the daemon until they are renamed over
 a real projected Tonel path, where the full file is sent to Pharo as one
 transactional write.
 
-Deleting or renaming real projected code files is explicit but unsupported in
-V1. It returns the Pharo-side unsupported-write error instead of silently
-modifying the image.
+Deleting real projected code files is supported for `.class.st` and
+`.extension.st`. Class-file deletion removes the class from the image.
+Extension-file deletion removes only extension methods for that class/package.
+
+Renaming real projected `.class.st` files inside the same package is supported.
+The class is renamed in the live image, same-package references are updated, and
+the package is exported. Cross-package class rename and `.extension.st` rename
+remain unsupported.
 
 `/critiques` is read-only.
