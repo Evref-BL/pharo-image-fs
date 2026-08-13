@@ -237,6 +237,42 @@ func TestRenameOverlayFileToTonelFileLogsWriteFailure(t *testing.T) {
 	}
 }
 
+func TestUnlinkProjectedTonelFileUsesProjectionProtocol(t *testing.T) {
+	client := &fakeClient{}
+	node := writableTonelDirectoryNode(client)
+
+	errno := node.Unlink(t.Context(), "PharoImageFSProjectionBackend.class.st")
+	if errno != 0 {
+		t.Fatalf("unlink errno: %v", errno)
+	}
+
+	if client.deletedPath != "/tonel/PharoImageFS/PharoImageFSProjectionBackend.class.st" {
+		t.Fatalf("unexpected deleted path: %s", client.deletedPath)
+	}
+}
+
+func TestRenameProjectedTonelFileUsesProjectionProtocol(t *testing.T) {
+	client := &fakeClient{}
+	node := writableTonelDirectoryNode(client)
+
+	errno := node.Rename(
+		t.Context(),
+		"Old.class.st",
+		node,
+		"New.class.st",
+		0)
+	if errno != 0 {
+		t.Fatalf("rename errno: %v", errno)
+	}
+
+	if client.renamedPath != "/tonel/PharoImageFS/Old.class.st" {
+		t.Fatalf("unexpected renamed path: %s", client.renamedPath)
+	}
+	if client.renameTarget != "/tonel/PharoImageFS/New.class.st" {
+		t.Fatalf("unexpected rename target: %s", client.renameTarget)
+	}
+}
+
 func writableTonelDirectoryNode(client protocol.Client) *Node {
 	root := NewRoot(client)
 	fs.NewNodeFS(root, nil)

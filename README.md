@@ -52,6 +52,7 @@ Requirements:
 
 - Go
 - macFUSE on macOS
+- a Pharo image with the `PharoImageFS` package loaded
 
 Build the daemon:
 
@@ -63,18 +64,43 @@ go build ./...
 Run the daemon:
 
 ```sh
-mkdir -p /tmp/pharo-image-fs
 go run ./cmd/pharo-image-fs --endpoint http://127.0.0.1:9013/projection /tmp/pharo-image-fs
 ```
 
-The endpoint is the Pharo-side projection protocol root. The daemon calls these
-JSON endpoints under it:
+Start the Pharo-side projection endpoint in the image first:
+
+```smalltalk
+PharoImageFSProjectionHTTPServer startOn: 9013
+```
+
+The mountpoint directory is created automatically when missing. The endpoint is
+the Pharo-side projection protocol root. The daemon calls these JSON endpoints
+under it:
 
 - `POST /list` with `{ "path": "/tonel" }`
 - `POST /stat` with `{ "path": "/tonel/PharoImageFS/PharoImageFSProjectionBackend.class.st" }`
 - `POST /read` with `{ "path": "/tonel/PharoImageFS/PharoImageFSProjectionBackend.class.st" }`
 - `POST /write` with `{ "path": "/tonel/PharoImageFS/PharoImageFSProjectionBackend.class.st", "text": "..." }`
+- `POST /delete` with `{ "path": "/tonel/PharoImageFS/Old.class.st" }`
+- `POST /rename` with `{ "path": "/tonel/PharoImageFS/Old.class.st", "targetPath": "/tonel/PharoImageFS/New.class.st" }`
 
-The first daemon slice supports direct reads and direct full-file writes to
-existing writable projected files. Editor-safe temporary-file create/rename save
-patterns are a separate namespace-mutation step.
+## V1 write semantics
+
+`/tonel` accepts full-file writes for:
+
+- existing `.class.st` files;
+- existing `.extension.st` files;
+- new `.class.st` files whose Tonel class definition matches the projection
+  path;
+- new `.extension.st` files for existing classes.
+
+Editor-safe temporary-file create/write/rename save patterns are supported by
+the daemon. Temporary files stay local to the daemon until they are renamed over
+a real projected Tonel path, where the full file is sent to Pharo as one
+transactional write.
+
+Deleting or renaming real projected code files is explicit but unsupported in
+V1. It returns the Pharo-side unsupported-write error instead of silently
+modifying the image.
+
+`/critiques` is read-only.

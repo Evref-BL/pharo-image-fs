@@ -56,8 +56,13 @@ type fakeClient struct {
 	stats           map[string]protocol.Entry
 	writeResult     protocol.WriteResult
 	writeErr        error
+	deleteErr       error
+	renameErr       error
 	writtenPath     string
 	writtenContents []byte
+	deletedPath     string
+	renamedPath     string
+	renameTarget    string
 }
 
 func (c *fakeClient) List(_ context.Context, path string) ([]protocol.Entry, error) {
@@ -85,6 +90,25 @@ func (c *fakeClient) Write(_ context.Context, path string, contents []byte) (pro
 	c.writtenPath = path
 	c.writtenContents = append([]byte(nil), contents...)
 	return c.writeResult, nil
+}
+
+func (c *fakeClient) Delete(_ context.Context, path string) error {
+	if c.deleteErr != nil {
+		return c.deleteErr
+	}
+
+	c.deletedPath = path
+	return nil
+}
+
+func (c *fakeClient) Rename(_ context.Context, sourcePath string, targetPath string) error {
+	if c.renameErr != nil {
+		return c.renameErr
+	}
+
+	c.renamedPath = sourcePath
+	c.renameTarget = targetPath
+	return nil
 }
 
 func dirStreamNames(t *testing.T, stream fs.DirStream) []string {

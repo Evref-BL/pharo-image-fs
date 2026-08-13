@@ -94,6 +94,8 @@ PharoImageFSProjectionHTTPServer >> responseObjectForOperation: operation reques
 	operation = 'stat' ifTrue: [ ^ backend statResponseForPath: path ].
 	operation = 'read' ifTrue: [ ^ backend readResponseForPath: path ].
 	operation = 'write' ifTrue: [ ^ backend writeResponseForPath: path text: (self valueAt: #text in: body) ].
+	operation = 'delete' ifTrue: [ ^ backend deleteResponseForPath: path ].
+	operation = 'rename' ifTrue: [ ^ backend renameResponseForPath: path to: (self valueAt: #targetPath in: body) ].
 	Error signal: 'Unknown projection operation: ' , operation
 ]
 

@@ -188,17 +188,21 @@ func (n *Node) Create(ctx context.Context, name string, flags uint32, _ uint32, 
 	return n.NewInode(ctx, n.childNode(childPath, entry), stableAttrFor(entry)), handle, fuse.FOPEN_DIRECT_IO, 0
 }
 
-func (n *Node) Unlink(_ context.Context, name string) syscall.Errno {
+func (n *Node) Unlink(ctx context.Context, name string) syscall.Errno {
 	childPath := joinProjectionPath(n.path, name)
 	if n.overlay.Delete(childPath) {
 		return 0
 	}
 
-	if isWritableProjectionPath(childPath) {
-		return syscall.ENOTSUP
+	if !isWritableProjectionPath(childPath) {
+		return syscall.EROFS
 	}
 
-	return syscall.EROFS
+	if err := n.client.Delete(ctx, childPath); err != nil {
+		n.logf("delete %s failed: %v", childPath, err)
+		return errnoFor(err)
+	}
+	return 0
 }
 
 func (n *Node) Rename(ctx context.Context, name string, newParent fs.InodeEmbedder, newName string, flags uint32) syscall.Errno {
@@ -214,11 +218,7 @@ func (n *Node) Rename(ctx context.Context, name string, newParent fs.InodeEmbedd
 	oldPath := joinProjectionPath(n.path, name)
 	newPath := joinProjectionPath(targetParent.path, newName)
 	contents, ok := n.overlay.Read(oldPath)
-	if !ok {
-		return syscall.ENOTSUP
-	}
-
-	if isProjectedTonelFilePath(newPath) {
+	if ok && isProjectedTonelFilePath(newPath) {
 		if err := n.writeProjection(ctx, newPath, contents); err != nil {
 			return errnoFor(err)
 		}
@@ -227,11 +227,23 @@ func (n *Node) Rename(ctx context.Context, name string, newParent fs.InodeEmbedd
 		return 0
 	}
 
-	if !isWritableProjectionPath(newPath) {
+	if ok {
+		if !isWritableProjectionPath(newPath) {
+			return syscall.EROFS
+		}
+
+		n.overlay.Move(oldPath, newPath)
+		return 0
+	}
+
+	if !isWritableProjectionPath(oldPath) || !isWritableProjectionPath(newPath) {
 		return syscall.EROFS
 	}
 
-	n.overlay.Move(oldPath, newPath)
+	if err := n.client.Rename(ctx, oldPath, newPath); err != nil {
+		n.logf("rename %s to %s failed: %v", oldPath, newPath, err)
+		return errnoFor(err)
+	}
 	return 0
 }
 

@@ -1,6 +1,9 @@
 package mount
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+)
 
 func TestParseConfigUsesDefaultEndpoint(t *testing.T) {
 	config, err := ParseConfig([]string{"/tmp/pharo-image-fs"})
@@ -24,5 +27,12 @@ func TestParseConfigAcceptsEndpoint(t *testing.T) {
 
 	if config.Endpoint != "http://127.0.0.1:9100/projection" {
 		t.Fatalf("unexpected endpoint: %s", config.Endpoint)
+	}
+}
+
+func TestEnsureMountPointCreatesMissingDirectory(t *testing.T) {
+	mountPoint := filepath.Join(t.TempDir(), "missing", "mount")
+	if err := ensureMountPoint(mountPoint); err != nil {
+		t.Fatal(err)
 	}
 }

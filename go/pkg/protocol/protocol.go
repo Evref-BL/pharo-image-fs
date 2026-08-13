@@ -49,6 +49,8 @@ type Client interface {
 	Stat(ctx context.Context, path string) (Entry, error)
 	Read(ctx context.Context, path string) ([]byte, error)
 	Write(ctx context.Context, path string, contents []byte) (WriteResult, error)
+	Delete(ctx context.Context, path string) error
+	Rename(ctx context.Context, sourcePath string, targetPath string) error
 }
 
 // Error is a projection protocol error.
@@ -141,6 +143,20 @@ func (c *HTTPClient) Write(ctx context.Context, projectionPath string, contents 
 	return response.WriteResult, nil
 }
 
+func (c *HTTPClient) Delete(ctx context.Context, projectionPath string) error {
+	var response emptyResponse
+	return c.post(ctx, "delete", pathRequest{Path: projectionPath}, &response)
+}
+
+func (c *HTTPClient) Rename(ctx context.Context, sourcePath string, targetPath string) error {
+	var response emptyResponse
+	request := renameRequest{
+		Path:       sourcePath,
+		TargetPath: targetPath,
+	}
+	return c.post(ctx, "rename", request, &response)
+}
+
 func (c *HTTPClient) post(ctx context.Context, operation string, requestBody any, responseBody any) error {
 	bodyBytes, err := json.Marshal(requestBody)
 	if err != nil {
@@ -210,6 +226,11 @@ type writeRequest struct {
 	Text string `json:"text"`
 }
 
+type renameRequest struct {
+	Path       string `json:"path"`
+	TargetPath string `json:"targetPath"`
+}
+
 type listResponse struct {
 	Entries []Entry `json:"entries"`
 }
@@ -224,4 +245,7 @@ type readResponse struct {
 
 type writeResponse struct {
 	WriteResult
+}
+
+type emptyResponse struct {
 }

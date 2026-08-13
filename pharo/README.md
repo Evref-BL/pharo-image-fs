@@ -13,3 +13,12 @@ The Pharo backend owns:
 - non-blocking critique diagnostics;
 - synchronization of live image and exported source.
 
+Start a local projection endpoint with:
+
+```smalltalk
+PharoImageFSProjectionHTTPServer startOn: 9013
+```
+
+V1 supports full-file writes for existing and new Tonel class files, plus
+existing and new Tonel extension files. It deliberately rejects direct deletion
+or rename of projected code files until those image semantics are made safe.

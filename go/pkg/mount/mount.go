@@ -56,6 +56,9 @@ func Mount(mountPoint string, client protocol.Client, config Config) (*fuse.Serv
 func ensureMountPoint(mountPoint string) error {
 	info, err := os.Stat(mountPoint)
 	if err != nil {
+		if os.IsNotExist(err) {
+			return os.MkdirAll(mountPoint, 0o755)
+		}
 		return err
 	}
 	if !info.IsDir() {
