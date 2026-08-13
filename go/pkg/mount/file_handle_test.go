@@ -13,7 +13,7 @@ func TestFileHandleFlushWritesFullContents(t *testing.T) {
 	client := &fakeClient{}
 	handle := &FileHandle{
 		client:   client,
-		path:     "/tonel/MCP/MCP.class.st",
+		path:     "/tonel/PharoImageFS/PharoImageFSProjectionBackend.class.st",
 		contents: []byte("abc"),
 		writable: true,
 	}
@@ -30,7 +30,7 @@ func TestFileHandleFlushWritesFullContents(t *testing.T) {
 		t.Fatalf("flush errno: %v", errno)
 	}
 
-	if client.writtenPath != "/tonel/MCP/MCP.class.st" {
+	if client.writtenPath != "/tonel/PharoImageFS/PharoImageFSProjectionBackend.class.st" {
 		t.Fatalf("unexpected written path: %s", client.writtenPath)
 	}
 	if string(client.writtenContents) != "aXY" {

@@ -22,7 +22,7 @@ func TestHTTPClientListPostsProjectionPath(t *testing.T) {
 		}
 
 		response.Header().Set("Content-Type", "application/json")
-		_, _ = response.Write([]byte(`{"entries":[{"name":"MCP","kind":"directory"}]}`))
+		_, _ = response.Write([]byte(`{"entries":[{"name":"PharoImageFS","kind":"directory"}]}`))
 	}))
 	defer server.Close()
 
@@ -35,7 +35,7 @@ func TestHTTPClientListPostsProjectionPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 1 || entries[0].Name != "MCP" || entries[0].Kind != Directory {
+	if len(entries) != 1 || entries[0].Name != "PharoImageFS" || entries[0].Kind != Directory {
 		t.Fatalf("unexpected entries: %#v", entries)
 	}
 }
@@ -52,7 +52,7 @@ func TestHTTPClientReturnsProtocolErrorMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = client.Read(t.Context(), "/tonel/MCP/MCP.class.st")
+	_, err = client.Read(t.Context(), "/tonel/PharoImageFS/PharoImageFSProjectionBackend.class.st")
 	if err == nil {
 		t.Fatal("expected protocol error")
 	}

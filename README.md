@@ -71,9 +71,9 @@ The endpoint is the Pharo-side projection protocol root. The daemon calls these
 JSON endpoints under it:
 
 - `POST /list` with `{ "path": "/tonel" }`
-- `POST /stat` with `{ "path": "/tonel/MCP/MCP.class.st" }`
-- `POST /read` with `{ "path": "/tonel/MCP/MCP.class.st" }`
-- `POST /write` with `{ "path": "/tonel/MCP/MCP.class.st", "text": "..." }`
+- `POST /stat` with `{ "path": "/tonel/PharoImageFS/PharoImageFSProjectionBackend.class.st" }`
+- `POST /read` with `{ "path": "/tonel/PharoImageFS/PharoImageFSProjectionBackend.class.st" }`
+- `POST /write` with `{ "path": "/tonel/PharoImageFS/PharoImageFSProjectionBackend.class.st", "text": "..." }`
 
 The first daemon slice supports direct reads and direct full-file writes to
 existing writable projected files. Editor-safe temporary-file create/rename save

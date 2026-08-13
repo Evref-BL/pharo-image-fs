@@ -89,9 +89,7 @@ PharoImageFSProjectionBackend >> blockingCritiquesForMethodNode: aMethodNode [
 { #category : 'private - critiques' }
 PharoImageFSProjectionBackend >> blockingPreCompileRuleClasses [
 
-	| ruleClass toolClass |
-	toolClass := Smalltalk globals at: #MCPToolCompileMethod ifAbsent: [ nil ].
-	toolClass ifNotNil: [ ^ toolClass new blockingPreCompileRuleClasses ].
+	| ruleClass |
 	ruleClass := Smalltalk globals at: #ReDeadBlockRule ifAbsent: [ nil ].
 	ruleClass ifNil: [ ^ #(  ) ].
 	^ { ruleClass }
