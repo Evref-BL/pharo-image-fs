@@ -46,7 +46,7 @@ macFUSE supports two backends:
 Use the FSKit backend on macOS 26+ with:
 
 ```sh
-./daemon/pharo-image-fs --mount-option backend=fskit --endpoint http://127.0.0.1:9013/projection /tmp/pharo-image-fs
+daemon/pharo-image-fs --mount-option backend=fskit --endpoint http://127.0.0.1:9013/projection /tmp/pharo-image-fs
 ```
 
 If FSKit is unavailable or does not work for your setup, omit the
@@ -54,12 +54,12 @@ If FSKit is unavailable or does not work for your setup, omit the
 
 ## Load the Pharo backend
 
-Load the project from the repository root:
+Load the project in a Pharo image:
 
 ```smalltalk
 Metacello new
 	baseline: 'PharoImageFS';
-	repository: 'tonel://src';
+	repository: 'github://Evref-BL/pharo-image-fs:main/src';
 	load
 ```
 
@@ -71,9 +71,10 @@ The baseline groups are:
 
 ## Build the daemon
 
+From a checkout of this repository:
+
 ```sh
-cd daemon
-go build -o pharo-image-fs ./cmd/pharo-image-fs
+go -C daemon build -o pharo-image-fs ./cmd/pharo-image-fs
 ```
 
 ## Start the projection
@@ -96,7 +97,7 @@ started through this API.
 Then mount the image from a terminal:
 
 ```sh
-./daemon/pharo-image-fs --endpoint http://127.0.0.1:9013/projection /tmp/pharo-image-fs
+daemon/pharo-image-fs --endpoint http://127.0.0.1:9013/projection /tmp/pharo-image-fs
 ```
 
 The mountpoint directory is created automatically when missing.
