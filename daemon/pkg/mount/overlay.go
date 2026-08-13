@@ -6,7 +6,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/Evref-BL/pharo-image-fs/go/pkg/protocol"
+	"github.com/Evref-BL/pharo-image-fs/daemon/pkg/protocol"
 )
 
 // Overlay stores files created by editors as part of safe-save workflows before

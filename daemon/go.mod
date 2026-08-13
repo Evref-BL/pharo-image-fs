@@ -1,4 +1,4 @@
-module github.com/Evref-BL/pharo-image-fs/go
+module github.com/Evref-BL/pharo-image-fs/daemon
 
 go 1.26
 

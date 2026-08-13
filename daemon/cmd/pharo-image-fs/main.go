@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/Evref-BL/pharo-image-fs/go/pkg/mount"
+	"github.com/Evref-BL/pharo-image-fs/daemon/pkg/mount"
 )
 
 func main() {

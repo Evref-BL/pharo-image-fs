@@ -5,7 +5,7 @@ import (
 	"errors"
 	"syscall"
 
-	"github.com/Evref-BL/pharo-image-fs/go/pkg/protocol"
+	"github.com/Evref-BL/pharo-image-fs/daemon/pkg/protocol"
 )
 
 func errnoFor(err error) syscall.Errno {

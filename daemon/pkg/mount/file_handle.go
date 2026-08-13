@@ -5,7 +5,7 @@ import (
 	"sync"
 	"syscall"
 
-	"github.com/Evref-BL/pharo-image-fs/go/pkg/protocol"
+	"github.com/Evref-BL/pharo-image-fs/daemon/pkg/protocol"
 	"github.com/hanwen/go-fuse/v2/fs"
 	"github.com/hanwen/go-fuse/v2/fuse"
 )
