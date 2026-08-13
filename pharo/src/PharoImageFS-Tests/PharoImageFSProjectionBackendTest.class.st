@@ -27,6 +27,58 @@ PharoImageFSProjectionBackendTest >> classTonelSource [
 ]
 
 { #category : 'private' }
+PharoImageFSProjectionBackendTest >> classTonelSourceWithDeadBlock [
+
+	^ self classTonelSource , '
+{ #category : ''tests'' }
+' , self originalClassName , ' >> deadBlockProbe [
+
+	[ self error: ''never run'' ]
+]
+'
+]
+
+{ #category : 'private' }
+PharoImageFSProjectionBackendTest >> classTonelSourceWithExtraMethod [
+
+	^ self classTonelSource , '
+{ #category : ''accessing'' }
+' , self originalClassName , ' >> extraAnswer [
+
+	^ 99
+]
+'
+]
+
+{ #category : 'private' }
+PharoImageFSProjectionBackendTest >> classTonelSourceWithSlot [
+
+	^ 'Class {
+	#name : ''' , self originalClassName , ''',
+	#superclass : ''Object'',
+	#instVars : [
+		''value''
+	],
+	#category : ''PharoImageFS-Tests'',
+	#package : ''PharoImageFS-Tests''
+}
+
+{ #category : ''initialization'' }
+' , self originalClassName , ' >> initialize [
+
+	super initialize.
+	value := 123
+]
+
+{ #category : ''accessing'' }
+' , self originalClassName , ' >> value [
+
+	^ value
+]
+'
+]
+
+{ #category : 'private' }
 PharoImageFSProjectionBackendTest >> createExtensionTargetClass [
 
 	((Object << #PharoImageFSProjectionExtensionTarget)
@@ -46,6 +98,12 @@ PharoImageFSProjectionBackendTest >> createReferenceUserClass [
 
 	^ ' , self originalClassName
 		classified: 'accessing'
+]
+
+{ #category : 'private' }
+PharoImageFSProjectionBackendTest >> decodedJsonFrom: aString [
+
+	^ STONJSON fromString: aString
 ]
 
 { #category : 'private' }
@@ -164,11 +222,85 @@ PharoImageFSProjectionBackendTest >> testDeleteRemovesExtensionTonelFile [
 ]
 
 { #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testExistingClassRewriteRemovesAbsentMethods [
+
+	| backend class |
+	backend := self newBackend.
+	backend write: self classTonelSourceWithExtraMethod at: self originalClassTonelPath.
+	class := Smalltalk globals at: self originalClassName asSymbol.
+	self assert: class new extraAnswer equals: 99.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	self deny: (class includesSelector: #extraAnswer).
+	self assert: class new answer equals: 42.
+	self assert: backend exportedPackageNames equals: {
+			self fixturePackageName.
+			self fixturePackageName }
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testExistingClassRewriteUpdatesClassDefinition [
+
+	| backend class |
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	backend write: self classTonelSourceWithSlot at: self originalClassTonelPath.
+	class := Smalltalk globals at: self originalClassName asSymbol.
+	self assert: class instVarNames equals: #( 'value' ).
+	self deny: (class includesSelector: #answer).
+	self assert: class new value equals: 123.
+	self assert: backend exportedPackageNames equals: {
+			self fixturePackageName.
+			self fixturePackageName }
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testExportFailureDuringClassRewriteRollsBackImage [
+
+	| backend class |
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	backend failNextExport.
+	self
+		should: [ backend write: self classTonelSourceWithExtraMethod at: self originalClassTonelPath ]
+		raise: Error
+		whoseDescriptionIncludes: 'Simulated export failure'
+		description: 'A failed export after applying a class rewrite must rollback the live image.'.
+	class := Smalltalk globals at: self originalClassName asSymbol.
+	self assert: class new answer equals: 42.
+	self deny: (class includesSelector: #extraAnswer).
+	self assert: backend exportedPackageNames equals: {
+			self fixturePackageName.
+			self fixturePackageName }
+]
+
+{ #category : 'tests' }
 PharoImageFSProjectionBackendTest >> testListRootExposesTonelAndCritiques [
 
 	| names |
 	names := (self newBackend list: '/') collect: [ :entry | entry name ].
 	self assert: names asArray equals: #( 'tonel' 'critiques' )
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testReadClassCritiqueFileReturnsClassAndMethodKeys [
+
+	| backend data |
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	data := self decodedJsonFrom: (backend read: '/critiques/' , self originalClassName , '.json').
+	self assert: (data includesKey: 'class').
+	self assert: (data includesKey: 'methods')
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testReadMethodCritiqueFileReturnsSideKeys [
+
+	| backend data |
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	data := self decodedJsonFrom: (backend read: '/critiques/' , self originalClassName , '/answer.json').
+	self assert: (data includesKey: 'instance').
+	self assert: (data at: 'instance') isEmpty
 ]
 
 { #category : 'tests' }
@@ -197,6 +329,39 @@ PharoImageFSProjectionBackendTest >> testRenameExtensionTonelFileSignalsUnsuppor
 		raise: Error
 		whoseDescriptionIncludes: 'Projection path is not writable yet:'
 		description: 'Extension file rename has no safe V1 semantics.'
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testRollbackFailureReportsBothErrors [
+
+	| backend class |
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	backend failNextExports: 2.
+	self
+		should: [ backend write: self classTonelSourceWithExtraMethod at: self originalClassTonelPath ]
+		raise: Error
+		whoseDescriptionIncludes: 'Projection write failed and rollback failed'
+		description: 'Rollback failure should not hide the original write failure.'.
+	class := Smalltalk globals at: self originalClassName asSymbol.
+	self assert: class new answer equals: 42.
+	self deny: (class includesSelector: #extraAnswer)
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testWriteBlockedByCritiqueKeepsExistingClass [
+
+	| backend class |
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	self
+		should: [ backend write: self classTonelSourceWithDeadBlock at: self originalClassTonelPath ]
+		raise: Error
+		whoseDescriptionIncludes: 'Write blocked by critiques'
+		description: 'Blocking critiques must reject the transaction before broken methods are installed.'.
+	class := Smalltalk globals at: self originalClassName asSymbol.
+	self assert: class new answer equals: 42.
+	self deny: (class includesSelector: #deadBlockProbe)
 ]
 
 { #category : 'tests' }

@@ -5,7 +5,8 @@ Class {
 	#name : 'PharoImageFSTestProjectionBackend',
 	#superclass : 'PharoImageFSProjectionBackend',
 	#instVars : [
-		'exportedPackageNames'
+		'exportedPackageNames',
+		'remainingExportFailures'
 	],
 	#category : 'PharoImageFS-Tests',
 	#package : 'PharoImageFS-Tests'
@@ -14,6 +15,9 @@ Class {
 { #category : 'private - repositories' }
 PharoImageFSTestProjectionBackend >> exportPackageNamed: packageName [
 
+	remainingExportFailures > 0 ifTrue: [
+			remainingExportFailures := remainingExportFailures - 1.
+			Error signal: 'Simulated export failure for ' , packageName ].
 	exportedPackageNames add: packageName
 ]
 
@@ -23,11 +27,24 @@ PharoImageFSTestProjectionBackend >> exportedPackageNames [
 	^ exportedPackageNames asArray
 ]
 
+{ #category : 'testing' }
+PharoImageFSTestProjectionBackend >> failNextExport [
+
+	self failNextExports: 1
+]
+
+{ #category : 'testing' }
+PharoImageFSTestProjectionBackend >> failNextExports: anInteger [
+
+	remainingExportFailures := anInteger
+]
+
 { #category : 'initialization' }
 PharoImageFSTestProjectionBackend >> initialize [
 
 	super initialize.
-	exportedPackageNames := OrderedCollection new
+	exportedPackageNames := OrderedCollection new.
+	remainingExportFailures := 0
 ]
 
 { #category : 'private - repositories' }
