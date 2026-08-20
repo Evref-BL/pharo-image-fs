@@ -14,9 +14,17 @@ critique runs, and repository operations.
 
 ## Requirements
 
-- macOS with [macFUSE](https://macfuse.github.io/) installed
+- macOS (Linux also supported)
 - Go
 - a Pharo image where the `PharoImageFS` package can be loaded
+
+The daemon starts a local NFS server and mounts it using macOS's built-in
+`mount_nfs` (or `mount -t nfs` on Linux). No kernel extensions or third-party
+filesystem drivers are needed.
+
+Mounting requires root privileges. The daemon invokes `mount_nfs` which needs to
+run as root. Either run the daemon as root, or configure a `sudoers` entry for
+the mount command.
 
 ## Usage
 
@@ -66,42 +74,53 @@ Then mount the image from a terminal. The mountpoint path is created when it is
 missing. If the path already exists, it must be a directory.
 
 ```sh
-daemon/pharo-image-fs --endpoint http://127.0.0.1:9013/projection /tmp/pharo-image-fs
+sudo daemon/pharo-image-fs --endpoint http://127.0.0.1:9013/projection /tmp/pharo-image-fs
 ```
 
 Use the same port in both commands. For example, if the Pharo endpoint runs on
 `9023`, mount with:
 
 ```sh
-daemon/pharo-image-fs --endpoint http://127.0.0.1:9023/projection /tmp/pharo-image-fs
+sudo daemon/pharo-image-fs --endpoint http://127.0.0.1:9023/projection /tmp/pharo-image-fs
 ```
 
 If the daemon reports `mountpoint is not a directory`, the chosen mountpoint path
 already exists as a non-directory. Choose another path or remove/rename the
 existing file before mounting.
 
-Unmount with the normal macOS unmount command:
+Unmount with the standard unmount command:
 
 ```sh
 umount /tmp/pharo-image-fs
 ```
 
-If macFUSE reports the mount as busy, use:
+If the mount is busy, use:
 
 ```sh
-diskutil unmount /tmp/pharo-image-fs
+umount -f /tmp/pharo-image-fs
 ```
 
-macFUSE uses its kernel backend by default. On macOS 26+ with a recent macFUSE,
-you can opt into the FSKit backend, which runs in user space and avoids the
-kernel-extension approval path for supported file systems:
+### NFS mount options
+
+The daemon mounts the NFS share with these options by default:
+
+| Option | Effect |
+|--------|--------|
+| `nfsvers=3` | NFSv3 (required by the Go NFS server) |
+| `tcp` | TCP transport |
+| `nolock` | Disable NLM file locking (server does not implement it) |
+| `locallocks` | Local-only locking |
+| `nfc` | Normalize UTF-8 filenames (important on macOS) |
+| `actimeo=1` | 1-second attribute cache timeout for real-time consistency |
+| `rsize=32768` | 32 KB read buffer |
+| `wsize=32768` | 32 KB write buffer |
+
+You can pass additional mount options with `--mount-option`:
 
 ```sh
-daemon/pharo-image-fs --mount-option backend=fskit --endpoint http://127.0.0.1:9013/projection /tmp/pharo-image-fs
+sudo daemon/pharo-image-fs --mount-option actimeo=0 \
+    --endpoint http://127.0.0.1:9013/projection /tmp/pharo-image-fs
 ```
-
-If FSKit is unavailable or does not work for your setup, omit the
-`--mount-option backend=fskit` option to use macFUSE's default backend.
 
 ### Use the mounted image
 
@@ -127,7 +146,7 @@ cat /tmp/pharo-image-fs/critiques/PharoImageFSProjectionBackend/write:at:.json
 The projection is lazy and backed by the live image. Directory listings, stat
 requests, and reads ask Pharo for the current state as the filesystem needs
 them, so image-side changes become visible through the mount on later
-filesystem operations. macFUSE/go-fuse metadata caches are intentionally short;
+filesystem operations. The NFS `actimeo=1` option keeps metadata caches short;
 an already-open file handle can still contain the contents read when it was
 opened.
 
@@ -211,4 +230,4 @@ The useful next improvements are:
 - support combined cross-package class move plus class rename;
 - add broader transaction coverage for failure paths;
 - add more useful critique projections;
-- evaluate Linux and Windows mount backends after the macOS workflow is stable.
+- evaluate Windows mount support.

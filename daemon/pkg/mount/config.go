@@ -32,8 +32,8 @@ func ParseConfig(args []string) (Config, error) {
 
 	config := Config{}
 	flags.StringVar(&config.Endpoint, "endpoint", "http://127.0.0.1:9013/projection", "Pharo projection endpoint root")
-	flags.BoolVar(&config.Debug, "debug", false, "enable FUSE debug logging")
-	flags.Var((*mountOptionFlags)(&config.MountOptions), "mount-option", "FUSE mount option passed as -o; repeat for multiple options")
+	flags.BoolVar(&config.Debug, "debug", false, "enable debug logging")
+	flags.Var((*mountOptionFlags)(&config.MountOptions), "mount-option", "NFS mount option passed as -o; repeat for multiple options")
 
 	if err := flags.Parse(args); err != nil {
 		return Config{}, err

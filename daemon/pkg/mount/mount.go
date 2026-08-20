@@ -2,56 +2,19 @@ package mount
 
 import (
 	"fmt"
-	"log"
 	"os"
-	"time"
 
 	"github.com/Evref-BL/pharo-image-fs/daemon/pkg/protocol"
-	"github.com/hanwen/go-fuse/v2/fs"
-	"github.com/hanwen/go-fuse/v2/fuse"
 )
 
-// Run starts the pharo-image-fs mount daemon.
+// Run starts the pharo-image-fs mount daemon using NFS.
 func Run(args []string) error {
-	config, err := ParseConfig(args)
-	if err != nil {
-		return err
-	}
-
-	client, err := protocol.NewHTTPClient(config.Endpoint)
-	if err != nil {
-		return err
-	}
-
-	server, err := Mount(config.MountPoint, client, config)
-	if err != nil {
-		return err
-	}
-	server.Wait()
-	return nil
+	return RunNFS(args)
 }
 
-// Mount mounts the Pharo projection filesystem at mountPoint.
-func Mount(mountPoint string, client protocol.Client, config Config) (*fuse.Server, error) {
-	if err := ensureMountPoint(mountPoint); err != nil {
-		return nil, err
-	}
-
-	timeout := time.Second
-	options := &fs.Options{
-		AttrTimeout:     &timeout,
-		EntryTimeout:    &timeout,
-		NegativeTimeout: &timeout,
-		MountOptions: fuse.MountOptions{
-			Name:    "pharo-image-fs",
-			Debug:   config.Debug,
-			Options: config.MountOptions,
-		},
-	}
-
-	root := NewRoot(client)
-	root.logger = log.New(os.Stderr, "pharo-image-fs: ", log.LstdFlags)
-	return fs.Mount(mountPoint, root, options)
+// Mount mounts the Pharo projection filesystem at mountPoint using NFS.
+func Mount(mountPoint string, client protocol.Client, config Config) (*NFSServer, error) {
+	return MountNFS(mountPoint, client, config)
 }
 
 func ensureMountPoint(mountPoint string) error {
