@@ -94,14 +94,37 @@ diskutil unmount /tmp/pharo-image-fs
 
 macFUSE uses its kernel backend by default. On macOS 26+ with a recent macFUSE,
 you can opt into the FSKit backend, which runs in user space and avoids the
-kernel-extension approval path for supported file systems:
+kernel-extension approval path for supported file systems.
+
+FSKit has two requirements that differ from the kernel backend:
+
+- **Mount points must be under `/Volumes`.** Outside of `/Volumes`, macFUSE
+  falls back to the kernel extension.
+- **Reduced Security.** macOS classifies FSKit modules as system extensions.
+  Even though they run in user space, the Mac's security policy must allow
+  third-party system extensions. If your Mac is on Full Security, you need to
+  change it once: shut down, hold Touch ID / power button to enter Startup
+  Security Utility, select your disk, click **Security Policy**, and choose
+  **Reduced Security** (Allow identified developers is sufficient). This is a
+  one-time change.
+
+**First-time FSKit setup.** After setting the security policy, approve the
+macFUSE FSKit extensions from a terminal:
 
 ```sh
-daemon/pharo-image-fs --mount-option backend=fskit --endpoint http://127.0.0.1:9013/projection /tmp/pharo-image-fs
+pluginkit -e use -p com.apple.fskit.fsmodule -i io.macfuse.app.fsmodule.macfuse
+pluginkit -e use -p com.apple.fskit.fsmodule -i io.macfuse.app.fsmodule.macfuse-local
+```
+
+Then mount under `/Volumes` with the FSKit backend:
+
+```sh
+daemon/pharo-image-fs --mount-option backend=fskit --endpoint http://127.0.0.1:9013/projection /Volumes/pharo-image-fs
 ```
 
 If FSKit is unavailable or does not work for your setup, omit the
-`--mount-option backend=fskit` option to use macFUSE's default backend.
+`--mount-option backend=fskit` option to use macFUSE's default backend. Without
+FSKit, mount points are not restricted to `/Volumes`.
 
 ### Use the mounted image
 
