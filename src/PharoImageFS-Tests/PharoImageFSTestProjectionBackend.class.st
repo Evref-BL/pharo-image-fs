@@ -78,6 +78,20 @@ PharoImageFSTestProjectionBackend >> loadedMethodSelectors [
 ]
 
 { #category : 'private - repositories' }
+PharoImageFSTestProjectionBackend >> repositoryInfos [
+
+	^ {
+		  (OrderedDictionary new
+			   at: #name put: 'Fixture Repository';
+			   at: #projectionName put: 'Fixture Repository';
+			   at: #path put: '/tmp/fixture-repository';
+			   at: #loadedPackages put: {
+					   'PharoImageFS-Tests'.
+					   'PharoImageFS-Tests-Resources' };
+			   yourself) }
+]
+
+{ #category : 'private - repositories' }
 PharoImageFSTestProjectionBackend >> repositoryOwningPackageNamed: packageName ifAbsent: absentBlock [
 
 	^ PackageOrganizer default packageNamed: packageName ifAbsent: absentBlock

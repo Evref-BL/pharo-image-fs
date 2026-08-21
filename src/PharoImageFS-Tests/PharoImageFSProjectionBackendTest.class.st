@@ -434,7 +434,7 @@ PharoImageFSProjectionBackendTest >> testListRootExposesTonelAndCritiques [
 
 	| names |
 	names := (self newBackend list: '/') collect: [ :entry | entry name ].
-	self assert: names asArray equals: #( 'tonel' 'critiques' )
+	self assert: names asArray equals: #( 'tonel' 'critiques' 'repositories' )
 ]
 
 { #category : 'tests' }
@@ -542,6 +542,38 @@ PharoImageFSProjectionBackendTest >> testRenameExtensionTonelFileSignalsUnsuppor
 		raise: Error
 		whoseDescriptionIncludes: 'Projection path is not writable yet:'
 		description: 'Extension file rename is intentionally unsupported.'
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testRepositoryMetadataCanBeRead [
+
+	| metadata |
+	metadata := self decodedJsonFrom:
+		            (self newBackend read: '/repositories/Fixture Repository.repository.json').
+	self assert: (metadata at: #name) equals: 'Fixture Repository'.
+	self assert: (metadata at: #path) equals: '/tmp/fixture-repository'.
+	self
+		assert: (metadata at: #loadedPackages)
+		equals: #( 'PharoImageFS-Tests' 'PharoImageFS-Tests-Resources' )
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testRepositoryRootListsSymlinkAndMetadata [
+
+	| names |
+	names := (self newBackend list: '/repositories') collect: [ :entry | entry name ].
+	self
+		assert: names asArray
+		equals: #( 'Fixture Repository' 'Fixture Repository.repository.json' )
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testRepositoryStatExposesSymlink [
+
+	| entry |
+	entry := self newBackend stat: '/repositories/Fixture Repository'.
+	self assert: entry isSymlink.
+	self assert: entry target equals: '/tmp/fixture-repository'
 ]
 
 { #category : 'tests' }

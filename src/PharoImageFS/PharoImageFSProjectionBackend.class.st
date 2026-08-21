@@ -522,6 +522,19 @@ PharoImageFSProjectionBackend >> icePackageNamed: packageName in: aRepository if
 	^ aRepository loadedPackages detect: [ :package | package packageName asString = packageName ] ifNone: absentBlock
 ]
 
+{ #category : 'private - repositories' }
+PharoImageFSProjectionBackend >> iceRepositoryDirectoryFor: aRepository [
+
+	^ [
+		  | directory |
+		  directory := (aRepository respondsTo: #repositoryDirectory)
+			               ifTrue: [ aRepository repositoryDirectory ]
+			               ifFalse: [ nil ].
+		  directory ifNil: [ nil ] ifNotNil: [ directory asFileReference ] ]
+		  on: Error
+		  do: [ nil ]
+]
+
 { #category : 'private - critiques' }
 PharoImageFSProjectionBackend >> jsonTextFor: anObject [
 
@@ -536,6 +549,7 @@ PharoImageFSProjectionBackend >> list: aString [
 	segments isEmpty ifTrue: [ ^ self rootEntries ].
 	segments first = 'tonel' ifTrue: [ ^ self listTonelSegments: segments allButFirst originalPath: aString ].
 	segments first = 'critiques' ifTrue: [ ^ self listCritiqueSegments: segments allButFirst originalPath: aString ].
+	segments first = 'repositories' ifTrue: [ ^ self listRepositorySegments: segments allButFirst originalPath: aString ].
 	self signalNotFound: aString
 ]
 
@@ -549,6 +563,13 @@ PharoImageFSProjectionBackend >> listCritiqueSegments: segments originalPath: aS
 	class := self classNamed: segments second originalPath: aString.
 	class package name asString = segments first ifFalse: [ self signalNotFound: aString ].
 	^ self critiqueMethodEntriesForClass: class
+]
+
+{ #category : 'private - listing' }
+PharoImageFSProjectionBackend >> listRepositorySegments: segments originalPath: aString [
+
+	segments isEmpty ifTrue: [ ^ self repositoryEntries ].
+	self signalNotFound: aString
 ]
 
 { #category : 'protocol responses' }
@@ -828,6 +849,7 @@ PharoImageFSProjectionBackend >> read: aString [
 	segments isEmpty ifTrue: [ self signalNotFound: aString ].
 	segments first = 'tonel' ifTrue: [ ^ self readTonelSegments: segments allButFirst originalPath: aString ].
 	segments first = 'critiques' ifTrue: [ ^ self readCritiqueSegments: segments allButFirst originalPath: aString ].
+	segments first = 'repositories' ifTrue: [ ^ self readRepositorySegments: segments allButFirst originalPath: aString ].
 	self signalNotFound: aString
 ]
 
@@ -880,6 +902,13 @@ PharoImageFSProjectionBackend >> readCritiqueSegments: segments originalPath: aS
 							  className: segments second
 							  originalPath: aString ] ].
 	self signalNotFound: aString
+]
+
+{ #category : 'private - reading' }
+PharoImageFSProjectionBackend >> readRepositorySegments: segments originalPath: aString [
+
+	segments size = 1 ifFalse: [ self signalNotFound: aString ].
+	^ self repositoryMetadataTextForFileNamed: segments first originalPath: aString
 ]
 
 { #category : 'protocol responses' }
@@ -1032,11 +1061,99 @@ PharoImageFSProjectionBackend >> renameTonelClassFileNamed: sourceFileName toFil
 ]
 
 { #category : 'private - repositories' }
+PharoImageFSProjectionBackend >> repositoryEntries [
+
+	| entries |
+	entries := OrderedCollection new.
+	self repositoryInfos do: [ :info |
+		entries
+			add: (self symlinkNamed: (info at: #projectionName) target: (info at: #path));
+			add:
+				(self
+					fileNamed: (self repositoryMetadataFileNameFor: info)
+					text: (self jsonTextFor: info)
+					writable: false) ].
+	^ entries asArray
+]
+
+{ #category : 'private - repositories' }
+PharoImageFSProjectionBackend >> repositoryInfoForMetadataFileNamed: fileName originalPath: aString [
+
+	^ self repositoryInfos
+		  detect: [ :info | (self repositoryMetadataFileNameFor: info) = fileName ]
+		  ifNone: [ self signalNotFound: aString ]
+]
+
+{ #category : 'private - repositories' }
+PharoImageFSProjectionBackend >> repositoryInfoForProjectionName: projectionName originalPath: aString [
+
+	^ self repositoryInfos
+		  detect: [ :info | (info at: #projectionName) = projectionName ]
+		  ifNone: [ self signalNotFound: aString ]
+]
+
+{ #category : 'private - repositories' }
+PharoImageFSProjectionBackend >> repositoryInfoForRepository: repository ifPresent: presentBlock [
+
+	| directory info |
+	directory := self iceRepositoryDirectoryFor: repository.
+	(directory isNil or: [ directory exists not ]) ifTrue: [ ^ self ].
+	info := OrderedDictionary new.
+	info
+		at: #name put: repository name asString;
+		at: #projectionName put: (self repositoryProjectionNameFor: repository name asString);
+		at: #path put: directory pathString;
+		at: #loadedPackages put: (self repositoryLoadedPackageNamesFor: repository).
+	^ presentBlock value: info
+]
+
+{ #category : 'private - repositories' }
+PharoImageFSProjectionBackend >> repositoryInfos [
+
+	| infos |
+	infos := OrderedCollection new.
+	IceRepository registry do: [ :repository |
+		self repositoryInfoForRepository: repository ifPresent: [ :info | infos add: info ] ].
+	^ infos asArray sorted: [ :left :right | (left at: #projectionName) <= (right at: #projectionName) ]
+]
+
+{ #category : 'private - repositories' }
+PharoImageFSProjectionBackend >> repositoryLoadedPackageNamesFor: repository [
+
+	^ [
+		  (repository loadedPackages collect: [ :package | package packageName asString ] as: Array) sorted ]
+		  on: Error
+		  do: [ #(  ) ]
+]
+
+{ #category : 'private - repositories' }
+PharoImageFSProjectionBackend >> repositoryMetadataFileNameFor: info [
+
+	^ (info at: #projectionName) , '.repository.json'
+]
+
+{ #category : 'private - repositories' }
+PharoImageFSProjectionBackend >> repositoryMetadataTextForFileNamed: fileName originalPath: aString [
+
+	^ self jsonTextFor: (self repositoryInfoForMetadataFileNamed: fileName originalPath: aString)
+]
+
+{ #category : 'private - repositories' }
 PharoImageFSProjectionBackend >> repositoryOwningPackageNamed: packageName ifAbsent: absentBlock [
 
 	^ IceRepository repositories
 		  detect: [ :repository | repository loadedPackages anySatisfy: [ :package | package packageName asString = packageName ] ]
 		  ifNone: absentBlock
+]
+
+{ #category : 'private - repositories' }
+PharoImageFSProjectionBackend >> repositoryProjectionNameFor: aString [
+
+	^ String streamContents: [ :stream |
+		  aString do: [ :character |
+			  ((character = $/) or: [ character = $: ])
+				  ifTrue: [ stream nextPut: $- ]
+				  ifFalse: [ stream nextPut: character ] ] ]
 ]
 
 { #category : 'private - deleting' }
@@ -1097,7 +1214,8 @@ PharoImageFSProjectionBackend >> rootEntries [
 
 	^ {
 		  (self directoryNamed: 'tonel').
-		  (self directoryNamed: 'critiques') }
+		  (self directoryNamed: 'critiques').
+		  (self directoryNamed: 'repositories') }
 ]
 
 { #category : 'private - paths' }
@@ -1173,6 +1291,7 @@ PharoImageFSProjectionBackend >> stat: aString [
 	segments isEmpty ifTrue: [ ^ self directoryNamed: '/' ].
 	segments first = 'tonel' ifTrue: [ ^ self statTonelSegments: segments allButFirst originalPath: aString ].
 	segments first = 'critiques' ifTrue: [ ^ self statCritiqueSegments: segments allButFirst originalPath: aString ].
+	segments first = 'repositories' ifTrue: [ ^ self statRepositorySegments: segments allButFirst originalPath: aString ].
 	self signalNotFound: aString
 ]
 
@@ -1239,6 +1358,20 @@ PharoImageFSProjectionBackend >> statCritiqueSegments: segments originalPath: aS
 	self signalNotFound: aString
 ]
 
+{ #category : 'private - accessing' }
+PharoImageFSProjectionBackend >> statRepositorySegments: segments originalPath: aString [
+
+	| info text |
+	segments isEmpty ifTrue: [ ^ self directoryNamed: 'repositories' ].
+	segments size = 1 ifFalse: [ self signalNotFound: aString ].
+	(segments first endsWith: '.repository.json')
+		ifTrue: [
+			text := self repositoryMetadataTextForFileNamed: segments first originalPath: aString.
+			^ self fileNamed: segments first text: text writable: false ].
+	info := self repositoryInfoForProjectionName: segments first originalPath: aString.
+	^ self symlinkNamed: segments first target: (info at: #path)
+]
+
 { #category : 'protocol responses' }
 PharoImageFSProjectionBackend >> statResponseForPath: aString [
 
@@ -1265,6 +1398,12 @@ PharoImageFSProjectionBackend >> statTonelSegments: segments originalPath: aStri
 	segments size = 1 ifTrue: [ ^ self directoryNamed: segments first ].
 	segments size = 2 ifFalse: [ self signalNotFound: aString ].
 	^ self statTonelFileNamed: segments second packageName: package name asString originalPath: aString
+]
+
+{ #category : 'private - entries' }
+PharoImageFSProjectionBackend >> symlinkNamed: aString target: targetString [
+
+	^ PharoImageFSProjectionEntry symlinkNamed: aString target: targetString
 ]
 
 { #category : 'private - entries' }

@@ -8,7 +8,8 @@ Class {
 		'name',
 		'kind',
 		'size',
-		'writable'
+		'writable',
+		'target'
 	],
 	#category : 'PharoImageFS',
 	#package : 'PharoImageFS'
@@ -45,6 +46,18 @@ PharoImageFSProjectionEntry class >> name: nameString kind: kindString size: anI
 		  yourself
 ]
 
+{ #category : 'instance creation' }
+PharoImageFSProjectionEntry class >> symlinkNamed: aString target: targetString [
+
+	^ (self
+		   name: aString
+		   kind: 'symlink'
+		   size: targetString size
+		   writable: false)
+		  target: targetString;
+		  yourself
+]
+
 { #category : 'converting' }
 PharoImageFSProjectionEntry >> asDictionary [
 
@@ -55,6 +68,7 @@ PharoImageFSProjectionEntry >> asDictionary [
 		at: #kind put: kind.
 	size = 0 ifFalse: [ dictionary at: #size put: size ].
 	writable ifTrue: [ dictionary at: #writable put: true ].
+	target ifNotNil: [ dictionary at: #target put: target ].
 	^ dictionary
 ]
 
@@ -68,6 +82,12 @@ PharoImageFSProjectionEntry >> isDirectory [
 PharoImageFSProjectionEntry >> isFile [
 
 	^ kind = 'file'
+]
+
+{ #category : 'testing' }
+PharoImageFSProjectionEntry >> isSymlink [
+
+	^ kind = 'symlink'
 ]
 
 { #category : 'accessing' }
@@ -104,6 +124,18 @@ PharoImageFSProjectionEntry >> size [
 PharoImageFSProjectionEntry >> size: anInteger [
 
 	size := anInteger
+]
+
+{ #category : 'accessing' }
+PharoImageFSProjectionEntry >> target [
+
+	^ target
+]
+
+{ #category : 'accessing' }
+PharoImageFSProjectionEntry >> target: aString [
+
+	target := aString
 ]
 
 { #category : 'accessing' }

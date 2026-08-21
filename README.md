@@ -146,6 +146,18 @@ cat /tmp/pharo-image-fs/errors/latest.txt
 failures that are otherwise hard to see from filesystem tools. Pharo critiques
 remain under `/critiques` only.
 
+Inspect the loaded Git checkouts through repository symlinks:
+
+```sh
+ls -l /tmp/pharo-image-fs/repositories
+git -C /tmp/pharo-image-fs/repositories/pharo-image-fs status
+cat /tmp/pharo-image-fs/repositories/pharo-image-fs.repository.json
+```
+
+Use `/repositories` for repository operations and non-image files such as docs.
+For Pharo code, edit `/tonel` so writes are compiled in the live image and
+exported coherently.
+
 The projection is lazy and backed by the live image. Directory listings, stat
 requests, and reads ask Pharo for the current state as the filesystem needs
 them, so image-side changes become visible through the mount on later
@@ -196,6 +208,11 @@ Renaming projected `.extension.st` files is not supported.
 `/errors` is read-only and records a small in-memory history of operation
 failures, plus `latest.txt`.
 
+`/repositories` is read-only from the projection point of view. Each loaded
+Iceberg repository is exposed as a symlink to its real checkout plus a
+`<repository>.repository.json` metadata file. Following a symlink reaches the
+normal Git checkout on disk.
+
 ## What the mount exposes
 
 ```text
@@ -215,6 +232,10 @@ failures, plus `latest.txt`.
   errors/
     latest.txt
     <timestamp>-write.txt
+
+  repositories/
+    <repository> -> /absolute/path/to/checkout
+    <repository>.repository.json
 ```
 
 - `/tonel` is the code editing surface. It mirrors Tonel class and extension
@@ -225,6 +246,9 @@ failures, plus `latest.txt`.
   use caret escape names, for example `responseObjectForOperation.request..json`
   and `^slash.json`.
 - `/errors` is read-only operational feedback for failed projection writes.
+- `/repositories` exposes loaded Iceberg repositories as symlinks to their real
+  checkout directories, plus small metadata files listing the repository name,
+  projection name, path, and loaded packages.
 
 ## Projection protocol
 
