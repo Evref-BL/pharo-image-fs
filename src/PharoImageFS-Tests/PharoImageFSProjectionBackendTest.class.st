@@ -494,14 +494,14 @@ PharoImageFSProjectionBackendTest >> testMoveExtensionTonelFileAcrossPackagesMov
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testReadClassCritiqueFileReturnsClassAndMethodKeys [
+PharoImageFSProjectionBackendTest >> testReadClassCritiqueFileReturnsCritiquesArray [
 
 	| backend data |
 	backend := self newBackend.
 	backend write: self classTonelSource at: self originalClassTonelPath.
-	data := self decodedJsonFrom: (backend read: '/critiques/' , self originalClassName , '.json').
-	self assert: (data includesKey: 'class').
-	self assert: (data includesKey: 'methods')
+	data := self decodedJsonFrom:
+		        (backend read: '/critiques/' , self fixturePackageName , '/' , self originalClassName , '/class-critiques.json').
+	self assert: data isArray
 ]
 
 { #category : 'tests' }
@@ -510,7 +510,8 @@ PharoImageFSProjectionBackendTest >> testReadMethodCritiqueFileReturnsSideKeys [
 	| backend data |
 	backend := self newBackend.
 	backend write: self classTonelSource at: self originalClassTonelPath.
-	data := self decodedJsonFrom: (backend read: '/critiques/' , self originalClassName , '/answer.json').
+	data := self decodedJsonFrom:
+		        (backend read: '/critiques/' , self fixturePackageName , '/' , self originalClassName , '/answer.json').
 	self assert: (data includesKey: 'instance').
 	self assert: (data at: 'instance') isEmpty
 ]
@@ -558,6 +559,26 @@ PharoImageFSProjectionBackendTest >> testRollbackFailureReportsBothErrors [
 	class := Smalltalk globals at: self originalClassName asSymbol.
 	self assert: class new answer equals: 42.
 	self deny: (class includesSelector: #extraAnswer)
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testSelectorPathSegmentEscapesSlashInBinarySelectors [
+
+	| backend |
+	backend := self newBackend.
+	self assert: (backend pathSegmentForSelector: #/) equals: '^slash'.
+	self assert: (backend selectorFromPathSegment: '^slash.json' originalPath: '/critiques/example') equals: #/
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testSelectorPathSegmentUsesFileTreeColonEncoding [
+
+	| backend |
+	backend := self newBackend.
+	self assert: (backend pathSegmentForSelector: #responseObjectForOperation:request:) equals: 'responseObjectForOperation.request.'.
+	self
+		assert: (backend selectorFromPathSegment: 'responseObjectForOperation.request..json' originalPath: '/critiques/example')
+		equals: #responseObjectForOperation:request:
 ]
 
 { #category : 'tests' }

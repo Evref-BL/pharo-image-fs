@@ -154,6 +154,12 @@ PharoImageFSProjectionBackend >> classCritiqueDataForClass: aClass [
 		  yourself
 ]
 
+{ #category : 'private - critiques' }
+PharoImageFSProjectionBackend >> classCritiquesForClass: aClass [
+
+	^ self critiqueDataForBehavior: aClass
+]
+
 { #category : 'private - writing' }
 PharoImageFSProjectionBackend >> classDefinitionFrom: definitions originalPath: aString [
 
@@ -173,6 +179,13 @@ PharoImageFSProjectionBackend >> classForName: className packageName: packageNam
 	^ class
 ]
 
+{ #category : 'private - critiques' }
+PharoImageFSProjectionBackend >> classHasCritiqueEntries: aClass [
+
+	(self classCritiquesForClass: aClass) ifNotEmpty: [ ^ true ].
+	^ self selectorsWithCritiquesForClass: aClass isNotEmpty
+]
+
 { #category : 'private - paths' }
 PharoImageFSProjectionBackend >> classNameFromFileName: fileName suffix: suffixString [
 
@@ -190,6 +203,13 @@ PharoImageFSProjectionBackend >> classNamed: className originalPath: aString [
 PharoImageFSProjectionBackend >> classNames [
 
 	^ (Smalltalk globals allClasses collect: [ :class | class name asString ] as: Array) sorted
+]
+
+{ #category : 'private - classes' }
+PharoImageFSProjectionBackend >> classesInPackageNamed: packageName [
+
+	^ (Smalltalk globals allClasses select: [ :class | class package name asString = packageName ]) sorted: [ :left :right |
+		  left name <= right name ]
 ]
 
 { #category : 'private - writing' }
@@ -225,18 +245,42 @@ PharoImageFSProjectionBackend >> critiqueDictionariesFor: critiques [
 { #category : 'private - listing' }
 PharoImageFSProjectionBackend >> critiqueMethodEntriesForClass: aClass [
 
-	| selectors |
-	selectors := (aClass selectors , aClass classSide selectors) asSet asArray sorted.
-	^ selectors collect: [ :selector | self fileNamed: (self pathSegmentForSelector: selector) , '.json' size: 0 writable: false ]
+	| entries selectors |
+	entries := OrderedCollection new.
+	(self classCritiquesForClass: aClass) ifNotEmpty: [
+		entries add: (self fileNamed: 'class-critiques.json' size: 0 writable: false) ].
+	selectors := self selectorsWithCritiquesForClass: aClass.
+	selectors do: [ :selector |
+		entries add: (self fileNamed: (self pathSegmentForSelector: selector) , '.json' size: 0 writable: false) ].
+	^ entries asArray
+]
+
+{ #category : 'private - listing' }
+PharoImageFSProjectionBackend >> critiquePackageEntriesForPackageNamed: packageName originalPath: aString [
+
+	| entries package |
+	package := self packageNamed: packageName ifAbsent: [ self signalNotFound: aString ].
+	entries := OrderedCollection new.
+	(self packageCritiquesForPackage: package) ifNotEmpty: [
+		entries add: (self fileNamed: 'package-critiques.json' size: 0 writable: false) ].
+	(self classesInPackageNamed: packageName) do: [ :class |
+		(self classHasCritiqueEntries: class) ifTrue: [ entries add: (self directoryNamed: class name) ] ].
+	^ entries asArray
 ]
 
 { #category : 'private - listing' }
 PharoImageFSProjectionBackend >> critiqueRootEntries [
 
-	^ self classNames flatCollect: [ :className |
-			  {
-				  (self directoryNamed: className).
-				  (self fileNamed: className , '.json' size: 0 writable: false) } ]
+	^ self packageNames
+		  select: [ :packageName | self packageHasCritiqueEntriesNamed: packageName ]
+		  thenCollect: [ :packageName | self directoryNamed: packageName ]
+]
+
+{ #category : 'private - paths' }
+PharoImageFSProjectionBackend >> decodedSelectorToken: token originalPath: originalPath [
+
+	(token beginsWith: '^') ifFalse: [ ^ token ].
+	^ self selectorCharacterForEscapeName: token allButFirst originalPath: originalPath
 ]
 
 { #category : 'accessing' }
@@ -500,9 +544,10 @@ PharoImageFSProjectionBackend >> listCritiqueSegments: segments originalPath: aS
 
 	| class |
 	segments isEmpty ifTrue: [ ^ self critiqueRootEntries ].
-	segments size = 1 ifFalse: [ self signalNotFound: aString ].
-	(segments first endsWith: '.json') ifTrue: [ self signalNotFound: aString ].
-	class := self classNamed: segments first originalPath: aString.
+	segments size = 1 ifTrue: [ ^ self critiquePackageEntriesForPackageNamed: segments first originalPath: aString ].
+	segments size = 2 ifFalse: [ self signalNotFound: aString ].
+	class := self classNamed: segments second originalPath: aString.
+	class package name asString = segments first ifFalse: [ self signalNotFound: aString ].
 	^ self critiqueMethodEntriesForClass: class
 ]
 
@@ -546,6 +591,14 @@ PharoImageFSProjectionBackend >> methodCritiqueDataForClass: aClass selector: aS
 		data at: #class put: (self critiqueDataForCompiledMethod: aClass classSide >> aSelector) ].
 	data ifEmpty: [ Error signal: 'Critique selector not found: ' , aClass name asString , '>>' , aSelector asString ].
 	^ data
+]
+
+{ #category : 'private - critiques' }
+PharoImageFSProjectionBackend >> methodCritiquesForClass: aClass selector: aSelector [
+
+	| data |
+	data := self methodCritiqueDataForClass: aClass selector: aSelector.
+	^ data values flatCollect: [ :each | each ]
 ]
 
 { #category : 'private - writing' }
@@ -708,6 +761,22 @@ PharoImageFSProjectionBackend >> moveTonelExtensionFileNamed: fileName packageNa
 				Error signal: failureMessage ]
 ]
 
+{ #category : 'private - critiques' }
+PharoImageFSProjectionBackend >> packageCritiquesForPackage: aPackage [
+
+	(aPackage class canUnderstand: #critiques) ifFalse: [ ^ #(  ) ].
+	^ self critiqueDictionariesFor: aPackage critiques
+]
+
+{ #category : 'private - critiques' }
+PharoImageFSProjectionBackend >> packageHasCritiqueEntriesNamed: packageName [
+
+	| package |
+	package := self packageNamed: packageName ifAbsent: [ ^ false ].
+	(self packageCritiquesForPackage: package) ifNotEmpty: [ ^ true ].
+	^ (self classesInPackageNamed: packageName) anySatisfy: [ :class | self classHasCritiqueEntries: class ]
+]
+
 { #category : 'private - packages' }
 PharoImageFSProjectionBackend >> packageNamed: aString ifAbsent: absentBlock [
 
@@ -731,14 +800,18 @@ PharoImageFSProjectionBackend >> parseTonelDefinitionsFrom: textString originalP
 { #category : 'private - paths' }
 PharoImageFSProjectionBackend >> pathSegmentForSelector: aSelector [
 
+	(aSelector includes: $:) ifTrue: [
+			^ String streamContents: [ :stream |
+					  aSelector do: [ :character |
+							  character = $:
+								  ifTrue: [ stream nextPut: $. ]
+								  ifFalse: [ stream nextPut: character ] ] ] ].
+	(self selectorEscapeNames includesKey: aSelector first) ifFalse: [ ^ aSelector asString ].
 	^ String streamContents: [ :stream |
-			  aSelector asString do: [ :character |
-					  character = $%
-						  ifTrue: [ stream nextPutAll: '%25' ]
-						  ifFalse: [
-								  character = $/
-									  ifTrue: [ stream nextPutAll: '%2F' ]
-									  ifFalse: [ stream nextPut: character ] ] ] ]
+			  stream nextPut: $^.
+			  aSelector asString
+				  do: [ :character | stream nextPutAll: (self selectorEscapeNames at: character ifAbsent: [ character asString ]) ]
+				  separatedBy: [ stream nextPut: $. ] ]
 ]
 
 { #category : 'private - paths' }
@@ -759,29 +832,53 @@ PharoImageFSProjectionBackend >> read: aString [
 ]
 
 { #category : 'private - reading' }
-PharoImageFSProjectionBackend >> readCritiqueClassFileNamed: fileName originalPath: aString [
+PharoImageFSProjectionBackend >> readCritiqueClassFileNamed: fileName packageName: packageName className: className originalPath: aString [
 
-	| class className |
-	className := self classNameFromFileName: fileName suffix: '.json'.
-	className ifNil: [ self signalNotFound: aString ].
+	| class |
+	fileName = 'class-critiques.json' ifFalse: [ self signalNotFound: aString ].
 	class := self classNamed: className originalPath: aString.
-	^ self jsonTextFor: (self classCritiqueDataForClass: class)
+	class package name asString = packageName ifFalse: [ self signalNotFound: aString ].
+	^ self jsonTextFor: (self classCritiquesForClass: class)
 ]
 
 { #category : 'private - reading' }
-PharoImageFSProjectionBackend >> readCritiqueMethodFileNamed: fileName className: className originalPath: aString [
+PharoImageFSProjectionBackend >> readCritiqueMethodFileNamed: fileName packageName: packageName className: className originalPath: aString [
 
 	| class selector |
 	class := self classNamed: className originalPath: aString.
+	class package name asString = packageName ifFalse: [ self signalNotFound: aString ].
 	selector := self selectorFromPathSegment: fileName originalPath: aString.
 	^ self jsonTextFor: (self methodCritiqueDataForClass: class selector: selector)
 ]
 
 { #category : 'private - reading' }
+PharoImageFSProjectionBackend >> readCritiquePackageFileNamed: fileName packageName: packageName originalPath: aString [
+
+	| package |
+	fileName = 'package-critiques.json' ifFalse: [ self signalNotFound: aString ].
+	package := self packageNamed: packageName ifAbsent: [ self signalNotFound: aString ].
+	^ self jsonTextFor: (self packageCritiquesForPackage: package)
+]
+
+{ #category : 'private - reading' }
 PharoImageFSProjectionBackend >> readCritiqueSegments: segments originalPath: aString [
 
-	segments size = 1 ifTrue: [ ^ self readCritiqueClassFileNamed: segments first originalPath: aString ].
-	segments size = 2 ifTrue: [ ^ self readCritiqueMethodFileNamed: segments second className: segments first originalPath: aString ].
+	segments size = 2 ifTrue: [
+		^ self readCritiquePackageFileNamed: segments second packageName: segments first originalPath: aString ].
+	segments size = 3 ifTrue: [
+			segments third = 'class-critiques.json'
+				ifTrue: [
+						^ self
+							  readCritiqueClassFileNamed: segments third
+							  packageName: segments first
+							  className: segments second
+							  originalPath: aString ]
+				ifFalse: [
+						^ self
+							  readCritiqueMethodFileNamed: segments third
+							  packageName: segments first
+							  className: segments second
+							  originalPath: aString ] ].
 	self signalNotFound: aString
 ]
 
@@ -1004,34 +1101,56 @@ PharoImageFSProjectionBackend >> rootEntries [
 ]
 
 { #category : 'private - paths' }
+PharoImageFSProjectionBackend >> selectorCharacterForEscapeName: aString originalPath: originalPath [
+
+	self selectorEscapeNames keysAndValuesDo: [ :character :name | name = aString ifTrue: [ ^ character asString ] ].
+	self signalNotFound: originalPath
+]
+
+{ #category : 'private - paths' }
+PharoImageFSProjectionBackend >> selectorEscapeNames [
+
+	^ Dictionary new
+		  at: $+ put: 'plus';
+		  at: $- put: 'minus';
+		  at: $= put: 'equals';
+		  at: $< put: 'less';
+		  at: $> put: 'more';
+		  at: $% put: 'percent';
+		  at: $& put: 'and';
+		  at: $| put: 'pipe';
+		  at: $* put: 'star';
+		  at: $/ put: 'slash';
+		  at: $\ put: 'backslash';
+		  at: $~ put: 'tilde';
+		  at: $? put: 'wat';
+		  at: $, put: 'comma';
+		  at: $@ put: 'at';
+		  yourself
+]
+
+{ #category : 'private - paths' }
 PharoImageFSProjectionBackend >> selectorFromPathSegment: aString originalPath: originalPath [
 
-	| index stream |
+	| base tokens |
 	(aString endsWith: '.json') ifFalse: [ self signalNotFound: originalPath ].
-	stream := String new writeStream.
-	index := 1.
-	[ index <= (aString size - 5) ] whileTrue: [
-			| character escape |
-			character := aString at: index.
-			character = $%
-				ifTrue: [
-						escape := aString copyFrom: index to: (index + 2 min: aString size).
-						escape = '%25'
-							ifTrue: [
-									stream nextPut: $%.
-									index := index + 3 ]
-							ifFalse: [
-									escape = '%2F'
-										ifTrue: [
-												stream nextPut: $/.
-												index := index + 3 ]
-										ifFalse: [
-												stream nextPut: character.
-												index := index + 1 ] ] ]
-				ifFalse: [
-						stream nextPut: character.
-						index := index + 1 ] ].
-	^ stream contents asSymbol
+	base := aString allButLast: 5.
+	base ifEmpty: [ self signalNotFound: originalPath ].
+	tokens := $. split: base.
+	tokens size = 1 ifTrue: [ ^ (self decodedSelectorToken: tokens first originalPath: originalPath) asSymbol ].
+	tokens last ifEmpty: [ tokens := tokens allButLast ].
+	^ (String streamContents: [ :stream |
+			   tokens do: [ :token |
+					   stream nextPutAll: (self decodedSelectorToken: token originalPath: originalPath).
+					   stream nextPut: $: ] ]) asSymbol
+]
+
+{ #category : 'private - critiques' }
+PharoImageFSProjectionBackend >> selectorsWithCritiquesForClass: aClass [
+
+	| selectors |
+	selectors := (aClass selectors , aClass classSide selectors) asSet asArray sorted.
+	^ selectors select: [ :selector | (self methodCritiquesForClass: aClass selector: selector) isNotEmpty ]
 ]
 
 { #category : 'private - errors' }
@@ -1058,30 +1177,65 @@ PharoImageFSProjectionBackend >> stat: aString [
 ]
 
 { #category : 'private - accessing' }
-PharoImageFSProjectionBackend >> statCritiqueClassFileNamed: fileName originalPath: aString [
+PharoImageFSProjectionBackend >> statCritiqueClassFileNamed: fileName packageName: packageName className: className originalPath: aString [
 
 	| text |
-	text := self readCritiqueClassFileNamed: fileName originalPath: aString.
+	text := self
+		        readCritiqueClassFileNamed: fileName
+		        packageName: packageName
+		        className: className
+		        originalPath: aString.
 	^ self fileNamed: fileName text: text writable: false
 ]
 
 { #category : 'private - accessing' }
-PharoImageFSProjectionBackend >> statCritiqueMethodFileNamed: fileName className: className originalPath: aString [
+PharoImageFSProjectionBackend >> statCritiqueMethodFileNamed: fileName packageName: packageName className: className originalPath: aString [
 
 	| text |
-	text := self readCritiqueMethodFileNamed: fileName className: className originalPath: aString.
+	text := self
+		        readCritiqueMethodFileNamed: fileName
+		        packageName: packageName
+		        className: className
+		        originalPath: aString.
+	^ self fileNamed: fileName text: text writable: false
+]
+
+{ #category : 'private - accessing' }
+PharoImageFSProjectionBackend >> statCritiquePackageFileNamed: fileName packageName: packageName originalPath: aString [
+
+	| text |
+	text := self readCritiquePackageFileNamed: fileName packageName: packageName originalPath: aString.
 	^ self fileNamed: fileName text: text writable: false
 ]
 
 { #category : 'private - accessing' }
 PharoImageFSProjectionBackend >> statCritiqueSegments: segments originalPath: aString [
 
+	| class |
 	segments isEmpty ifTrue: [ ^ self directoryNamed: 'critiques' ].
 	segments size = 1 ifTrue: [
-			(segments first endsWith: '.json') ifTrue: [ ^ self statCritiqueClassFileNamed: segments first originalPath: aString ].
-			self classNamed: segments first originalPath: aString.
+			self packageNamed: segments first ifAbsent: [ self signalNotFound: aString ].
 			^ self directoryNamed: segments first ].
-	segments size = 2 ifTrue: [ ^ self statCritiqueMethodFileNamed: segments second className: segments first originalPath: aString ].
+	segments size = 2 ifTrue: [
+			segments second = 'package-critiques.json' ifTrue: [
+				^ self statCritiquePackageFileNamed: segments second packageName: segments first originalPath: aString ].
+			class := self classNamed: segments second originalPath: aString.
+			class package name asString = segments first ifFalse: [ self signalNotFound: aString ].
+			^ self directoryNamed: segments second ].
+	segments size = 3 ifTrue: [
+			segments third = 'class-critiques.json'
+				ifTrue: [
+						^ self
+							  statCritiqueClassFileNamed: segments third
+							  packageName: segments first
+							  className: segments second
+							  originalPath: aString ]
+				ifFalse: [
+						^ self
+							  statCritiqueMethodFileNamed: segments third
+							  packageName: segments first
+							  className: segments second
+							  originalPath: aString ] ].
 	self signalNotFound: aString
 ]
 

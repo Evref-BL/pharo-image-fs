@@ -117,8 +117,9 @@ is restored.
 Read critique feedback:
 
 ```sh
-cat /tmp/pharo-image-fs/critiques/PharoImageFSProjectionBackend.json
-cat /tmp/pharo-image-fs/critiques/PharoImageFSProjectionBackend/write:at:.json
+find /tmp/pharo-image-fs/critiques -type f
+cat /tmp/pharo-image-fs/critiques/PharoImageFS/PharoImageFSProjectionBackend/class-critiques.json
+cat /tmp/pharo-image-fs/critiques/PharoImageFS/PharoImageFSProjectionBackend/write.at..json
 ```
 
 If a filesystem write fails with a generic editor or OS error, inspect the
@@ -192,9 +193,11 @@ failures, plus `latest.txt`.
       <Class>.extension.st
 
   critiques/
-    <Class>.json
-    <Class>/
-      <selector>.json
+    <package>/
+      package-critiques.json
+      <Class>/
+        class-critiques.json
+        <selector-encoded>.json
 
   errors/
     latest.txt
@@ -203,7 +206,11 @@ failures, plus `latest.txt`.
 
 - `/tonel` is the code editing surface. It mirrors Tonel class and extension
   files from the live image.
-- `/critiques` is read-only diagnostic feedback from the live image.
+- `/critiques` is read-only diagnostic feedback from the live image. It is
+  listed lazily and contains only entries with actual Pharo critiques.
+  Keyword-selector colons are encoded as dots, and binary selector characters
+  use caret escape names, for example `responseObjectForOperation.request..json`
+  and `^slash.json`.
 - `/errors` is read-only operational feedback for failed projection writes.
 
 ## Projection protocol
