@@ -7,7 +7,11 @@ Class {
 	#instVars : [
 		'backend',
 		'server',
-		'port'
+		'port',
+		'mountPath',
+		'mountName',
+		'daemonPidFile',
+		'daemonLogFile'
 	],
 	#classVars : [
 		'ServersByPort'
@@ -15,6 +19,36 @@ Class {
 	#category : 'PharoImageFS',
 	#package : 'PharoImageFS'
 }
+
+{ #category : 'private - daemon' }
+PharoImageFSProjectionHTTPServer class >> daemonExecutable [
+
+	^ self projectRepositoryDirectory / 'daemon' / 'pharo-image-fs'
+]
+
+{ #category : 'defaults' }
+PharoImageFSProjectionHTTPServer class >> defaultMountName [
+
+	| delimiter imagePath suffix |
+	imagePath := Smalltalk imagePath.
+	delimiter := FileSystem disk delimiter.
+	suffix := '.image'.
+	(imagePath endsWith: suffix) ifTrue: [
+		imagePath := imagePath copyFrom: 1 to: imagePath size - suffix size ].
+	^ imagePath copyFrom: (imagePath lastIndexOf: delimiter) + 1 to: imagePath size
+]
+
+{ #category : 'defaults' }
+PharoImageFSProjectionHTTPServer class >> defaultMountPath [
+
+	^ FileLocator temp / self defaultMountName
+]
+
+{ #category : 'private - daemon' }
+PharoImageFSProjectionHTTPServer class >> projectRepositoryDirectory [
+
+	^ (IceRepository registry detect: [ :each | each includesPackageNamed: self package name ]) repositoryDirectory
+]
 
 { #category : 'registry' }
 PharoImageFSProjectionHTTPServer class >> register: aProjectionServer on: portNumber [
@@ -41,6 +75,37 @@ PharoImageFSProjectionHTTPServer class >> startOn: portNumber [
 
 	self stopOn: portNumber.
 	^ self register: (self new startOn: portNumber) on: portNumber
+]
+
+{ #category : 'instance creation' }
+PharoImageFSProjectionHTTPServer class >> startOn: portNumber mountAt: aPath [
+
+	^ self startOn: portNumber mountAt: aPath named: self defaultMountName
+]
+
+{ #category : 'instance creation' }
+PharoImageFSProjectionHTTPServer class >> startOn: portNumber mountAt: aPath named: aString [
+
+	| projectionServer |
+	projectionServer := self startOn: portNumber.
+	[
+		projectionServer
+			startDaemonMountedAt: aPath
+			named: aString ]
+		on: Error
+		do: [ :error |
+				projectionServer stop.
+				error pass ].
+	^ projectionServer
+]
+
+{ #category : 'instance creation' }
+PharoImageFSProjectionHTTPServer class >> startOn: portNumber named: aString [
+
+	^ self
+		  startOn: portNumber
+		  mountAt: FileLocator temp / aString
+		  named: aString
 ]
 
 { #category : 'registry' }
@@ -74,6 +139,43 @@ PharoImageFSProjectionHTTPServer >> backend [
 PharoImageFSProjectionHTTPServer >> backend: aBackend [
 
 	backend := aBackend
+]
+
+{ #category : 'private - daemon' }
+PharoImageFSProjectionHTTPServer >> daemonCommandMountedAt: aFileReference named: aString [
+
+	| daemonDirectory executable endpoint |
+	executable := self class daemonExecutable.
+	daemonDirectory := executable parent.
+	endpoint := 'http://127.0.0.1:' , port asString , '/projection'.
+	^ String streamContents: [ :stream |
+		  stream
+			  nextPutAll: 'cd ';
+			  nextPutAll: (self shellQuote: daemonDirectory pathString);
+			  nextPutAll: ' && nohup ';
+			  nextPutAll: (self shellQuote: executable pathString);
+			  nextPutAll: ' --endpoint ';
+			  nextPutAll: (self shellQuote: endpoint);
+			  nextPutAll: ' --mount-option ';
+			  nextPutAll: (self shellQuote: 'volname=' , aString);
+			  nextPut: Character space;
+			  nextPutAll: (self shellQuote: aFileReference pathString);
+			  nextPutAll: ' > ';
+			  nextPutAll: (self shellQuote: daemonLogFile pathString);
+			  nextPutAll: ' 2>&1 & echo $! > ';
+			  nextPutAll: (self shellQuote: daemonPidFile pathString) ]
+]
+
+{ #category : 'private - daemon' }
+PharoImageFSProjectionHTTPServer >> daemonLogFile [
+
+	^ daemonLogFile
+]
+
+{ #category : 'private - daemon' }
+PharoImageFSProjectionHTTPServer >> daemonPidFile [
+
+	^ daemonPidFile
 ]
 
 { #category : 'private - json' }
@@ -112,6 +214,18 @@ PharoImageFSProjectionHTTPServer >> jsonEntityFor: anObject [
 PharoImageFSProjectionHTTPServer >> jsonResponseFor: anObject [
 
 	^ ZnResponse ok: (self jsonEntityFor: anObject)
+]
+
+{ #category : 'accessing' }
+PharoImageFSProjectionHTTPServer >> mountName [
+
+	^ mountName
+]
+
+{ #category : 'accessing' }
+PharoImageFSProjectionHTTPServer >> mountPath [
+
+	^ mountPath
 ]
 
 { #category : 'private - routing' }
@@ -157,6 +271,41 @@ PharoImageFSProjectionHTTPServer >> server [
 	^ server
 ]
 
+{ #category : 'private - daemon' }
+PharoImageFSProjectionHTTPServer >> shellQuote: aString [
+
+	^ String streamContents: [ :stream |
+		  stream nextPut: $'.
+		  aString do: [ :character |
+				  character = $'
+					  ifTrue: [
+							  stream
+								  nextPut: $';
+								  nextPut: $\;
+								  nextPut: $';
+								  nextPut: $' ]
+					  ifFalse: [ stream nextPut: character ] ].
+		  stream nextPut: $' ]
+]
+
+{ #category : 'private - daemon' }
+PharoImageFSProjectionHTTPServer >> startDaemonMountedAt: aPath named: aString [
+
+	| command executable |
+	OSPlatform current isMacOS ifFalse: [ Error signal: 'pharo-image-fs daemon startup is currently supported only on macOS.' ].
+	executable := self class daemonExecutable.
+	executable exists ifFalse: [
+		Error signal: 'pharo-image-fs daemon executable not found: ' , executable pathString
+			, '. Build it with: go -C daemon build -o pharo-image-fs ./cmd/pharo-image-fs' ].
+	mountPath := aPath asFileReference.
+	mountName := aString.
+	mountPath ensureCreateDirectory.
+	daemonPidFile := FileLocator temp / ('pharo-image-fs-' , port asString , '.pid').
+	daemonLogFile := FileLocator temp / ('pharo-image-fs-' , port asString , '.log').
+	command := self daemonCommandMountedAt: mountPath named: mountName.
+	(LibC system: command) = 0 ifFalse: [ Error signal: 'Failed to start pharo-image-fs daemon.' ]
+]
+
 { #category : 'running' }
 PharoImageFSProjectionHTTPServer >> startOn: portNumber [
 
@@ -180,11 +329,31 @@ PharoImageFSProjectionHTTPServer >> statusCodeForError: anError [
 { #category : 'running' }
 PharoImageFSProjectionHTTPServer >> stop [
 
+	self stopDaemon.
 	server ifNotNil: [
 			server stop.
 			server := nil ].
 	self class unregister: self.
 	port := nil
+]
+
+{ #category : 'private - daemon' }
+PharoImageFSProjectionHTTPServer >> stopDaemon [
+
+	mountPath ifNil: [ ^ self ].
+	OSPlatform current isMacOS ifTrue: [
+			LibC system: 'umount ' , (self shellQuote: mountPath pathString) , ' >/dev/null 2>&1 || diskutil unmount '
+				, (self shellQuote: mountPath pathString) , ' >/dev/null 2>&1'.
+			daemonPidFile ifNotNil: [
+					daemonPidFile exists ifTrue: [
+							| pid |
+							pid := daemonPidFile contents trimBoth.
+							pid ifNotEmpty: [ LibC system: 'kill -TERM ' , (self shellQuote: pid) , ' >/dev/null 2>&1' ].
+							daemonPidFile delete ] ] ].
+	mountPath := nil.
+	mountName := nil.
+	daemonPidFile := nil.
+	daemonLogFile := nil
 ]
 
 { #category : 'private - json' }
