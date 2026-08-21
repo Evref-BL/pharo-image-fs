@@ -32,7 +32,7 @@ func TestRootReaddirUsesProjectionClient(t *testing.T) {
 		t.Fatalf("readdir errno: %v", errc)
 	}
 
-	if strings.Join(names, ",") != ".,..,tonel,critiques" {
+	if strings.Join(names, ",") != ".,..,tonel,critiques,errors" {
 		t.Fatalf("unexpected entries: %#v", names)
 	}
 }
@@ -241,6 +241,74 @@ func TestRenameOverlayFileToTonelFileLogsWriteFailure(t *testing.T) {
 	logText := logBuffer.String()
 	if !strings.Contains(logText, "write /tonel/PharoImageFS/PharoImageFSProjectionBackend.class.st failed: compile failed") {
 		t.Fatalf("missing failure log: %s", logText)
+	}
+}
+
+func TestRenameOverlayFileToTonelFileExposesLatestWriteError(t *testing.T) {
+	client := fakeProjectionClientForTonelPackage()
+	client.stats["/tonel/PharoImageFS/PharoImageFSProjectionBackend.class.st"] = protocol.Entry{
+		Name:     "PharoImageFSProjectionBackend.class.st",
+		Kind:     protocol.File,
+		Writable: true,
+	}
+	client.writeErr = &protocol.Error{
+		StatusCode: http.StatusBadRequest,
+		Message:    "Cannot parse Tonel file",
+	}
+	fsys := NewProjectionFileSystem(client)
+
+	errc, handle := fsys.Create("/tonel/PharoImageFS/.PharoImageFSProjectionBackend.class.st.tmp", syscall.O_RDWR, 0o644)
+	if errc != 0 {
+		t.Fatalf("create errno: %v", errc)
+	}
+
+	if written := fsys.Write("", []byte("broken source"), 0, handle); written != len("broken source") {
+		t.Fatalf("unexpected write result: %v", written)
+	}
+	if errc := fsys.Flush("", handle); errc != 0 {
+		t.Fatalf("flush errno: %v", errc)
+	}
+
+	errc = fsys.Rename(
+		"/tonel/PharoImageFS/.PharoImageFSProjectionBackend.class.st.tmp",
+		"/tonel/PharoImageFS/PharoImageFSProjectionBackend.class.st")
+	if errc != -int(syscall.EIO) {
+		t.Fatalf("unexpected rename errno: %v", errc)
+	}
+
+	names := []string{}
+	errc = fsys.Readdir("/errors", func(name string, _ *fuse.Stat_t, _ int64) bool {
+		names = append(names, name)
+		return true
+	}, 0, 0)
+	if errc != 0 {
+		t.Fatalf("readdir errno: %v", errc)
+	}
+	if !contains(names, "latest.txt") {
+		t.Fatalf("missing latest error entry: %#v", names)
+	}
+
+	errc, errorHandle := fsys.Open("/errors/latest.txt", syscall.O_RDONLY)
+	if errc != 0 {
+		t.Fatalf("open latest error errno: %v", errc)
+	}
+	buffer := make([]byte, 512)
+	read := fsys.Read("", buffer, 0, errorHandle)
+	if read < 0 {
+		t.Fatalf("read latest error errno: %v", read)
+	}
+	errorText := string(buffer[:read])
+	if !strings.Contains(errorText, "Operation: write") {
+		t.Fatalf("missing operation: %s", errorText)
+	}
+	if !strings.Contains(errorText, "Path: /tonel/PharoImageFS/PharoImageFSProjectionBackend.class.st") {
+		t.Fatalf("missing path: %s", errorText)
+	}
+	if !strings.Contains(errorText, "Image changed: no") {
+		t.Fatalf("missing image state: %s", errorText)
+	}
+	if !strings.Contains(errorText, "Cannot parse Tonel file") {
+		t.Fatalf("missing Pharo error: %s", errorText)
 	}
 }
 

@@ -22,6 +22,7 @@ type ProjectionFileSystem struct {
 
 	client  protocol.Client
 	overlay *Overlay
+	errors  *ErrorStore
 	logger  projectionLogger
 
 	mu         sync.Mutex
@@ -38,6 +39,7 @@ func NewProjectionFileSystem(client protocol.Client) *ProjectionFileSystem {
 	return &ProjectionFileSystem{
 		client:     client,
 		overlay:    NewOverlay(),
+		errors:     NewErrorStore(),
 		handles:    map[uint64]*FileHandle{},
 		nextHandle: 1,
 	}
@@ -69,14 +71,20 @@ func (fsys *ProjectionFileSystem) Readdir(projectionPath string, fill func(name 
 		return -int(syscall.ENOTDIR)
 	}
 
-	entries, err := fsys.client.List(context.Background(), projectionPath)
-	if err != nil {
-		return -int(errnoFor(err))
+	var entries []protocol.Entry
+	if projectionPath == errorsRoot {
+		entries = fsys.errors.EntriesIn(projectionPath)
+	} else {
+		projectedEntries, err := fsys.client.List(context.Background(), projectionPath)
+		if err != nil {
+			return -int(errnoFor(err))
+		}
+		entries = mergeEntries(projectedEntries, fsys.overlay.EntriesIn(projectionPath), fsys.errors.EntriesIn(projectionPath))
 	}
 
 	fill(".", nil, 0)
 	fill("..", nil, 0)
-	for _, childEntry := range mergeEntries(entries, fsys.overlay.EntriesIn(projectionPath)) {
+	for _, childEntry := range entries {
 		stat := fuse.Stat_t{}
 		childPath := joinProjectionPath(projectionPath, childEntry.Name)
 		childEntry = writableEntryForPath(childPath, childEntry)
@@ -106,6 +114,8 @@ func (fsys *ProjectionFileSystem) Open(projectionPath string, flags int) (int, u
 	if !openFlagsTruncate(flags) {
 		if overlayContents, ok := fsys.overlay.Read(projectionPath); ok {
 			contents = overlayContents
+		} else if errorContents, ok := fsys.errors.Read(projectionPath); ok {
+			contents = errorContents
 		} else {
 			readContents, err := fsys.client.Read(context.Background(), projectionPath)
 			if err != nil {
@@ -314,6 +324,9 @@ func (fsys *ProjectionFileSystem) entryForPath(projectionPath string) (protocol.
 	if overlayEntry, ok := fsys.overlay.Stat(projectionPath); ok {
 		return writableEntryForPath(projectionPath, overlayEntry), 0
 	}
+	if errorEntry, ok := fsys.errors.Stat(projectionPath); ok {
+		return errorEntry, 0
+	}
 
 	entry, err := fsys.client.Stat(context.Background(), projectionPath)
 	if err != nil {
@@ -357,6 +370,9 @@ func (fsys *ProjectionFileSystem) contentsForPath(projectionPath string) ([]byte
 	if overlayContents, ok := fsys.overlay.Read(projectionPath); ok {
 		return overlayContents, nil
 	}
+	if errorContents, ok := fsys.errors.Read(projectionPath); ok {
+		return errorContents, nil
+	}
 
 	return fsys.client.Read(context.Background(), projectionPath)
 }
@@ -378,6 +394,7 @@ func (fsys *ProjectionFileSystem) writeProjection(ctx context.Context, projectio
 	result, err := fsys.client.Write(ctx, projectionPath, contents)
 	if err != nil {
 		fsys.logf("write %s failed: %v", projectionPath, err)
+		fsys.errors.RecordWriteError(projectionPath, err)
 		return err
 	}
 
@@ -561,26 +578,29 @@ func joinProjectionPath(parentPath string, name string) string {
 	return strings.TrimRight(parentPath, "/") + "/" + name
 }
 
-func mergeEntries(projected []protocol.Entry, overlay []protocol.Entry) []protocol.Entry {
+func mergeEntries(projected []protocol.Entry, overlays ...[]protocol.Entry) []protocol.Entry {
 	byName := map[string]protocol.Entry{}
 	for _, entry := range projected {
 		byName[entry.Name] = entry
 	}
 
-	merged := make([]protocol.Entry, 0, len(projected)+len(overlay))
+	merged := make([]protocol.Entry, 0, len(projected))
 	merged = append(merged, projected...)
-	overlayOnly := make([]protocol.Entry, 0, len(overlay))
-	for _, entry := range overlay {
-		if _, exists := byName[entry.Name]; exists {
-			continue
+	for _, overlay := range overlays {
+		overlayOnly := make([]protocol.Entry, 0, len(overlay))
+		for _, entry := range overlay {
+			if _, exists := byName[entry.Name]; exists {
+				continue
+			}
+			byName[entry.Name] = entry
+			overlayOnly = append(overlayOnly, entry)
 		}
-		overlayOnly = append(overlayOnly, entry)
-	}
-	sort.Slice(overlayOnly, func(i int, j int) bool {
-		return overlayOnly[i].Name < overlayOnly[j].Name
-	})
-	for _, entry := range overlayOnly {
-		merged = append(merged, entry)
+		sort.Slice(overlayOnly, func(i int, j int) bool {
+			return overlayOnly[i].Name < overlayOnly[j].Name
+		})
+		for _, entry := range overlayOnly {
+			merged = append(merged, entry)
+		}
 	}
 
 	return merged
