@@ -123,7 +123,7 @@ PharoImageFSProjectionHTTPServer class >> startOn: portNumber mountAt: aPath nam
 ]
 
 { #category : 'instance creation' }
-PharoImageFSProjectionHTTPServer class >> startOn: portNumber named: aString [
+PharoImageFSProjectionHTTPServer class >> startOn: portNumber mountNamed: aString [
 
 	^ self
 		  startOn: portNumber

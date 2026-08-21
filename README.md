@@ -70,7 +70,15 @@ Start the Pharo-side projection endpoint and daemon from the image:
 PharoImageFSProjectionHTTPServer startAndMountOn: 9013
 ```
 
-To use an explicit mountpoint or volume name:
+To use the default mountpoint with an explicit volume name:
+
+```smalltalk
+PharoImageFSProjectionHTTPServer
+	startOn: 9013
+	mountNamed: 'pharo-image-fs'
+```
+
+To use an explicit mountpoint and volume name:
 
 ```smalltalk
 PharoImageFSProjectionHTTPServer
