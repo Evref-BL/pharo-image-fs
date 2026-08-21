@@ -62,6 +62,7 @@ type fakeClient struct {
 	deletedPath     string
 	renamedPath     string
 	renameTarget    string
+	readContents    []byte
 }
 
 func (c *fakeClient) List(_ context.Context, path string) ([]protocol.Entry, error) {
@@ -78,7 +79,7 @@ func (c *fakeClient) Stat(_ context.Context, path string) (protocol.Entry, error
 }
 
 func (c *fakeClient) Read(context.Context, string) ([]byte, error) {
-	return nil, nil
+	return append([]byte(nil), c.readContents...), nil
 }
 
 func (c *fakeClient) Write(_ context.Context, path string, contents []byte) (protocol.WriteResult, error) {

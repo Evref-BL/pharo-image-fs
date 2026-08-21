@@ -288,6 +288,58 @@ func TestRenameProjectedTonelFileUsesProjectionProtocol(t *testing.T) {
 	}
 }
 
+func TestPathLevelTruncateDefersProjectionWriteUntilHandleFlush(t *testing.T) {
+	client := fakeProjectionClientForTonelPackage()
+	client.readContents = []byte("original source")
+	client.stats["/tonel/PharoImageFS/PharoImageFSProjectionHTTPServer.class.st"] = protocol.Entry{
+		Name:     "PharoImageFSProjectionHTTPServer.class.st",
+		Kind:     protocol.File,
+		Writable: true,
+	}
+	fsys := NewProjectionFileSystem(client)
+
+	if errc := fsys.Truncate("/tonel/PharoImageFS/PharoImageFSProjectionHTTPServer.class.st", 0, ^uint64(0)); errc != 0 {
+		t.Fatalf("truncate errno: %v", errc)
+	}
+	if client.writtenPath != "" {
+		t.Fatalf("path-level truncate should not write projection before final flush")
+	}
+
+	errc, handle := fsys.Open("/tonel/PharoImageFS/PharoImageFSProjectionHTTPServer.class.st", syscall.O_RDWR)
+	if errc != 0 {
+		t.Fatalf("open errno: %v", errc)
+	}
+	if written := fsys.Write("", []byte("replacement source"), 0, handle); written != len("replacement source") {
+		t.Fatalf("unexpected write result: %v", written)
+	}
+	if errc := fsys.Flush("", handle); errc != 0 {
+		t.Fatalf("flush errno: %v", errc)
+	}
+
+	if client.writtenPath != "/tonel/PharoImageFS/PharoImageFSProjectionHTTPServer.class.st" {
+		t.Fatalf("unexpected written path: %s", client.writtenPath)
+	}
+	if string(client.writtenContents) != "replacement source" {
+		t.Fatalf("unexpected written contents: %q", client.writtenContents)
+	}
+}
+
+func TestProjectedTonelFilePathIgnoresAppleDoubleSidecars(t *testing.T) {
+	if isProjectedTonelFilePath("/tonel/PharoImageFS/._PharoImageFSProjectionHTTPServer.class.st") {
+		t.Fatalf("AppleDouble sidecar should not be treated as a projected Tonel file")
+	}
+}
+
+func TestMountOptionsSuppressMacOSMetadataFiles(t *testing.T) {
+	options := mountOptions(Config{})
+	joinedOptions := strings.Join(options, " ")
+	for _, expected := range []string{"-s", "noappledouble", "noapplexattr"} {
+		if !strings.Contains(joinedOptions, expected) {
+			t.Fatalf("missing %s in mount options %#v", expected, options)
+		}
+	}
+}
+
 func fakeProjectionClientForTonelPackage() *fakeClient {
 	return &fakeClient{
 		stats: map[string]protocol.Entry{

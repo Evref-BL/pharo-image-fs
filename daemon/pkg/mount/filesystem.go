@@ -224,19 +224,28 @@ func (fsys *ProjectionFileSystem) Truncate(projectionPath string, size int64, fh
 		return 0
 	}
 
-	errc, newHandle := fsys.Open(projectionPath, syscall.O_RDWR)
-	if errc != 0 {
-		return errc
+	if handles := fsys.handlesForPath(projectionPath); len(handles) > 0 {
+		for _, handle := range handles {
+			if errno := handle.Truncate(size); errno != 0 {
+				return -int(errno)
+			}
+		}
+		return 0
 	}
-	defer fsys.Release(projectionPath, newHandle)
 
-	handle, _ := fsys.handle(newHandle)
-	if errno := handle.Truncate(size); errno != 0 {
-		return -int(errno)
+	if size < 0 {
+		return -int(syscall.EINVAL)
 	}
-	if errno := handle.Flush(context.Background()); errno != 0 {
-		return -int(errno)
+	if !isWritableProjectionPath(projectionPath) {
+		return -int(syscall.EROFS)
 	}
+
+	contents, err := fsys.contentsForPath(projectionPath)
+	if err != nil {
+		return -int(errnoFor(err))
+	}
+	contents = resizedContents(contents, int(size))
+	_ = fsys.overlay.Write(context.Background(), projectionPath, contents)
 	return 0
 }
 
@@ -331,6 +340,40 @@ func (fsys *ProjectionFileSystem) handle(fh uint64) (*FileHandle, bool) {
 	return handle, ok
 }
 
+func (fsys *ProjectionFileSystem) handlesForPath(projectionPath string) []*FileHandle {
+	fsys.mu.Lock()
+	defer fsys.mu.Unlock()
+
+	handles := make([]*FileHandle, 0)
+	for _, handle := range fsys.handles {
+		if handle.path == projectionPath {
+			handles = append(handles, handle)
+		}
+	}
+	return handles
+}
+
+func (fsys *ProjectionFileSystem) contentsForPath(projectionPath string) ([]byte, error) {
+	if overlayContents, ok := fsys.overlay.Read(projectionPath); ok {
+		return overlayContents, nil
+	}
+
+	return fsys.client.Read(context.Background(), projectionPath)
+}
+
+func resizedContents(contents []byte, size int) []byte {
+	if len(contents) == size {
+		return contents
+	}
+	if len(contents) > size {
+		return contents[:size]
+	}
+
+	resized := make([]byte, size)
+	copy(resized, contents)
+	return resized
+}
+
 func (fsys *ProjectionFileSystem) writeProjection(ctx context.Context, projectionPath string, contents []byte) error {
 	result, err := fsys.client.Write(ctx, projectionPath, contents)
 	if err != nil {
@@ -388,7 +431,7 @@ func Mount(mountPoint string, client protocol.Client, config Config) error {
 	fsys := NewProjectionFileSystem(client)
 	fsys.logger = log.New(os.Stderr, "pharo-image-fs: ", log.LstdFlags)
 	host := fuse.NewFileSystemHost(fsys)
-	options := append([]string{"-s", "-o", "volname=pharo-image-fs"}, fuseOptions(config)...)
+	options := mountOptions(config)
 	if !host.Mount(mountPoint, options) {
 		if fsys.wasMounted() {
 			return nil
@@ -416,6 +459,15 @@ func (fsys *ProjectionFileSystem) wasMounted() bool {
 	defer fsys.mu.Unlock()
 
 	return fsys.mounted
+}
+
+func mountOptions(config Config) []string {
+	return append([]string{
+		"-s",
+		"-o", "volname=pharo-image-fs",
+		"-o", "noappledouble",
+		"-o", "noapplexattr",
+	}, fuseOptions(config)...)
 }
 
 func fuseOptions(config Config) []string {
@@ -539,6 +591,10 @@ func isWritableProjectionPath(projectionPath string) bool {
 }
 
 func isProjectedTonelFilePath(projectionPath string) bool {
+	if strings.HasPrefix(path.Base(projectionPath), "._") {
+		return false
+	}
+
 	return strings.HasPrefix(projectionPath, "/tonel/") &&
 		(strings.HasSuffix(path.Base(projectionPath), ".class.st") ||
 			strings.HasSuffix(path.Base(projectionPath), ".extension.st"))
