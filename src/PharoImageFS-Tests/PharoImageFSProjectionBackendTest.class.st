@@ -27,6 +27,24 @@ PharoImageFSProjectionBackendTest >> classTonelSource [
 ]
 
 { #category : 'private' }
+PharoImageFSProjectionBackendTest >> classTonelSourceWithBrokenExtraMethod [
+
+	^ self classTonelSource , '
+{ #category : ''accessing'' }
+' , self originalClassName , ' >> extraAnswer [
+
+	^ 99
+]
+
+{ #category : ''accessing'' }
+' , self originalClassName , ' >> brokenAnswer [
+
+	^ self +
+]
+'
+]
+
+{ #category : 'private' }
 PharoImageFSProjectionBackendTest >> classTonelSourceWithChangedAnswerAndExtraMethod [
 
 	^ self classTonelSourceWithExtraMethod copyReplaceAll: '^ 42' with: '^ 43'
@@ -145,6 +163,18 @@ PharoImageFSProjectionExtensionTarget >> projectedExtensionAnswer [
 ]
 
 { #category : 'private' }
+PharoImageFSProjectionBackendTest >> extensionTonelSourceWithBrokenExtraMethod [
+
+	^ self extensionTonelSource , '
+{ #category : ''*PharoImageFS-Tests'' }
+PharoImageFSProjectionExtensionTarget >> brokenProjectedExtensionAnswer [
+
+	^ self +
+]
+'
+]
+
+{ #category : 'private' }
 PharoImageFSProjectionBackendTest >> fixturePackageName [
 
 	^ 'PharoImageFS-Tests'
@@ -230,6 +260,43 @@ PharoImageFSProjectionBackendTest >> tearDown [
 ]
 
 { #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testCompileFailureDuringClassRewriteRollsBackImage [
+
+	| backend class |
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	self
+		should: [ backend write: self classTonelSourceWithBrokenExtraMethod at: self originalClassTonelPath ]
+		raise: Error
+		description: 'A method compilation failure after partial application must rollback the live image.'.
+	class := Smalltalk globals at: self originalClassName asSymbol.
+	self assert: class new answer equals: 42.
+	self deny: (class includesSelector: #extraAnswer).
+	self deny: (class includesSelector: #brokenAnswer)
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testCompileFailureDuringExtensionRewriteRollsBackImage [
+
+	| backend targetClass |
+	self createExtensionTargetClass.
+	backend := self newBackend.
+	backend
+		write: self extensionTonelSource
+		at: '/tonel/' , self fixturePackageName , '/PharoImageFSProjectionExtensionTarget.extension.st'.
+	self
+		should: [
+				backend
+					write: self extensionTonelSourceWithBrokenExtraMethod
+					at: '/tonel/' , self fixturePackageName , '/PharoImageFSProjectionExtensionTarget.extension.st' ]
+		raise: Error
+		description: 'A method compilation failure after partial extension application must rollback the live image.'.
+	targetClass := Smalltalk globals at: #PharoImageFSProjectionExtensionTarget.
+	self assert: (targetClass new perform: #projectedExtensionAnswer) equals: 7.
+	self deny: (targetClass includesSelector: #brokenProjectedExtensionAnswer)
+]
+
+{ #category : 'tests' }
 PharoImageFSProjectionBackendTest >> testDeleteRemovesClassTonelFile [
 
 	| backend |
@@ -305,6 +372,41 @@ PharoImageFSProjectionBackendTest >> testExistingClassRewriteUpdatesClassDefinit
 	self assert: backend exportedPackageNames equals: {
 			self fixturePackageName.
 			self fixturePackageName }
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testExportFailureDuringClassDeleteRollsBackImage [
+
+	| backend class |
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	backend failNextExport.
+	self
+		should: [ backend delete: self originalClassTonelPath ]
+		raise: Error
+		whoseDescriptionIncludes: 'Simulated export failure'
+		description: 'A failed export after deleting a class must rollback the live image.'.
+	class := Smalltalk globals at: self originalClassName asSymbol.
+	self assert: class package name equals: self fixturePackageName.
+	self assert: class new answer equals: 42
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testExportFailureDuringClassMoveRollsBackImage [
+
+	| backend class |
+	self ensureTargetPackage.
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	backend failNextExport.
+	self
+		should: [ backend rename: self originalClassTonelPath to: self targetPackageTonelPath ]
+		raise: Error
+		whoseDescriptionIncludes: 'Simulated export failure'
+		description: 'A failed export after moving a class must rollback the live image.'.
+	class := Smalltalk globals at: self originalClassName asSymbol.
+	self assert: class package name equals: self fixturePackageName.
+	self assert: class new answer equals: 42
 ]
 
 { #category : 'tests' }

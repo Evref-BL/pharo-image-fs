@@ -131,6 +131,17 @@ cat /tmp/pharo-image-fs/critiques/PharoImageFSProjectionBackend.json
 cat /tmp/pharo-image-fs/critiques/PharoImageFSProjectionBackend/write:at:.json
 ```
 
+If a filesystem write fails with a generic editor or OS error, inspect the
+latest operational error:
+
+```sh
+cat /tmp/pharo-image-fs/errors/latest.txt
+```
+
+`/errors` is intentionally small and only contains mount/projection operation
+failures that are otherwise hard to see from filesystem tools. Pharo critiques
+remain under `/critiques` only.
+
 The projection is lazy and backed by the live image. Directory listings, stat
 requests, and reads ask Pharo for the current state as the filesystem needs
 them, so image-side changes become visible through the mount on later
@@ -178,6 +189,9 @@ Renaming projected `.extension.st` files is not supported.
 
 `/critiques` is read-only.
 
+`/errors` is read-only and records a small in-memory history of operation
+failures, plus `latest.txt`.
+
 ## What the mount exposes
 
 ```text
@@ -191,11 +205,16 @@ Renaming projected `.extension.st` files is not supported.
     <Class>.json
     <Class>/
       <selector>.json
+
+  errors/
+    latest.txt
+    <timestamp>-write.txt
 ```
 
 - `/tonel` is the code editing surface. It mirrors Tonel class and extension
   files from the live image.
 - `/critiques` is read-only diagnostic feedback from the live image.
+- `/errors` is read-only operational feedback for failed projection writes.
 
 ## Projection protocol
 
@@ -217,9 +236,6 @@ owns source rendering, write transactions, compilation, critiques, and export.
 The useful next improvements are:
 
 - package the daemon and Pharo backend so installation is less manual;
-- make startup/shutdown easier from Pharo and from shell scripts;
-- improve write diagnostics so editor and CLI users can see critique feedback
-  without checking daemon logs;
-- add broader transaction coverage for failure paths;
+- improve shell-side startup/shutdown helpers;
 - add more useful critique projections;
 - evaluate Linux and Windows mount backends after the macOS workflow is stable.
