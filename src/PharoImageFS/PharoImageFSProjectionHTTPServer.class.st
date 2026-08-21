@@ -66,6 +66,58 @@ PharoImageFSProjectionHTTPServer class >> defaultMountPath [
 	^ FileLocator temp / self defaultMountName
 ]
 
+{ #category : 'private - daemon' }
+PharoImageFSProjectionHTTPServer class >> downloadDaemonArchiveTo: aFileReference [
+
+	ZnClient new
+		url: PharoImageFSVersion daemonReleaseURL;
+		downloadTo: aFileReference
+]
+
+{ #category : 'private - daemon' }
+PharoImageFSProjectionHTTPServer class >> downloadDaemonExecutable [
+
+	| archive executable |
+	self daemonExecutableCacheDirectory ensureCreateDirectory.
+	archive := self daemonExecutableCacheDirectory / PharoImageFSVersion daemonArchiveName.
+	archive ensureDelete.
+	self downloadDaemonArchiveTo: archive.
+	[
+		self extractDaemonArchive: archive into: self daemonExecutableCacheDirectory.
+		executable := self daemonExecutable.
+		executable exists ifFalse: [
+			Error signal:
+				'Downloaded daemon archive did not contain ' , self daemonExecutableName , ': ' , PharoImageFSVersion daemonReleaseURL ].
+		self makeDaemonExecutable: executable.
+		^ executable ] ensure: [ archive exists ifTrue: [ archive delete ] ]
+]
+
+{ #category : 'private - daemon' }
+PharoImageFSProjectionHTTPServer class >> ensureDaemonExecutable [
+
+	self daemonExecutableOverride ifNotNil: [ :override | ^ override ].
+	self daemonExecutable exists ifFalse: [ ^ self downloadDaemonExecutable ].
+	^ self daemonExecutable
+]
+
+{ #category : 'private - daemon' }
+PharoImageFSProjectionHTTPServer class >> extractDaemonArchive: archiveReference into: directoryReference [
+
+	| archive |
+	archive := ZipArchive new.
+	[
+		archive readFrom: archiveReference.
+		archive extractAllTo: directoryReference overwrite: true ] ensure: [ archive close ]
+]
+
+{ #category : 'private - daemon' }
+PharoImageFSProjectionHTTPServer class >> makeDaemonExecutable: aFileReference [
+
+	| command |
+	command := 'chmod +x ' , (self shellQuote: aFileReference pathString).
+	(LibC system: command) = 0 ifFalse: [ Error signal: 'Failed to make daemon executable: ' , aFileReference pathString ]
+]
+
 { #category : 'registry' }
 PharoImageFSProjectionHTTPServer class >> register: aProjectionServer on: portNumber [
 
@@ -82,6 +134,23 @@ PharoImageFSProjectionHTTPServer class >> serverOn: portNumber [
 PharoImageFSProjectionHTTPServer class >> serversByPort [
 
 	^ ServersByPort ifNil: [ ServersByPort := Dictionary new ]
+]
+
+{ #category : 'private - daemon' }
+PharoImageFSProjectionHTTPServer class >> shellQuote: aString [
+
+	^ String streamContents: [ :stream |
+		  stream nextPut: $'.
+		  aString do: [ :character |
+			  character = $'
+				  ifTrue: [
+					  stream
+						  nextPut: $';
+						  nextPut: $\;
+						  nextPut: $';
+						  nextPut: $' ]
+				  ifFalse: [ stream nextPut: character ] ].
+		  stream nextPut: $' ]
 ]
 
 { #category : 'instance creation' }
@@ -297,18 +366,7 @@ PharoImageFSProjectionHTTPServer >> server [
 { #category : 'private - daemon' }
 PharoImageFSProjectionHTTPServer >> shellQuote: aString [
 
-	^ String streamContents: [ :stream |
-		  stream nextPut: $'.
-		  aString do: [ :character |
-				  character = $'
-					  ifTrue: [
-							  stream
-								  nextPut: $';
-								  nextPut: $\;
-								  nextPut: $';
-								  nextPut: $' ]
-					  ifFalse: [ stream nextPut: character ] ].
-		  stream nextPut: $' ]
+	^ self class shellQuote: aString
 ]
 
 { #category : 'private - daemon' }
@@ -316,11 +374,7 @@ PharoImageFSProjectionHTTPServer >> startDaemonMountedAt: aPath named: aString [
 
 	| command executable |
 	OSPlatform current isMacOS ifFalse: [ Error signal: 'pharo-image-fs daemon startup is currently supported only on macOS.' ].
-	executable := self class daemonExecutable.
-	executable exists ifFalse: [
-			Error signal: 'pharo-image-fs daemon executable not found: ' , executable pathString
-				, '. Set PHARO_IMAGE_FS_DAEMON to a local daemon binary or install version ' , PharoImageFSVersion current , ' from '
-				, PharoImageFSVersion daemonRepositoryURL ].
+	executable := self class ensureDaemonExecutable.
 	mountPath := aPath asFileReference.
 	mountName := aString.
 	mountPath ensureCreateDirectory.

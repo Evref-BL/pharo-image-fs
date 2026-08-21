@@ -14,7 +14,7 @@ PharoImageFSVersion class >> current [
 { #category : 'accessing' }
 PharoImageFSVersion class >> daemonArchiveName [
 
-	^ self daemonAssetName , '.tar.gz'
+	^ self daemonAssetName , '.zip'
 ]
 
 { #category : 'accessing' }

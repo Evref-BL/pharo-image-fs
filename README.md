@@ -16,7 +16,6 @@ critique runs, and repository operations.
 
 - macOS with [fuse-t](https://www.fuse-t.org/) installed
 - a Pharo image where the `PharoImageFS` package can be loaded
-- a matching `pharo-image-fs-daemon` binary
 
 On macOS, fuse-t can be installed with Homebrew:
 
@@ -33,6 +32,7 @@ brew reinstall --cask fuse-t
 
 The daemon is built and released from
 [`pharo-image-fs-daemon`](https://github.com/Evref-BL/pharo-image-fs-daemon).
+`pharo-image-fs` downloads the matching prebuilt daemon binary when needed.
 Prebuilt daemon binaries do not require Go at runtime, but the platform FUSE
 dependency is still required.
 
@@ -55,12 +55,11 @@ The baseline groups are:
 - `Tests`: backend tests
 - `default`: `Core` and `Tests`
 
-### Install the daemon
+### Daemon binary
 
-Install the matching daemon version from
-[`pharo-image-fs-daemon`](https://github.com/Evref-BL/pharo-image-fs-daemon).
-For local development, set `PHARO_IMAGE_FS_DAEMON` to the daemon executable
-path.
+By default, the Pharo backend downloads the matching daemon release into its
+local cache before starting the mount. For local development, set
+`PHARO_IMAGE_FS_DAEMON` to a daemon executable path to bypass the download.
 
 ### Start the projection
 
@@ -249,6 +248,5 @@ its expected daemon version in `PharoImageFSVersion`.
 
 The useful next improvements are:
 
-- download matching daemon release binaries from Pharo;
 - add more useful critique projections;
 - evaluate Linux and Windows mount backends after the macOS workflow is stable.

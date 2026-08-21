@@ -10,7 +10,7 @@ PharoImageFSVersionTest >> testDaemonArchiveNameUsesCurrentPlatform [
 
 	self
 		assert: PharoImageFSVersion daemonArchiveName
-		equals: PharoImageFSVersion daemonAssetName , '.tar.gz'
+		equals: PharoImageFSVersion daemonAssetName , '.zip'
 ]
 
 { #category : 'tests' }
