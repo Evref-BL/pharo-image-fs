@@ -33,7 +33,7 @@ func TestParseConfigAcceptsEndpoint(t *testing.T) {
 func TestParseConfigAcceptsRepeatedMountOptions(t *testing.T) {
 	config, err := ParseConfig([]string{
 		"--mount-option",
-		"backend=fskit",
+		"noappledouble",
 		"--mount-option",
 		"volname=Pharo Image",
 		"/tmp/mount",
@@ -45,7 +45,7 @@ func TestParseConfigAcceptsRepeatedMountOptions(t *testing.T) {
 	if len(config.MountOptions) != 2 {
 		t.Fatalf("unexpected mount options: %#v", config.MountOptions)
 	}
-	if config.MountOptions[0] != "backend=fskit" {
+	if config.MountOptions[0] != "noappledouble" {
 		t.Fatalf("unexpected first mount option: %s", config.MountOptions[0])
 	}
 	if config.MountOptions[1] != "volname=Pharo Image" {

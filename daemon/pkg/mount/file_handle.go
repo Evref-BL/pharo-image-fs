@@ -6,8 +6,6 @@ import (
 	"syscall"
 
 	"github.com/Evref-BL/pharo-image-fs/daemon/pkg/protocol"
-	"github.com/hanwen/go-fuse/v2/fs"
-	"github.com/hanwen/go-fuse/v2/fuse"
 )
 
 // FileHandle buffers one opened projected file.
@@ -21,28 +19,23 @@ type FileHandle struct {
 	flush    func(context.Context, string, []byte) error
 }
 
-var _ fs.FileReader = (*FileHandle)(nil)
-var _ fs.FileWriter = (*FileHandle)(nil)
-var _ fs.FileFlusher = (*FileHandle)(nil)
-var _ fs.FileSetattrer = (*FileHandle)(nil)
-
-func (h *FileHandle) Read(_ context.Context, dest []byte, off int64) (fuse.ReadResult, syscall.Errno) {
+func (h *FileHandle) Read(dest []byte, off int64) (int, syscall.Errno) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	if off < 0 {
-		return nil, syscall.EINVAL
+		return 0, syscall.EINVAL
 	}
 	if off >= int64(len(h.contents)) {
-		return fuse.ReadResultData(nil), 0
+		return 0, 0
 	}
 
 	start := int(off)
 	end := min(start+len(dest), len(h.contents))
-	return fuse.ReadResultData(h.contents[start:end]), 0
+	return copy(dest, h.contents[start:end]), 0
 }
 
-func (h *FileHandle) Write(_ context.Context, data []byte, off int64) (uint32, syscall.Errno) {
+func (h *FileHandle) Write(data []byte, off int64) (int, syscall.Errno) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -56,7 +49,7 @@ func (h *FileHandle) Write(_ context.Context, data []byte, off int64) (uint32, s
 	h.growTo(int(off) + len(data))
 	copy(h.contents[off:], data)
 	h.dirty = true
-	return uint32(len(data)), 0
+	return len(data), 0
 }
 
 func (h *FileHandle) Flush(ctx context.Context) syscall.Errno {
@@ -75,6 +68,22 @@ func (h *FileHandle) Flush(ctx context.Context) syscall.Errno {
 	return 0
 }
 
+func (h *FileHandle) Truncate(size int64) syscall.Errno {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	if !h.writable {
+		return syscall.EROFS
+	}
+	if size < 0 {
+		return syscall.EINVAL
+	}
+
+	h.resizeTo(int(size))
+	h.dirty = true
+	return 0
+}
+
 func (h *FileHandle) flushContents(ctx context.Context) error {
 	if h.flush != nil {
 		return h.flush(ctx, h.path, h.contents)
@@ -82,27 +91,6 @@ func (h *FileHandle) flushContents(ctx context.Context) error {
 
 	_, err := h.client.Write(ctx, h.path, h.contents)
 	return err
-}
-
-func (h *FileHandle) Setattr(_ context.Context, in *fuse.SetAttrIn, out *fuse.AttrOut) syscall.Errno {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	if !h.writable {
-		return syscall.EROFS
-	}
-
-	size, ok := in.GetSize()
-	if !ok {
-		out.Size = uint64(len(h.contents))
-		return 0
-	}
-
-	h.resizeTo(int(size))
-	h.dirty = true
-	out.Size = size
-	out.Mode = modeForKind(protocol.File, true)
-	return 0
 }
 
 func (h *FileHandle) growTo(size int) {

@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/Evref-BL/pharo-image-fs/daemon/pkg/protocol"
-	"github.com/hanwen/go-fuse/v2/fs"
 )
 
 func TestFileHandleFlushWritesFullContents(t *testing.T) {
@@ -19,7 +18,7 @@ func TestFileHandleFlushWritesFullContents(t *testing.T) {
 		writable: true,
 	}
 
-	written, errno := handle.Write(t.Context(), []byte("XY"), 1)
+	written, errno := handle.Write([]byte("XY"), 1)
 	if errno != 0 {
 		t.Fatalf("write errno: %v", errno)
 	}
@@ -45,7 +44,7 @@ func TestFileHandleRejectsReadOnlyWrite(t *testing.T) {
 		writable: false,
 	}
 
-	_, errno := handle.Write(t.Context(), []byte("x"), 0)
+	_, errno := handle.Write([]byte("x"), 0)
 	if errno != syscall.EROFS {
 		t.Fatalf("unexpected errno: %v", errno)
 	}
@@ -109,18 +108,4 @@ func (c *fakeClient) Rename(_ context.Context, sourcePath string, targetPath str
 	c.renamedPath = sourcePath
 	c.renameTarget = targetPath
 	return nil
-}
-
-func dirStreamNames(t *testing.T, stream fs.DirStream) []string {
-	t.Helper()
-
-	names := []string{}
-	for stream.HasNext() {
-		entry, errno := stream.Next()
-		if errno != 0 {
-			t.Fatalf("dir stream errno: %v", errno)
-		}
-		names = append(names, entry.Name)
-	}
-	return names
 }
