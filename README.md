@@ -159,16 +159,22 @@ Deleting projected code files is supported for `.class.st` and `.extension.st`.
 Class-file deletion removes the class from the image. Extension-file deletion
 removes only extension methods for that class/package.
 
-Moving projected `.class.st` files across package directories is supported when
-the class filename stays the same. The class is moved in the live image, and
-both source and target packages are exported.
+Moving projected `.class.st` files across package directories is supported. The
+class is moved in the live image, and both source and target packages are
+exported.
 
 Renaming projected `.class.st` files inside the same package is supported. The
 class is renamed in the live image, same-package references are updated, and the
 package is exported.
 
-Combined cross-package move plus class rename and `.extension.st` rename are not
-supported.
+Combined cross-package move plus class rename is supported.
+
+Moving projected `.extension.st` files across package directories is supported
+when the extension filename stays the same. The extension method protocols are
+rewritten from the source package to the target package, and both packages are
+exported.
+
+Renaming projected `.extension.st` files is not supported.
 
 `/critiques` is read-only.
 
@@ -214,7 +220,6 @@ The useful next improvements are:
 - make startup/shutdown easier from Pharo and from shell scripts;
 - improve write diagnostics so editor and CLI users can see critique feedback
   without checking daemon logs;
-- support combined cross-package class move plus class rename;
 - add broader transaction coverage for failure paths;
 - add more useful critique projections;
 - evaluate Linux and Windows mount backends after the macOS workflow is stable.

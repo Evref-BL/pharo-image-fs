@@ -27,6 +27,12 @@ PharoImageFSProjectionBackendTest >> classTonelSource [
 ]
 
 { #category : 'private' }
+PharoImageFSProjectionBackendTest >> classTonelSourceWithChangedAnswerAndExtraMethod [
+
+	^ self classTonelSourceWithExtraMethod copyReplaceAll: '^ 42' with: '^ 43'
+]
+
+{ #category : 'private' }
 PharoImageFSProjectionBackendTest >> classTonelSourceWithDeadBlock [
 
 	^ self classTonelSource , '
@@ -36,12 +42,6 @@ PharoImageFSProjectionBackendTest >> classTonelSourceWithDeadBlock [
 	[ self error: ''never run'' ]
 ]
 '
-]
-
-{ #category : 'private' }
-PharoImageFSProjectionBackendTest >> classTonelSourceWithChangedAnswerAndExtraMethod [
-
-	^ self classTonelSourceWithExtraMethod copyReplaceAll: '^ 42' with: '^ 43'
 ]
 
 { #category : 'private' }
@@ -116,6 +116,19 @@ PharoImageFSProjectionBackendTest >> decodedJsonFrom: aString [
 PharoImageFSProjectionBackendTest >> ensureTargetPackage [
 
 	PackageOrganizer default ensurePackage: self targetPackageName
+]
+
+{ #category : 'private' }
+PharoImageFSProjectionBackendTest >> extensionMoveTonelSource [
+
+	^ 'Extension { #name : ''String'' }
+
+{ #category : ''*PharoImageFS-Tests'' }
+String >> pharoImageFSMoveExtensionProbe [
+
+	^ 7
+]
+'
 ]
 
 { #category : 'private' }
@@ -198,6 +211,12 @@ PharoImageFSProjectionBackendTest >> targetPackageTonelPath [
 	^ '/tonel/' , self targetPackageName , '/' , self originalClassName , '.class.st'
 ]
 
+{ #category : 'private' }
+PharoImageFSProjectionBackendTest >> targetRenamedClassTonelPath [
+
+	^ '/tonel/' , self targetPackageName , '/' , self renamedClassName , '.class.st'
+]
+
 { #category : 'running' }
 PharoImageFSProjectionBackendTest >> tearDown [
 
@@ -206,6 +225,7 @@ PharoImageFSProjectionBackendTest >> tearDown [
 		self removeClassNamed: self renamedClassName.
 		self removeClassNamed: self referenceUserClassName.
 		self removeClassNamed: 'PharoImageFSProjectionExtensionTarget'.
+		(String includesSelector: #pharoImageFSMoveExtensionProbe) ifTrue: [ String removeSelector: #pharoImageFSMoveExtensionProbe ].
 		self removePackageNamed: self targetPackageName ] ensure: [ super tearDown ]
 ]
 
@@ -240,22 +260,6 @@ PharoImageFSProjectionBackendTest >> testDeleteRemovesExtensionTonelFile [
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testExistingClassRewriteRemovesAbsentMethods [
-
-	| backend class |
-	backend := self newBackend.
-	backend write: self classTonelSourceWithExtraMethod at: self originalClassTonelPath.
-	class := Smalltalk globals at: self originalClassName asSymbol.
-	self assert: class new extraAnswer equals: 99.
-	backend write: self classTonelSource at: self originalClassTonelPath.
-	self deny: (class includesSelector: #extraAnswer).
-	self assert: class new answer equals: 42.
-	self assert: backend exportedPackageNames equals: {
-			self fixturePackageName.
-			self fixturePackageName }
-]
-
-{ #category : 'tests' }
 PharoImageFSProjectionBackendTest >> testExistingClassRewriteOnlyLoadsChangedDefinitions [
 
 	| backend class |
@@ -269,6 +273,22 @@ PharoImageFSProjectionBackendTest >> testExistingClassRewriteOnlyLoadsChangedDef
 	self assert: backend loadedClassDefinitionCount equals: 0.
 	self assert: backend loadedMethodSelectors equals: #( answer ).
 	self assert: backend unloadedMethodSelectors equals: #(  )
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testExistingClassRewriteRemovesAbsentMethods [
+
+	| backend class |
+	backend := self newBackend.
+	backend write: self classTonelSourceWithExtraMethod at: self originalClassTonelPath.
+	class := Smalltalk globals at: self originalClassName asSymbol.
+	self assert: class new extraAnswer equals: 99.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	self deny: (class includesSelector: #extraAnswer).
+	self assert: class new answer equals: 42.
+	self assert: backend exportedPackageNames equals: {
+			self fixturePackageName.
+			self fixturePackageName }
 ]
 
 { #category : 'tests' }
@@ -316,18 +336,21 @@ PharoImageFSProjectionBackendTest >> testListRootExposesTonelAndCritiques [
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testMoveAndRenameClassTonelFileSignalsUnsupportedWrite [
+PharoImageFSProjectionBackendTest >> testMoveAndRenameClassTonelFileAcrossPackages [
 
+	| backend renamedClass |
 	self ensureTargetPackage.
-	self
-		should: [
-				| backend |
-				backend := self newBackend.
-				backend write: self classTonelSource at: self originalClassTonelPath.
-				backend rename: self originalClassTonelPath to: '/tonel/' , self targetPackageName , '/' , self renamedClassName , '.class.st' ]
-		raise: Error
-		whoseDescriptionIncludes: 'Projection class move and rename in one operation is not supported yet:'
-		description: 'Combined class move and rename needs explicit transactional semantics.'
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	backend rename: self originalClassTonelPath to: self targetRenamedClassTonelPath.
+	renamedClass := Smalltalk globals at: self renamedClassName asSymbol.
+	self deny: (Smalltalk globals includesKey: self originalClassName asSymbol).
+	self assert: renamedClass package name equals: self targetPackageName.
+	self assert: renamedClass new answer equals: 42.
+	self assert: backend exportedPackageNames equals: {
+			self fixturePackageName.
+			self fixturePackageName.
+			self targetPackageName }
 ]
 
 { #category : 'tests' }
@@ -341,6 +364,27 @@ PharoImageFSProjectionBackendTest >> testMoveClassTonelFileAcrossPackagesMovesCl
 	class := Smalltalk globals at: self originalClassName asSymbol.
 	self assert: class package name equals: self targetPackageName.
 	self assert: class new answer equals: 42.
+	self assert: backend exportedPackageNames equals: {
+			self fixturePackageName.
+			self fixturePackageName.
+			self targetPackageName }
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testMoveExtensionTonelFileAcrossPackagesMovesMethods [
+
+	| backend movedText |
+	self ensureTargetPackage.
+	backend := self newBackend.
+	backend
+		write: self extensionMoveTonelSource
+		at: '/tonel/' , self fixturePackageName , '/String.extension.st'.
+	backend
+		rename: '/tonel/' , self fixturePackageName , '/String.extension.st'
+		to: '/tonel/' , self targetPackageName , '/String.extension.st'.
+	self assert: ('' perform: #pharoImageFSMoveExtensionProbe) equals: 7.
+	movedText := backend read: '/tonel/' , self targetPackageName , '/String.extension.st'.
+	self assert: (movedText includesSubstring: '*PharoImageFS-ProjectionTargetFixture').
 	self assert: backend exportedPackageNames equals: {
 			self fixturePackageName.
 			self fixturePackageName.

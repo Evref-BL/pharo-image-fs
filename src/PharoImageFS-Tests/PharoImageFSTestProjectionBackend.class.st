@@ -30,18 +30,6 @@ PharoImageFSTestProjectionBackend >> exportedPackageNames [
 	^ exportedPackageNames asArray
 ]
 
-{ #category : 'accessing' }
-PharoImageFSTestProjectionBackend >> loadedClassDefinitionCount [
-
-	^ loadedClassDefinitionCount
-]
-
-{ #category : 'accessing' }
-PharoImageFSTestProjectionBackend >> loadedMethodSelectors [
-
-	^ loadedMethodSelectors asArray
-]
-
 { #category : 'testing' }
 PharoImageFSTestProjectionBackend >> failNextExport [
 
@@ -75,6 +63,18 @@ PharoImageFSTestProjectionBackend >> loadMethodDefinition: methodDefinition [
 
 	loadedMethodSelectors add: methodDefinition selector.
 	super loadMethodDefinition: methodDefinition
+]
+
+{ #category : 'accessing' }
+PharoImageFSTestProjectionBackend >> loadedClassDefinitionCount [
+
+	^ loadedClassDefinitionCount
+]
+
+{ #category : 'accessing' }
+PharoImageFSTestProjectionBackend >> loadedMethodSelectors [
+
+	^ loadedMethodSelectors asArray
 ]
 
 { #category : 'private - repositories' }

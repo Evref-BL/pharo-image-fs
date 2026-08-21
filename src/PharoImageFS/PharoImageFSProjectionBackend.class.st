@@ -417,6 +417,30 @@ PharoImageFSProjectionBackend >> extensionMethodsForClassName: className inPacka
 	^ (aPackage extensionMethods select: [ :method | method methodClass instanceSide name asString = className ]) asArray
 ]
 
+{ #category : 'private - moving' }
+PharoImageFSProjectionBackend >> extensionText: textString movingCategoriesFromPackage: sourcePackageName toPackage: targetPackageName originalPath: aString [
+
+	| movedText methodDefinitions sourcePrefix |
+	movedText := textString.
+	sourcePrefix := '*' , sourcePackageName.
+	methodDefinitions := self methodDefinitionsFrom: (self parseTonelDefinitionsFrom: textString originalPath: aString).
+	methodDefinitions do: [ :methodDefinition |
+			| newCategory oldCategory suffix |
+			oldCategory := methodDefinition category asString.
+			(oldCategory beginsWith: sourcePrefix caseSensitive: false) ifFalse: [
+					Error signal:
+						'Extension method protocol ' , oldCategory , ' does not belong to package ' , sourcePackageName , ' for ' , aString ].
+			suffix := oldCategory allButFirst: sourcePrefix size.
+			(suffix isEmpty or: [ suffix beginsWith: '-' ]) ifFalse: [
+					Error signal:
+						'Extension method protocol ' , oldCategory , ' does not belong to package ' , sourcePackageName , ' for ' , aString ].
+			newCategory := '*' , targetPackageName , suffix.
+			movedText := movedText
+				             copyReplaceAll: '''' , oldCategory , ''''
+				             with: '''' , newCategory , '''' ].
+	^ movedText
+]
+
 { #category : 'private - reading' }
 PharoImageFSProjectionBackend >> extensionTextForClassName: className package: aPackage originalPath: aString [
 
@@ -525,9 +549,13 @@ PharoImageFSProjectionBackend >> methodCritiqueDataForClass: aClass selector: aS
 ]
 
 { #category : 'private - writing' }
-PharoImageFSProjectionBackend >> methodDefinitionsFrom: definitions [
+PharoImageFSProjectionBackend >> methodDefinitionsByIdentityFor: methodDefinitions [
 
-	^ definitions select: #isMethodDefinition
+	| definitionsByIdentity |
+	definitionsByIdentity := Dictionary new.
+	methodDefinitions do: [ :methodDefinition |
+		definitionsByIdentity at: (self methodIdentityFor: methodDefinition) put: methodDefinition ].
+	^ definitionsByIdentity
 ]
 
 { #category : 'private - writing' }
@@ -543,13 +571,9 @@ PharoImageFSProjectionBackend >> methodDefinitionsChangedFrom: oldMethodDefiniti
 ]
 
 { #category : 'private - writing' }
-PharoImageFSProjectionBackend >> methodDefinitionsByIdentityFor: methodDefinitions [
+PharoImageFSProjectionBackend >> methodDefinitionsFrom: definitions [
 
-	| definitionsByIdentity |
-	definitionsByIdentity := Dictionary new.
-	methodDefinitions do: [ :methodDefinition |
-		definitionsByIdentity at: (self methodIdentityFor: methodDefinition) put: methodDefinition ].
-	^ definitionsByIdentity
+	^ definitions select: #isMethodDefinition
 ]
 
 { #category : 'private - writing' }
@@ -559,6 +583,46 @@ PharoImageFSProjectionBackend >> methodIdentityFor: aMethodDefinition [
 		  aMethodDefinition className asString.
 		  aMethodDefinition classIsMeta.
 		  aMethodDefinition selector }
+]
+
+{ #category : 'private - moving' }
+PharoImageFSProjectionBackend >> moveAndRenameTonelClassFileNamed: sourceFileName toFileNamed: targetFileName packageName: sourcePackageName toPackageName: targetPackageName originalPath: sourcePath targetPath: targetPath [
+
+	| class failureMessage newClassName oldClassName |
+	oldClassName := self classNameFromFileName: sourceFileName suffix: '.class.st'.
+	newClassName := self classNameFromFileName: targetFileName suffix: '.class.st'.
+	oldClassName ifNil: [ self signalUnsupportedWrite: sourcePath ].
+	newClassName ifNil: [ self signalUnsupportedWrite: targetPath ].
+	class := self classForName: oldClassName packageName: sourcePackageName originalPath: sourcePath.
+	self repositoryOwningPackageNamed: sourcePackageName ifAbsent: [ Error signal: 'No Iceberg repository owns package ' , sourcePackageName ].
+	self repositoryOwningPackageNamed: targetPackageName ifAbsent: [ Error signal: 'No Iceberg repository owns package ' , targetPackageName ].
+	self packageNamed: targetPackageName ifAbsent: [ self signalNotFound: targetPath ].
+	(Smalltalk globals includesKey: newClassName asSymbol) ifTrue: [
+		Error signal: 'Cannot rename class ' , oldClassName , ' to existing global ' , newClassName , ' for ' , targetPath ].
+	self validateRenameReferencesForClass: class packageName: sourcePackageName originalPath: sourcePath.
+	[
+		self executeClassRenameFrom: oldClassName to: newClassName.
+		self executeClassMoveNamed: newClassName toPackage: targetPackageName.
+		self exportPackagesNamed: {
+				sourcePackageName.
+				targetPackageName } ]
+		on: Error
+		do: [ :error |
+				failureMessage := error messageText ifNil: [ error asString ].
+				[
+					(Smalltalk globals includesKey: newClassName asSymbol) ifTrue: [
+							class := Smalltalk at: newClassName asSymbol.
+							class package name asString = targetPackageName ifTrue: [
+								self executeClassMoveNamed: newClassName toPackage: sourcePackageName ].
+							self executeClassRenameFrom: newClassName to: oldClassName ].
+					self exportPackagesNamed: {
+							targetPackageName.
+							sourcePackageName } ]
+					on: Error
+					do: [ :rollbackError |
+							Error signal: 'Projection class move and rename failed and rollback failed. Move and rename error: '
+								, failureMessage , '. Rollback error: ' , (rollbackError messageText ifNil: [ rollbackError asString ]) ].
+				Error signal: failureMessage ]
 ]
 
 { #category : 'private - moving' }
@@ -589,6 +653,58 @@ PharoImageFSProjectionBackend >> moveTonelClassFileNamed: fileName packageName: 
 					do: [ :rollbackError |
 							Error signal: 'Projection class move failed and rollback failed. Move error: ' , failureMessage , '. Rollback error: '
 								, (rollbackError messageText ifNil: [ rollbackError asString ]) ].
+				Error signal: failureMessage ]
+]
+
+{ #category : 'private - moving' }
+PharoImageFSProjectionBackend >> moveTonelExtensionFileNamed: fileName packageName: sourcePackageName toPackageName: targetPackageName originalPath: sourcePath targetPath: targetPath [
+
+	| className failureMessage movedText previousText sourceMethods sourcePackage targetMethods targetPackage |
+	className := self classNameFromFileName: fileName suffix: '.extension.st'.
+	className ifNil: [ self signalUnsupportedWrite: sourcePath ].
+	self classNamed: className originalPath: sourcePath.
+	self repositoryOwningPackageNamed: sourcePackageName ifAbsent: [ Error signal: 'No Iceberg repository owns package ' , sourcePackageName ].
+	self repositoryOwningPackageNamed: targetPackageName ifAbsent: [ Error signal: 'No Iceberg repository owns package ' , targetPackageName ].
+	sourcePackage := self packageNamed: sourcePackageName ifAbsent: [ self signalNotFound: sourcePath ].
+	targetPackage := self packageNamed: targetPackageName ifAbsent: [ self signalNotFound: targetPath ].
+	sourceMethods := self extensionMethodsForClassName: className inPackage: sourcePackage.
+	sourceMethods ifEmpty: [ self signalNotFound: sourcePath ].
+	targetMethods := self extensionMethodsForClassName: className inPackage: targetPackage.
+	targetMethods ifNotEmpty: [ Error signal: 'Cannot move extension to existing target extension file for ' , targetPath ].
+	previousText := self extensionTextForClassName: className package: sourcePackage originalPath: sourcePath.
+	movedText := self
+		             extensionText: previousText
+		             movingCategoriesFromPackage: sourcePackageName
+		             toPackage: targetPackageName
+		             originalPath: sourcePath.
+	[
+		self removeCompiledMethods: sourceMethods.
+		self
+			applyNewExtensionTonelText: movedText
+			className: className
+			packageName: targetPackageName
+			originalPath: targetPath.
+		self exportPackagesNamed: {
+				sourcePackageName.
+				targetPackageName } ]
+		on: Error
+		do: [ :error |
+				failureMessage := error messageText ifNil: [ error asString ].
+				[
+					targetMethods := self extensionMethodsForClassName: className inPackage: targetPackage.
+					targetMethods ifNotEmpty: [ self removeCompiledMethods: targetMethods ].
+					self
+						applyNewExtensionTonelText: previousText
+						className: className
+						packageName: sourcePackageName
+						originalPath: sourcePath.
+					self exportPackagesNamed: {
+							targetPackageName.
+							sourcePackageName } ]
+					on: Error
+					do: [ :rollbackError |
+							Error signal: 'Projection extension move failed and rollback failed. Move error: ' , failureMessage
+								, '. Rollback error: ' , (rollbackError messageText ifNil: [ rollbackError asString ]) ].
 				Error signal: failureMessage ]
 ]
 
@@ -750,12 +866,32 @@ PharoImageFSProjectionBackend >> rename: sourcePath to: targetPath [
 						  toPackageName: targetSegments second
 						  originalPath: sourcePath
 						  targetPath: targetPath ].
-			sourceSegments second = targetSegments second ifFalse: [
-					Error signal: 'Projection class move and rename in one operation is not supported yet: ' , sourcePath , ' to ' , targetPath ].
+			sourceSegments second = targetSegments second
+				ifTrue: [
+						^ self
+							  renameTonelClassFileNamed: sourceSegments third
+							  toFileNamed: targetSegments third
+							  packageName: sourceSegments second
+							  originalPath: sourcePath
+							  targetPath: targetPath ]
+				ifFalse: [
+						^ self
+							  moveAndRenameTonelClassFileNamed: sourceSegments third
+							  toFileNamed: targetSegments third
+							  packageName: sourceSegments second
+							  toPackageName: targetSegments second
+							  originalPath: sourcePath
+							  targetPath: targetPath ] ].
+	(sourceSegments third endsWith: '.extension.st') ifTrue: [
+			(targetSegments third endsWith: '.extension.st') ifFalse: [ self signalUnsupportedWrite: sourcePath ].
+			sourceClassName := self classNameFromFileName: sourceSegments third suffix: '.extension.st'.
+			targetClassName := self classNameFromFileName: targetSegments third suffix: '.extension.st'.
+			sourceClassName = targetClassName ifFalse: [ self signalUnsupportedWrite: sourcePath ].
+			sourceSegments second = targetSegments second ifTrue: [ ^ self ].
 			^ self
-				  renameTonelClassFileNamed: sourceSegments third
-				  toFileNamed: targetSegments third
+				  moveTonelExtensionFileNamed: sourceSegments third
 				  packageName: sourceSegments second
+				  toPackageName: targetSegments second
 				  originalPath: sourcePath
 				  targetPath: targetPath ].
 	self signalUnsupportedWrite: sourcePath
@@ -1017,18 +1153,18 @@ PharoImageFSProjectionBackend >> tonelRootEntries [
 ]
 
 { #category : 'private - writing' }
+PharoImageFSProjectionBackend >> unloadMethodDefinition: methodDefinition [
+
+	methodDefinition unload
+]
+
+{ #category : 'private - writing' }
 PharoImageFSProjectionBackend >> unloadMethodDefinitionsAbsentFrom: newMethodDefinitions in: oldMethodDefinitions [
 
 	| newIdentities |
 	newIdentities := newMethodDefinitions collect: [ :methodDefinition | self methodIdentityFor: methodDefinition ] as: Set.
 	oldMethodDefinitions do: [ :methodDefinition |
 		(newIdentities includes: (self methodIdentityFor: methodDefinition)) ifFalse: [ self unloadMethodDefinition: methodDefinition ] ]
-]
-
-{ #category : 'private - writing' }
-PharoImageFSProjectionBackend >> unloadMethodDefinition: methodDefinition [
-
-	methodDefinition unload
 ]
 
 { #category : 'private - critiques' }
