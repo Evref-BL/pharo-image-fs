@@ -23,9 +23,7 @@ Class {
 { #category : 'private - daemon' }
 PharoImageFSProjectionHTTPServer class >> daemonExecutable [
 
-	| override |
-	override := self daemonExecutableOverride.
-	override ifNotNil: [ ^ override ].
+	self daemonExecutableOverride ifNotNil: [ :override | ^ override ].
 	^ self daemonExecutableCacheDirectory / self daemonExecutableName
 ]
 
@@ -38,7 +36,6 @@ PharoImageFSProjectionHTTPServer class >> daemonExecutableCacheDirectory [
 { #category : 'private - daemon' }
 PharoImageFSProjectionHTTPServer class >> daemonExecutableName [
 
-	OSPlatform current isMacOS ifTrue: [ ^ 'pharo-image-fs' ].
 	^ 'pharo-image-fs'
 ]
 
@@ -58,9 +55,9 @@ PharoImageFSProjectionHTTPServer class >> defaultMountName [
 	imagePath := Smalltalk imagePath.
 	delimiter := FileSystem disk delimiter.
 	suffix := '.image'.
-	(imagePath endsWith: suffix) ifTrue: [
-		imagePath := imagePath copyFrom: 1 to: imagePath size - suffix size ].
-	^ imagePath copyFrom: (imagePath lastIndexOf: delimiter) + 1 to: imagePath size
+	^ imagePath copyFrom: (imagePath lastIndexOf: delimiter) + 1 to: ((imagePath endsWith: suffix)
+			   ifTrue: [ imagePath size - suffix size ]
+			   ifFalse: [ imagePath size ])
 ]
 
 { #category : 'defaults' }
@@ -72,8 +69,7 @@ PharoImageFSProjectionHTTPServer class >> defaultMountPath [
 { #category : 'registry' }
 PharoImageFSProjectionHTTPServer class >> register: aProjectionServer on: portNumber [
 
-	self serversByPort at: portNumber put: aProjectionServer.
-	^ aProjectionServer
+	^ self serversByPort at: portNumber put: aProjectionServer
 ]
 
 { #category : 'registry' }
@@ -85,8 +81,16 @@ PharoImageFSProjectionHTTPServer class >> serverOn: portNumber [
 { #category : 'registry' }
 PharoImageFSProjectionHTTPServer class >> serversByPort [
 
-	ServersByPort ifNil: [ ServersByPort := Dictionary new ].
-	^ ServersByPort
+	^ ServersByPort ifNil: [ ServersByPort := Dictionary new ]
+]
+
+{ #category : 'instance creation' }
+PharoImageFSProjectionHTTPServer class >> startAndMountOn: portNumber [
+
+	^ self
+		  startOn: portNumber
+		  mountAt: self defaultMountPath
+		  named: self defaultMountName
 ]
 
 { #category : 'instance creation' }
@@ -123,14 +127,14 @@ PharoImageFSProjectionHTTPServer class >> startOn: portNumber named: aString [
 
 	^ self
 		  startOn: portNumber
-		  mountAt: FileLocator temp / aString
+		  mountAt: self defaultMountPath
 		  named: aString
 ]
 
 { #category : 'registry' }
 PharoImageFSProjectionHTTPServer class >> stopAll [
 
-	self serversByPort values copy do: [ :each | each stop ].
+	self serversByPort valuesDo: [ :each | each stop ].
 	self serversByPort removeAll
 ]
 

@@ -59,6 +59,15 @@ PharoImageFSProjectionHTTPServerTest >> testStartOnRegistersServerByPort [
 ]
 
 { #category : 'tests' }
+PharoImageFSProjectionHTTPServerTest >> testStartOnStartsProjectionOnly [
+
+	| projectionServer |
+	projectionServer := PharoImageFSProjectionHTTPServer startOn: self testPort.
+	self assert: projectionServer mountPath isNil.
+	self assert: projectionServer mountName isNil
+]
+
+{ #category : 'tests' }
 PharoImageFSProjectionHTTPServerTest >> testStartingSamePortReplacesRegisteredServer [
 
 	| firstServer secondServer |

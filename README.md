@@ -67,6 +67,12 @@ path.
 Start the Pharo-side projection endpoint and daemon from the image:
 
 ```smalltalk
+PharoImageFSProjectionHTTPServer startAndMountOn: 9013
+```
+
+To use an explicit mountpoint or volume name:
+
+```smalltalk
 PharoImageFSProjectionHTTPServer
 	startOn: 9013
 	mountAt: '/tmp/pharo-image-fs' asFileReference
