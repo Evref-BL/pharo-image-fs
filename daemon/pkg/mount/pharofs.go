@@ -5,6 +5,7 @@ import (
 	"hash/fnv"
 	"io"
 	"io/fs"
+	"log"
 	"os"
 	"path"
 	"sort"
@@ -114,8 +115,14 @@ func (fsys *PharoFS) OpenFile(filename string, flag int, perm os.FileMode) (bill
 
 // Stat returns a FileInfo describing the named file.
 func (fsys *PharoFS) Stat(filename string) (fs.FileInfo, error) {
+	base := path.Base(filename)
+	if isMetadataFile(base) {
+		return nil, os.ErrNotExist
+	}
+
 	// Check overlay first
 	if entry, ok := fsys.overlay.Stat(filename); ok {
+		log.Printf("[PharoFS] Stat(%s) overlay hit", filename)
 		return &pharoFileInfo{
 			entry: entry,
 			path:  filename,
@@ -125,8 +132,10 @@ func (fsys *PharoFS) Stat(filename string) (fs.FileInfo, error) {
 	ctx := context.Background()
 	entry, err := fsys.client.Stat(ctx, filename)
 	if err != nil {
+		log.Printf("[PharoFS] Stat(%s) Pharo error: %v", filename, err)
 		return nil, err
 	}
+	log.Printf("[PharoFS] Stat(%s) Pharo hit", filename)
 	return &pharoFileInfo{
 		entry: entry,
 		path:  filename,
@@ -385,12 +394,26 @@ func (f *pharoFile) Close() error {
 	// Flush dirty content to overlay
 	if f.dirty && f.fsys != nil {
 		f.fsys.overlay.Create(f.path, f.contents)
-		// Write through to Pharo for Tonel files
-		if isProjectedTonelFilePath(f.path) {
+		// Write through to Pharo for Tonel files.
+		// Skip empty content — an editor open+truncate produces 0-byte
+		// dirty files that must not overwrite real Pharo content.
+		if isProjectedTonelFilePath(f.path) && len(f.contents) > 0 {
+			log.Printf("[PharoFS] Close(%s) write-through to Pharo (%d bytes)", f.path, len(f.contents))
+			if len(f.contents) < 256 {
+				log.Printf("[PharoFS] Close(%s) content: %q", f.path, f.contents)
+			}
 			ctx := context.Background()
 			if _, err := f.fsys.client.Write(ctx, f.path, f.contents); err != nil {
+				log.Printf("[PharoFS] Close(%s) write-through error: %v", f.path, err)
+				if len(f.contents) >= 256 {
+					log.Printf("[PharoFS] Close(%s) first 256 bytes: %q", f.path, f.contents[:256])
+				}
 				return err
 			}
+			f.fsys.overlay.Delete(f.path)
+			log.Printf("[PharoFS] Close(%s) write-through success", f.path)
+		} else if isProjectedTonelFilePath(f.path) {
+			log.Printf("[PharoFS] Close(%s) skipping write-through (empty content, likely truncate-only)", f.path)
 			f.fsys.overlay.Delete(f.path)
 		}
 	}
@@ -516,14 +539,21 @@ func (fsys *PharoFS) Chtimes(name string, atime, mtime time.Time) error { return
 
 func mergeEntries(projected []protocol.Entry, overlay []protocol.Entry) []protocol.Entry {
 	byName := map[string]protocol.Entry{}
+	merged := make([]protocol.Entry, 0, len(projected)+len(overlay))
+
 	for _, entry := range projected {
+		if isMetadataFile(entry.Name) {
+			continue
+		}
 		byName[entry.Name] = entry
+		merged = append(merged, entry)
 	}
 
-	merged := make([]protocol.Entry, 0, len(projected)+len(overlay))
-	merged = append(merged, projected...)
 	overlayOnly := make([]protocol.Entry, 0, len(overlay))
 	for _, entry := range overlay {
+		if isMetadataFile(entry.Name) {
+			continue
+		}
 		if _, exists := byName[entry.Name]; exists {
 			continue
 		}

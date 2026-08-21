@@ -62,6 +62,9 @@ func MountNFS(mountPoint string, client protocol.Client, config Config) (*NFSSer
 	handler := helpers.NewNullAuthHandler(pharoFS)
 	cacheHandler := helpers.NewCachingHandler(handler, 1024)
 
+	// Enable debug logging for go-nfs
+	nfs.Log.SetLevel(nfs.DebugLevel)
+
 	// Listen on a port
 	listener, err := net.Listen("tcp", ":0")
 	if err != nil {

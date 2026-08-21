@@ -4,6 +4,7 @@ import (
 	"context"
 	"path"
 	"sort"
+	"strings"
 	"sync"
 
 	"github.com/Evref-BL/pharo-image-fs/daemon/pkg/protocol"
@@ -102,8 +103,13 @@ func (o *Overlay) EntriesIn(parentPath string) []protocol.Entry {
 			continue
 		}
 
+		base := path.Base(projectionPath)
+		if isMetadataFile(base) {
+			continue
+		}
+
 		entries = append(entries, protocol.Entry{
-			Name:     path.Base(projectionPath),
+			Name:     base,
 			Kind:     protocol.File,
 			Size:     uint64(len(contents)),
 			Writable: true,
@@ -114,4 +120,10 @@ func (o *Overlay) EntriesIn(parentPath string) []protocol.Entry {
 		return entries[i].Name < entries[j].Name
 	})
 	return entries
+}
+
+// isMetadataFile reports whether a filename is a macOS metadata file that
+// should be hidden from directory listings (._ prefixed files, .DS_Store).
+func isMetadataFile(name string) bool {
+	return strings.HasPrefix(name, "._") || name == ".DS_Store"
 }
