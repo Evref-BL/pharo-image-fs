@@ -103,6 +103,18 @@ PharoImageFSProjectionBackendTest >> classTonelSourceWithSlot [
 ]
 
 { #category : 'private' }
+PharoImageFSProjectionBackendTest >> classTonelSourceWithUnformattedMethod [
+
+	^ self classTonelSource , '
+{ #category : ''accessing'' }
+' , self originalClassName , ' >> messyAnswer [
+
+^(1+2)
+]
+'
+]
+
+{ #category : 'private' }
 PharoImageFSProjectionBackendTest >> createExtensionTargetClass [
 
 	((Object << #PharoImageFSProjectionExtensionTarget)
@@ -548,13 +560,10 @@ PharoImageFSProjectionBackendTest >> testRenameExtensionTonelFileSignalsUnsuppor
 PharoImageFSProjectionBackendTest >> testRepositoryMetadataCanBeRead [
 
 	| metadata |
-	metadata := self decodedJsonFrom:
-		            (self newBackend read: '/repositories/Fixture Repository.repository.json').
+	metadata := self decodedJsonFrom: (self newBackend read: '/repositories/Fixture Repository.repository.json').
 	self assert: (metadata at: #name) equals: 'Fixture Repository'.
 	self assert: (metadata at: #path) equals: '/tmp/fixture-repository'.
-	self
-		assert: (metadata at: #loadedPackages)
-		equals: #( 'PharoImageFS-Tests' 'PharoImageFS-Tests-Resources' )
+	self assert: (metadata at: #loadedPackages) equals: #( 'PharoImageFS-Tests' 'PharoImageFS-Tests-Resources' )
 ]
 
 { #category : 'tests' }
@@ -668,4 +677,16 @@ PharoImageFSProjectionBackendTest >> testWriteCreatesNewExtensionFromTonelFile [
 	targetClass := Smalltalk globals at: #PharoImageFSProjectionExtensionTarget.
 	self assert: (targetClass new perform: #projectedExtensionAnswer) equals: 7.
 	self assert: backend exportedPackageNames equals: { self fixturePackageName }
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testWriteReformatsAcceptedMethodSource [
+
+	| backend class source |
+	backend := self newBackend.
+	backend write: self classTonelSourceWithUnformattedMethod at: self originalClassTonelPath.
+	class := Smalltalk globals at: self originalClassName asSymbol.
+	source := class sourceCodeAt: #messyAnswer.
+	self assert: source equals: ((class >> #messyAnswer) ast formattedCodeIn: class).
+	self deny: (source includesSubstring: '^(1+2)')
 ]

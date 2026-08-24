@@ -599,7 +599,8 @@ PharoImageFSProjectionBackend >> loadClassDefinition: classDefinition [
 { #category : 'private - writing' }
 PharoImageFSProjectionBackend >> loadMethodDefinition: methodDefinition [
 
-	methodDefinition load
+	methodDefinition load.
+	self reformatLoadedMethodDefinition: methodDefinition
 ]
 
 { #category : 'private - critiques' }
@@ -948,6 +949,17 @@ PharoImageFSProjectionBackend >> readTonelSegments: segments originalPath: aStri
 	(segments second endsWith: '.extension.st') ifTrue: [
 		^ self readTonelExtensionFileNamed: segments second packageName: segments first originalPath: aString ].
 	self signalNotFound: aString
+]
+
+{ #category : 'private - writing' }
+PharoImageFSProjectionBackend >> reformatLoadedMethodDefinition: methodDefinition [
+
+	| behavior selector |
+	behavior := methodDefinition actualClass.
+	behavior ifNil: [ ^ self ].
+	selector := methodDefinition selector asSymbol.
+	(behavior includesSelector: selector) ifFalse: [ ^ self ].
+	(behavior >> selector) reformat
 ]
 
 { #category : 'private - writing' }
