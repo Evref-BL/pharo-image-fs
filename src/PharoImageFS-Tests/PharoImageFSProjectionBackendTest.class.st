@@ -272,6 +272,21 @@ PharoImageFSProjectionBackendTest >> tearDown [
 ]
 
 { #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testClassTonelFileDoesNotIncludeExtensionMethods [
+
+	| backend classText extensionText |
+	self createExtensionTargetClass.
+	backend := self newBackend.
+	backend
+		write: self extensionTonelSource
+		at: '/tonel/' , self fixturePackageName , '/PharoImageFSProjectionExtensionTarget.extension.st'.
+	classText := backend read: '/tonel/' , self targetPackageName , '/PharoImageFSProjectionExtensionTarget.class.st'.
+	extensionText := backend read: '/tonel/' , self fixturePackageName , '/PharoImageFSProjectionExtensionTarget.extension.st'.
+	self deny: (classText includesSubstring: 'projectedExtensionAnswer').
+	self assert: (extensionText includesSubstring: 'projectedExtensionAnswer')
+]
+
+{ #category : 'tests' }
 PharoImageFSProjectionBackendTest >> testCompileFailureDuringClassRewriteRollsBackImage [
 
 	| backend class |
@@ -439,6 +454,26 @@ PharoImageFSProjectionBackendTest >> testExportFailureDuringClassRewriteRollsBac
 	self assert: backend exportedPackageNames equals: {
 			self fixturePackageName.
 			self fixturePackageName }
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testExtensionMethodWrittenThroughClassFileMovesToExtensionFile [
+
+	| backend classText extensionText methodBlock targetClass |
+	self createExtensionTargetClass.
+	backend := self newBackend.
+	classText := backend read: '/tonel/' , self targetPackageName , '/PharoImageFSProjectionExtensionTarget.class.st'.
+	methodBlock := String cr , '{ #category : ''*PharoImageFS-Tests'' }' , String cr
+	               , 'PharoImageFSProjectionExtensionTarget >> projectedExtensionAnswer [' , String cr , String cr , String tab
+	               , '^ 7' , String cr , ']' , String cr.
+	backend write: classText , methodBlock at: '/tonel/' , self targetPackageName , '/PharoImageFSProjectionExtensionTarget.class.st'.
+	targetClass := Smalltalk globals at: #PharoImageFSProjectionExtensionTarget.
+	extensionText := backend read: '/tonel/' , self fixturePackageName , '/PharoImageFSProjectionExtensionTarget.extension.st'.
+	self assert: (targetClass new perform: #projectedExtensionAnswer) equals: 7.
+	self deny:
+		((backend read: '/tonel/' , self targetPackageName , '/PharoImageFSProjectionExtensionTarget.class.st') includesSubstring:
+			 'projectedExtensionAnswer').
+	self assert: (extensionText includesSubstring: 'projectedExtensionAnswer')
 ]
 
 { #category : 'tests' }

@@ -205,6 +205,20 @@ PharoImageFSProjectionBackend >> classNames [
 	^ (Smalltalk globals allClasses collect: [ :class | class name asString ] as: Array) sorted
 ]
 
+{ #category : 'private - reading' }
+PharoImageFSProjectionBackend >> classTonelTextFor: aClass [
+
+	| methodDefinitions writer |
+	writer := TonelWriter new.
+	methodDefinitions := { aClass asClassDefinition }
+	                     , ((self localMethodsForClass: aClass) collect: [ :method | method asRingDefinition asMCMethodDefinition ])
+	                     ,
+	                     ((self localMethodsForClass: aClass classSide) collect: [ :method |
+		                      method asRingDefinition asMCMethodDefinition ]).
+	writer instVarNamed: 'snapshot' put: (MCSnapshot fromDefinitions: methodDefinitions).
+	^ String streamContents: [ :stream | writer writeClass: aClass asClassDefinition on: stream ]
+]
+
 { #category : 'private - classes' }
 PharoImageFSProjectionBackend >> classesInPackageNamed: packageName [
 
@@ -308,7 +322,7 @@ PharoImageFSProjectionBackend >> deleteTonelClassFileNamed: fileName packageName
 	className ifNil: [ self signalUnsupportedWrite: aString ].
 	self repositoryOwningPackageNamed: packageName ifAbsent: [ Error signal: 'No Iceberg repository owns package ' , packageName ].
 	class := self classForName: className packageName: packageName originalPath: aString.
-	previousText := TonelWriter sourceCodeOf: class.
+	previousText := self classTonelTextFor: class.
 	[
 		class removeFromSystem.
 		self exportPackageNamed: packageName ]
@@ -601,6 +615,12 @@ PharoImageFSProjectionBackend >> loadMethodDefinition: methodDefinition [
 
 	methodDefinition load.
 	self reformatLoadedMethodDefinition: methodDefinition
+]
+
+{ #category : 'private - reading' }
+PharoImageFSProjectionBackend >> localMethodsForClass: aBehavior [
+
+	^ aBehavior localMethods reject: [ :method | method protocol name beginsWith: '*' ]
 ]
 
 { #category : 'private - critiques' }
@@ -927,7 +947,7 @@ PharoImageFSProjectionBackend >> readTonelClassFileNamed: fileName packageName: 
 	className := self classNameFromFileName: fileName suffix: '.class.st'.
 	className ifNil: [ self signalNotFound: aString ].
 	class := self classForName: className packageName: packageName originalPath: aString.
-	^ TonelWriter sourceCodeOf: class
+	^ self classTonelTextFor: class
 ]
 
 { #category : 'private - reading' }
@@ -1182,8 +1202,9 @@ PharoImageFSProjectionBackend >> restoreClassTonelText: textString className: cl
 					originalPath: aString ]
 		ifNotNil: [
 				currentClass package name asString = packageName ifFalse: [
-					Error signal: 'Cannot rollback class ' , className , ' because it now belongs to package ' , currentClass package name asString ].
-				currentText := TonelWriter sourceCodeOf: currentClass.
+					Error signal:
+						'Cannot rollback class ' , className , ' because it now belongs to package ' , currentClass package name asString ].
+				currentText := self classTonelTextFor: currentClass.
 				self
 					applyClassTonelText: textString
 					replacing: currentText
@@ -1425,7 +1446,7 @@ PharoImageFSProjectionBackend >> tonelClassEntryNamed: fileName packageName: pac
 	className := self classNameFromFileName: fileName suffix: '.class.st'.
 	className ifNil: [ self signalNotFound: aString ].
 	class := self classForName: className packageName: packageName originalPath: aString.
-	text := TonelWriter sourceCodeOf: class.
+	text := self classTonelTextFor: class.
 	^ self fileNamed: fileName text: text writable: true
 ]
 
