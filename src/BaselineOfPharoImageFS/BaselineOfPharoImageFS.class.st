@@ -18,10 +18,32 @@ BaselineOfPharoImageFS >> baseline: spec [
 			spec group: 'Core' with: #( 'PharoImageFS' ).
 			spec group: 'Tests' with: #( 'PharoImageFS-Tests' ).
 			spec group: 'default' with: #( 'Core' 'Tests' ) ].
-	spec for: #( 'pharo12.x' 'pharo13.x' ) do: [
+	spec for: self pharoVersionsBefore14 do: [
 			spec package: 'PharoImageFS-Compatibility-Pre14'.
 			spec group: 'PharoImageFS-Compatibility' with: #( 'PharoImageFS-Compatibility-Pre14' ) ].
-	spec for: #( 'pharo14.x' ) do: [
+	spec for: self pharoVersionsFrom14 do: [
 			spec package: 'PharoImageFS-Compatibility-14Plus'.
 			spec group: 'PharoImageFS-Compatibility' with: #( 'PharoImageFS-Compatibility-14Plus' ) ]
+]
+
+{ #category : 'baseline' }
+BaselineOfPharoImageFS >> currentPharoVersionSpec [
+
+	^ ('pharo' , SystemVersion current major asString , '.x') asSymbol
+]
+
+{ #category : 'baseline' }
+BaselineOfPharoImageFS >> pharoVersionsBefore14 [
+
+	^ SystemVersion current major < 14
+		  ifTrue: [ { self currentPharoVersionSpec } ]
+		  ifFalse: [ #(  ) ]
+]
+
+{ #category : 'baseline' }
+BaselineOfPharoImageFS >> pharoVersionsFrom14 [
+
+	^ SystemVersion current major >= 14
+		  ifTrue: [ { self currentPharoVersionSpec } ]
+		  ifFalse: [ #(  ) ]
 ]
