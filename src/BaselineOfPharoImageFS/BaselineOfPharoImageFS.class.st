@@ -22,8 +22,8 @@ BaselineOfPharoImageFS >> baseline: spec [
 			spec package: 'PharoImageFS-Compatibility-Pre14'.
 			spec group: 'PharoImageFS-Compatibility' with: #( 'PharoImageFS-Compatibility-Pre14' ) ].
 	spec for: self pharoVersionsFrom14 do: [
-			spec package: 'PharoImageFS-Compatibility-14Plus'.
-			spec group: 'PharoImageFS-Compatibility' with: #( 'PharoImageFS-Compatibility-14Plus' ) ]
+			spec package: 'PharoImageFS-Compatibility-From14'.
+			spec group: 'PharoImageFS-Compatibility' with: #( 'PharoImageFS-Compatibility-From14' ) ]
 ]
 
 { #category : 'baseline' }

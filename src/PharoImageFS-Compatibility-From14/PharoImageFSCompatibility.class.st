@@ -1,8 +1,8 @@
 Class {
 	#name : 'PharoImageFSCompatibility',
 	#superclass : 'Object',
-	#category : 'PharoImageFS-Compatibility-14Plus',
-	#package : 'PharoImageFS-Compatibility-14Plus'
+	#category : 'PharoImageFS-Compatibility-From14',
+	#package : 'PharoImageFS-Compatibility-From14'
 }
 
 { #category : 'evaluating' }
