@@ -26,7 +26,7 @@ PharoImageFSProjectionBackend >> addSourceIntervalFromCritique: aCritique to: da
 { #category : 'private - writing' }
 PharoImageFSProjectionBackend >> applyClassTonelText: textString replacing: previousTextString className: className packageName: packageName originalPath: aString [
 
-	^ PharoImageFSMonticelloDefinitionLoader activeDuring: [
+	^ PharoImageFSCompatibility activeDuring: [
 			  | changedMethodDefinitions classDefinition definitions methodDefinitions previousClassDefinition previousDefinitions previousMethodDefinitions |
 			  definitions := self parseTonelDefinitionsFrom: textString originalPath: aString.
 			  previousDefinitions := self parseTonelDefinitionsFrom: previousTextString originalPath: aString.
@@ -49,7 +49,7 @@ PharoImageFSProjectionBackend >> applyClassTonelText: textString replacing: prev
 { #category : 'private - writing' }
 PharoImageFSProjectionBackend >> applyExtensionTonelText: textString replacing: previousTextString className: className packageName: packageName originalPath: aString [
 
-	^ PharoImageFSMonticelloDefinitionLoader activeDuring: [
+	^ PharoImageFSCompatibility activeDuring: [
 			  | changedMethodDefinitions definitions methodDefinitions previousDefinitions previousMethodDefinitions |
 			  definitions := self parseTonelDefinitionsFrom: textString originalPath: aString.
 			  previousDefinitions := self parseTonelDefinitionsFrom: previousTextString originalPath: aString.
@@ -69,7 +69,7 @@ PharoImageFSProjectionBackend >> applyExtensionTonelText: textString replacing: 
 { #category : 'private - writing' }
 PharoImageFSProjectionBackend >> applyNewClassTonelText: textString className: className packageName: packageName originalPath: aString [
 
-	^ PharoImageFSMonticelloDefinitionLoader activeDuring: [
+	^ PharoImageFSCompatibility activeDuring: [
 			  | classDefinition definitions methodDefinitions |
 			  definitions := self parseTonelDefinitionsFrom: textString originalPath: aString.
 			  classDefinition := self classDefinitionFrom: definitions originalPath: aString.
@@ -87,7 +87,7 @@ PharoImageFSProjectionBackend >> applyNewClassTonelText: textString className: c
 { #category : 'private - writing' }
 PharoImageFSProjectionBackend >> applyNewExtensionTonelText: textString className: className packageName: packageName originalPath: aString [
 
-	^ PharoImageFSMonticelloDefinitionLoader activeDuring: [
+	^ PharoImageFSCompatibility activeDuring: [
 			  | definitions methodDefinitions |
 			  definitions := self parseTonelDefinitionsFrom: textString originalPath: aString.
 			  self
@@ -425,7 +425,7 @@ PharoImageFSProjectionBackend >> entryNamed: aString in: entries ifAbsent: absen
 { #category : 'private - moving' }
 PharoImageFSProjectionBackend >> executeClassMoveNamed: className toPackage: packageName [
 
-	(RBMoveClassTransformation move: className toPackage: packageName) execute
+	PharoImageFSCompatibility moveClassNamed: className toPackage: packageName
 ]
 
 { #category : 'private - renaming' }
@@ -611,13 +611,13 @@ PharoImageFSProjectionBackend >> listTonelSegments: segments originalPath: aStri
 { #category : 'private - writing' }
 PharoImageFSProjectionBackend >> loadClassDefinition: classDefinition [
 
-	PharoImageFSMonticelloDefinitionLoader loadDefinition: classDefinition
+	PharoImageFSCompatibility loadMonticelloDefinition: classDefinition
 ]
 
 { #category : 'private - writing' }
 PharoImageFSProjectionBackend >> loadMethodDefinition: methodDefinition [
 
-	PharoImageFSMonticelloDefinitionLoader loadDefinition: methodDefinition.
+	PharoImageFSCompatibility loadMonticelloDefinition: methodDefinition.
 	self reformatLoadedMethodDefinition: methodDefinition
 ]
 
