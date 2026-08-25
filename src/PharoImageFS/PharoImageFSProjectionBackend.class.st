@@ -26,75 +26,79 @@ PharoImageFSProjectionBackend >> addSourceIntervalFromCritique: aCritique to: da
 { #category : 'private - writing' }
 PharoImageFSProjectionBackend >> applyClassTonelText: textString replacing: previousTextString className: className packageName: packageName originalPath: aString [
 
-	| changedMethodDefinitions classDefinition definitions methodDefinitions previousClassDefinition previousDefinitions previousMethodDefinitions |
-	definitions := self parseTonelDefinitionsFrom: textString originalPath: aString.
-	previousDefinitions := self parseTonelDefinitionsFrom: previousTextString originalPath: aString.
-	classDefinition := self classDefinitionFrom: definitions originalPath: aString.
-	previousClassDefinition := self classDefinitionFrom: previousDefinitions originalPath: aString.
-	self
-		validateClassDefinition: classDefinition
-		className: className
-		packageName: packageName
-		originalPath: aString.
-	previousMethodDefinitions := self methodDefinitionsFrom: previousDefinitions.
-	methodDefinitions := self methodDefinitionsFrom: definitions.
-	changedMethodDefinitions := self methodDefinitionsChangedFrom: previousMethodDefinitions in: methodDefinitions.
-	self validateBlockingCritiquesForMethodDefinitions: changedMethodDefinitions originalPath: aString.
-	classDefinition = previousClassDefinition ifFalse: [ self loadClassDefinition: classDefinition ].
-	self unloadMethodDefinitionsAbsentFrom: methodDefinitions in: previousMethodDefinitions.
-	changedMethodDefinitions do: [ :methodDefinition | self loadMethodDefinition: methodDefinition ]
+	^ PharoImageFSMonticelloDefinitionLoader activeDuring: [
+			  | changedMethodDefinitions classDefinition definitions methodDefinitions previousClassDefinition previousDefinitions previousMethodDefinitions |
+			  definitions := self parseTonelDefinitionsFrom: textString originalPath: aString.
+			  previousDefinitions := self parseTonelDefinitionsFrom: previousTextString originalPath: aString.
+			  classDefinition := self classDefinitionFrom: definitions originalPath: aString.
+			  previousClassDefinition := self classDefinitionFrom: previousDefinitions originalPath: aString.
+			  self
+				  validateClassDefinition: classDefinition
+				  className: className
+				  packageName: packageName
+				  originalPath: aString.
+			  previousMethodDefinitions := self methodDefinitionsFrom: previousDefinitions.
+			  methodDefinitions := self methodDefinitionsFrom: definitions.
+			  changedMethodDefinitions := self methodDefinitionsChangedFrom: previousMethodDefinitions in: methodDefinitions.
+			  self validateBlockingCritiquesForMethodDefinitions: changedMethodDefinitions originalPath: aString.
+			  classDefinition = previousClassDefinition ifFalse: [ self loadClassDefinition: classDefinition ].
+			  self unloadMethodDefinitionsAbsentFrom: methodDefinitions in: previousMethodDefinitions.
+			  changedMethodDefinitions do: [ :methodDefinition | self loadMethodDefinition: methodDefinition ] ]
 ]
 
 { #category : 'private - writing' }
 PharoImageFSProjectionBackend >> applyExtensionTonelText: textString replacing: previousTextString className: className packageName: packageName originalPath: aString [
 
-	| changedMethodDefinitions definitions methodDefinitions previousDefinitions previousMethodDefinitions |
-	definitions := self parseTonelDefinitionsFrom: textString originalPath: aString.
-	previousDefinitions := self parseTonelDefinitionsFrom: previousTextString originalPath: aString.
-	self
-		validateExtensionDefinitions: definitions
-		className: className
-		packageName: packageName
-		originalPath: aString.
-	methodDefinitions := self methodDefinitionsFrom: definitions.
-	previousMethodDefinitions := self methodDefinitionsFrom: previousDefinitions.
-	changedMethodDefinitions := self methodDefinitionsChangedFrom: previousMethodDefinitions in: methodDefinitions.
-	self validateBlockingCritiquesForMethodDefinitions: changedMethodDefinitions originalPath: aString.
-	self unloadMethodDefinitionsAbsentFrom: methodDefinitions in: previousMethodDefinitions.
-	changedMethodDefinitions do: [ :methodDefinition | self loadMethodDefinition: methodDefinition ]
+	^ PharoImageFSMonticelloDefinitionLoader activeDuring: [
+			  | changedMethodDefinitions definitions methodDefinitions previousDefinitions previousMethodDefinitions |
+			  definitions := self parseTonelDefinitionsFrom: textString originalPath: aString.
+			  previousDefinitions := self parseTonelDefinitionsFrom: previousTextString originalPath: aString.
+			  self
+				  validateExtensionDefinitions: definitions
+				  className: className
+				  packageName: packageName
+				  originalPath: aString.
+			  methodDefinitions := self methodDefinitionsFrom: definitions.
+			  previousMethodDefinitions := self methodDefinitionsFrom: previousDefinitions.
+			  changedMethodDefinitions := self methodDefinitionsChangedFrom: previousMethodDefinitions in: methodDefinitions.
+			  self validateBlockingCritiquesForMethodDefinitions: changedMethodDefinitions originalPath: aString.
+			  self unloadMethodDefinitionsAbsentFrom: methodDefinitions in: previousMethodDefinitions.
+			  changedMethodDefinitions do: [ :methodDefinition | self loadMethodDefinition: methodDefinition ] ]
 ]
 
 { #category : 'private - writing' }
 PharoImageFSProjectionBackend >> applyNewClassTonelText: textString className: className packageName: packageName originalPath: aString [
 
-	| classDefinition definitions methodDefinitions |
-	definitions := self parseTonelDefinitionsFrom: textString originalPath: aString.
-	classDefinition := self classDefinitionFrom: definitions originalPath: aString.
-	self
-		validateClassDefinition: classDefinition
-		className: className
-		packageName: packageName
-		originalPath: aString.
-	methodDefinitions := self methodDefinitionsFrom: definitions.
-	self validateBlockingCritiquesForMethodDefinitions: methodDefinitions originalPath: aString.
-	self loadClassDefinition: classDefinition.
-	methodDefinitions do: [ :methodDefinition | self loadMethodDefinition: methodDefinition ]
+	^ PharoImageFSMonticelloDefinitionLoader activeDuring: [
+			  | classDefinition definitions methodDefinitions |
+			  definitions := self parseTonelDefinitionsFrom: textString originalPath: aString.
+			  classDefinition := self classDefinitionFrom: definitions originalPath: aString.
+			  self
+				  validateClassDefinition: classDefinition
+				  className: className
+				  packageName: packageName
+				  originalPath: aString.
+			  methodDefinitions := self methodDefinitionsFrom: definitions.
+			  self validateBlockingCritiquesForMethodDefinitions: methodDefinitions originalPath: aString.
+			  self loadClassDefinition: classDefinition.
+			  methodDefinitions do: [ :methodDefinition | self loadMethodDefinition: methodDefinition ] ]
 ]
 
 { #category : 'private - writing' }
 PharoImageFSProjectionBackend >> applyNewExtensionTonelText: textString className: className packageName: packageName originalPath: aString [
 
-	| definitions methodDefinitions |
-	definitions := self parseTonelDefinitionsFrom: textString originalPath: aString.
-	self
-		validateExtensionDefinitions: definitions
-		className: className
-		packageName: packageName
-		originalPath: aString.
-	methodDefinitions := self methodDefinitionsFrom: definitions.
-	methodDefinitions ifEmpty: [ Error signal: 'Extension file must contain at least one method for ' , aString ].
-	self validateBlockingCritiquesForMethodDefinitions: methodDefinitions originalPath: aString.
-	methodDefinitions do: [ :methodDefinition | self loadMethodDefinition: methodDefinition ]
+	^ PharoImageFSMonticelloDefinitionLoader activeDuring: [
+			  | definitions methodDefinitions |
+			  definitions := self parseTonelDefinitionsFrom: textString originalPath: aString.
+			  self
+				  validateExtensionDefinitions: definitions
+				  className: className
+				  packageName: packageName
+				  originalPath: aString.
+			  methodDefinitions := self methodDefinitionsFrom: definitions.
+			  methodDefinitions ifEmpty: [ Error signal: 'Extension file must contain at least one method for ' , aString ].
+			  self validateBlockingCritiquesForMethodDefinitions: methodDefinitions originalPath: aString.
+			  methodDefinitions do: [ :methodDefinition | self loadMethodDefinition: methodDefinition ] ]
 ]
 
 { #category : 'private - critiques' }
@@ -607,13 +611,13 @@ PharoImageFSProjectionBackend >> listTonelSegments: segments originalPath: aStri
 { #category : 'private - writing' }
 PharoImageFSProjectionBackend >> loadClassDefinition: classDefinition [
 
-	classDefinition load
+	PharoImageFSMonticelloDefinitionLoader loadDefinition: classDefinition
 ]
 
 { #category : 'private - writing' }
 PharoImageFSProjectionBackend >> loadMethodDefinition: methodDefinition [
 
-	methodDefinition load.
+	PharoImageFSMonticelloDefinitionLoader loadDefinition: methodDefinition.
 	self reformatLoadedMethodDefinition: methodDefinition
 ]
 
