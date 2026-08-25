@@ -8,7 +8,7 @@ Class {
 { #category : 'accessing' }
 PharoImageFSVersion class >> current [
 
-	^ '0.2.1'
+	^ '0.2.2'
 ]
 
 { #category : 'accessing' }
