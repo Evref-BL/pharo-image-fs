@@ -1,0 +1,17 @@
+SmalltalkCISpec {
+  #loading : [
+    SCIMetacelloLoadSpec {
+      #baseline : 'PharoImageFS',
+      #directory : 'src',
+      #ignoreImage : true,
+      #onConflict : #useIncoming,
+      #onUpgrade : #useIncoming,
+      #load : [ 'Tests' ]
+    }
+  ],
+  #testing : {
+    #packages : [
+      'PharoImageFS-Tests'
+    ]
+  }
+}

@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: macos-26
+    strategy:
+      fail-fast: false
+      matrix:
+        smalltalk:
+          - Pharo64-12
+          - Pharo64-13
+          - Pharo64-14
+
+    name: ${{ matrix.smalltalk }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up smalltalkCI
+        uses: hpi-swa/setup-smalltalkCI@v1
+        with:
+          smalltalk-image: ${{ matrix.smalltalk }}
+
+      - name: Test
+        run: smalltalkci -s ${{ matrix.smalltalk }}
+        shell: bash
+        timeout-minutes: 15
