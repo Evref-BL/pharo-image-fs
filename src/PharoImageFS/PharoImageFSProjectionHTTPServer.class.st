@@ -270,6 +270,17 @@ PharoImageFSProjectionHTTPServer >> daemonPidFile [
 	^ daemonPidFile
 ]
 
+{ #category : 'private - running' }
+PharoImageFSProjectionHTTPServer >> ensurePortAvailable: portNumber [
+
+	| probeSocket |
+	portNumber isZero ifTrue: [ ^ self ].
+	probeSocket := [ ZnNetworkingUtils serverSocketOn: portNumber ]
+		               on: Error
+		               do: [ :error | ^ self signalServerStartupFailureOn: portNumber ].
+	probeSocket destroy
+]
+
 { #category : 'private - json' }
 PharoImageFSProjectionHTTPServer >> errorResponseFor: anError statusCode: statusCode [
 
@@ -369,6 +380,14 @@ PharoImageFSProjectionHTTPServer >> shellQuote: aString [
 	^ self class shellQuote: aString
 ]
 
+{ #category : 'private - running' }
+PharoImageFSProjectionHTTPServer >> signalServerStartupFailureOn: portNumber [
+
+	self stop.
+	Error signal:
+		'Could not start pharo-image-fs projection server on port ' , portNumber asString , '. The port may already be in use.'
+]
+
 { #category : 'private - daemon' }
 PharoImageFSProjectionHTTPServer >> startDaemonMountedAt: aPath named: aString [
 
@@ -388,10 +407,12 @@ PharoImageFSProjectionHTTPServer >> startDaemonMountedAt: aPath named: aString [
 PharoImageFSProjectionHTTPServer >> startOn: portNumber [
 
 	server ifNotNil: [ self stop ].
+	self ensurePortAvailable: portNumber.
 	port := portNumber.
 	server := ZnServer on: portNumber.
 	server onRequestRespond: [ :request | self handleRequest: request ].
-	server start
+	server start.
+	self waitUntilServerStartedOn: portNumber
 ]
 
 { #category : 'private - errors' }
@@ -438,4 +459,14 @@ PharoImageFSProjectionHTTPServer >> stopDaemon [
 PharoImageFSProjectionHTTPServer >> valueAt: aKey in: aDictionary [
 
 	^ aDictionary at: aKey ifAbsent: [ aDictionary at: aKey asString ]
+]
+
+{ #category : 'private - running' }
+PharoImageFSProjectionHTTPServer >> waitUntilServerStartedOn: portNumber [
+
+	100 timesRepeat: [
+			server isRunning ifTrue: [ ^ self ].
+			(server process isNotNil and: [ server process isTerminated ]) ifTrue: [ ^ self signalServerStartupFailureOn: portNumber ].
+			(Delay forMilliseconds: 10) wait ].
+	server isRunning ifFalse: [ self signalServerStartupFailureOn: portNumber ]
 ]

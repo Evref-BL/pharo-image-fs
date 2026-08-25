@@ -50,6 +50,20 @@ PharoImageFSProjectionHTTPServerTest >> testPort [
 ]
 
 { #category : 'tests' }
+PharoImageFSProjectionHTTPServerTest >> testStartOnOccupiedPortSignalsClearError [
+
+	| occupyingSocket |
+	occupyingSocket := ZnNetworkingUtils serverSocketOn: self testPort.
+	[
+		self
+			should: [ PharoImageFSProjectionHTTPServer startOn: self testPort ]
+			raise: Error
+			whoseDescriptionIncludes: 'port may already be in use'
+			description: 'PIFS should fail clearly when the requested projection port is occupied by another server.'.
+		self assert: (PharoImageFSProjectionHTTPServer serverOn: self testPort) isNil ] ensure: [ occupyingSocket destroy ]
+]
+
+{ #category : 'tests' }
 PharoImageFSProjectionHTTPServerTest >> testStartOnRegistersServerByPort [
 
 	| projectionServer |
