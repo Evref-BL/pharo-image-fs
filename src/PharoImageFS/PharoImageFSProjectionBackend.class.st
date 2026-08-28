@@ -259,7 +259,7 @@ PharoImageFSProjectionBackend >> critiqueMethodEntriesForClass: aClass [
 	entries := OrderedCollection new.
 	(classEntry includesKey: #class) ifTrue: [ entries add: (self fileNamed: 'class-critiques.json' size: 0 writable: false) ].
 	methods := classEntry at: #methods ifAbsent: [ Dictionary new ].
-	methods keys asArray sorted do: [ :selector |
+	methods keys sorted do: [ :selector |
 		entries add: (self fileNamed: (self pathSegmentForSelector: selector) , '.json' size: 0 writable: false) ].
 	^ entries asArray
 ]
@@ -269,13 +269,13 @@ PharoImageFSProjectionBackend >> critiquePackageEntriesForPackageNamed: packageN
 
 	| packageEntry |
 	packageEntry := self critiqueEntries at: packageName ifAbsent: [ self signalNotFound: aString ].
-	^ packageEntry keys asArray sorted collect: [ :className | self directoryNamed: className ]
+	^ packageEntry keys sorted collect: [ :className | self directoryNamed: className ]
 ]
 
 { #category : 'private - listing' }
 PharoImageFSProjectionBackend >> critiqueRootEntries [
 
-	^ self critiqueEntries keys asArray sorted collect: [ :packageName | self directoryNamed: packageName ]
+	^ self critiqueEntries keys sorted collect: [ :packageName | self directoryNamed: packageName ]
 ]
 
 { #category : 'private - paths' }
