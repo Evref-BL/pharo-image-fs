@@ -5,7 +5,8 @@ Class {
 	#name : 'PharoImageFSProjectionBackend',
 	#superclass : 'Object',
 	#instVars : [
-		'critiqueEntries'
+		'critiqueEntries',
+		'requiresRepositoryOwnershipForWrites'
 	],
 	#category : 'PharoImageFS',
 	#package : 'PharoImageFS'
@@ -100,6 +101,23 @@ PharoImageFSProjectionBackend >> applyNewExtensionTonelText: textString classNam
 			  methodDefinitions ifEmpty: [ Error signal: 'Extension file must contain at least one method for ' , aString ].
 			  self validateBlockingCritiquesForMethodDefinitions: methodDefinitions originalPath: aString.
 			  methodDefinitions do: [ :methodDefinition | self loadMethodDefinition: methodDefinition ] ]
+]
+
+{ #category : 'private - repositories' }
+PharoImageFSProjectionBackend >> assertRepositoriesOwnPackageNames: packageNames originalPath: aString [
+
+	packageNames do: [ :packageName | self assertRepositoryOwnsPackageNamed: packageName originalPath: aString ]
+]
+
+{ #category : 'private - repositories' }
+PharoImageFSProjectionBackend >> assertRepositoryOwnsPackageNamed: packageName originalPath: aString [
+
+	self requiresRepositoryOwnershipForWrites ifFalse: [ ^ self ].
+	self repositoryOwningPackageNamed: packageName ifAbsent: [
+			Error signal: 'Package ' , packageName
+				,
+				' is not owned by a loaded Iceberg repository. Attach it to a repository or disable repository ownership checks before writing through '
+				, aString ]
 ]
 
 { #category : 'private - critiques' }
@@ -306,6 +324,7 @@ PharoImageFSProjectionBackend >> deleteTonelClassFileNamed: fileName packageName
 	| class className failureMessage previousText |
 	className := self classNameFromFileName: fileName suffix: '.class.st'.
 	className ifNil: [ self signalUnsupportedWrite: aString ].
+	self assertRepositoryOwnsPackageNamed: packageName originalPath: aString.
 	class := self classForName: className packageName: packageName originalPath: aString.
 	previousText := self classTonelTextFor: class.
 	[
@@ -335,6 +354,7 @@ PharoImageFSProjectionBackend >> deleteTonelExtensionFileNamed: fileName package
 	className := self classNameFromFileName: fileName suffix: '.extension.st'.
 	className ifNil: [ self signalUnsupportedWrite: aString ].
 	self classNamed: className originalPath: aString.
+	self assertRepositoryOwnsPackageNamed: packageName originalPath: aString.
 	package := self packageNamed: packageName ifAbsent: [ self signalNotFound: aString ].
 	methods := self extensionMethodsForClassName: className inPackage: package.
 	methods ifEmpty: [ self signalNotFound: aString ].
@@ -620,6 +640,7 @@ PharoImageFSProjectionBackend >> makeDirectoryResponseForPath: aString [
 PharoImageFSProjectionBackend >> makeTonelPackageDirectoryNamed: packageName originalPath: aString [
 
 	packageName ifEmpty: [ self signalUnsupportedWrite: aString ].
+	self assertRepositoryOwnsPackageNamed: packageName originalPath: aString.
 	PackageOrganizer default ensurePackage: packageName
 ]
 
@@ -681,6 +702,11 @@ PharoImageFSProjectionBackend >> moveAndRenameTonelClassFileNamed: sourceFileNam
 	oldClassName ifNil: [ self signalUnsupportedWrite: sourcePath ].
 	newClassName ifNil: [ self signalUnsupportedWrite: targetPath ].
 	class := self classForName: oldClassName packageName: sourcePackageName originalPath: sourcePath.
+	self
+		assertRepositoriesOwnPackageNames: {
+				sourcePackageName.
+				targetPackageName }
+		originalPath: sourcePath.
 	self packageNamed: targetPackageName ifAbsent: [ self signalNotFound: targetPath ].
 	(Smalltalk globals includesKey: newClassName asSymbol) ifTrue: [
 		Error signal: 'Cannot rename class ' , oldClassName , ' to existing global ' , newClassName , ' for ' , targetPath ].
@@ -718,6 +744,11 @@ PharoImageFSProjectionBackend >> moveTonelClassFileNamed: fileName packageName: 
 	className := self classNameFromFileName: fileName suffix: '.class.st'.
 	className ifNil: [ self signalUnsupportedWrite: sourcePath ].
 	class := self classForName: className packageName: sourcePackageName originalPath: sourcePath.
+	self
+		assertRepositoriesOwnPackageNames: {
+				sourcePackageName.
+				targetPackageName }
+		originalPath: sourcePath.
 	self packageNamed: targetPackageName ifAbsent: [ self signalNotFound: targetPath ].
 	[
 		self executeClassMoveNamed: className toPackage: targetPackageName.
@@ -748,6 +779,11 @@ PharoImageFSProjectionBackend >> moveTonelExtensionFileNamed: fileName packageNa
 	className := self classNameFromFileName: fileName suffix: '.extension.st'.
 	className ifNil: [ self signalUnsupportedWrite: sourcePath ].
 	self classNamed: className originalPath: sourcePath.
+	self
+		assertRepositoriesOwnPackageNames: {
+				sourcePackageName.
+				targetPackageName }
+		originalPath: sourcePath.
 	sourcePackage := self packageNamed: sourcePackageName ifAbsent: [ self signalNotFound: sourcePath ].
 	targetPackage := self packageNamed: targetPackageName ifAbsent: [ self signalNotFound: targetPath ].
 	sourceMethods := self extensionMethodsForClassName: className inPackage: sourcePackage.
@@ -1242,6 +1278,18 @@ PharoImageFSProjectionBackend >> repositoryProjectionNameFor: aString [
 				  ifFalse: [ stream nextPut: character ] ] ]
 ]
 
+{ #category : 'accessing' }
+PharoImageFSProjectionBackend >> requiresRepositoryOwnershipForWrites [
+
+	^ requiresRepositoryOwnershipForWrites ifNil: [ true ]
+]
+
+{ #category : 'accessing' }
+PharoImageFSProjectionBackend >> requiresRepositoryOwnershipForWrites: aBoolean [
+
+	requiresRepositoryOwnershipForWrites := aBoolean
+]
+
 { #category : 'private - deleting' }
 PharoImageFSProjectionBackend >> restoreClassTonelText: textString className: className packageName: packageName originalPath: aString [
 
@@ -1643,6 +1691,7 @@ PharoImageFSProjectionBackend >> writeTonelClassText: textString fileName: fileN
 				  toClassName: className
 				  packageName: packageName
 				  originalPath: aString ].
+	self assertRepositoryOwnsPackageNamed: packageName originalPath: aString.
 	packageExists := PackageOrganizer default hasPackage: packageName.
 	class := Smalltalk at: className asSymbol ifAbsent: [ nil ].
 	classExists := class notNil.
@@ -1696,6 +1745,7 @@ PharoImageFSProjectionBackend >> writeTonelExtensionText: textString fileName: f
 	className := self classNameFromFileName: fileName suffix: '.extension.st'.
 	className ifNil: [ self signalUnsupportedWrite: aString ].
 	self classNamed: className originalPath: aString.
+	self assertRepositoryOwnsPackageNamed: packageName originalPath: aString.
 	packageExists := PackageOrganizer default hasPackage: packageName.
 	definitions := self parseTonelDefinitionsFrom: textString originalPath: aString.
 	methodDefinitions := self methodDefinitionsFrom: definitions.

@@ -86,6 +86,20 @@ PharoImageFSProjectionHTTPServer
 	named: 'pharo-image-fs'
 ```
 
+By default, writes require the target package to belong to a loaded Iceberg
+repository. This keeps filesystem edits coherent with exported source. To allow
+live-image-only writes, for example in a scratch image, disable the check on the
+projection backend:
+
+```smalltalk
+| projection |
+projection := PharoImageFSProjectionHTTPServer
+	              startOn: 9013
+	              mountAt: '/tmp/pharo-image-fs' asFileReference
+	              named: 'pharo-image-fs'.
+projection backend requiresRepositoryOwnershipForWrites: false
+```
+
 Stop it from Pharo with:
 
 ```smalltalk
@@ -159,7 +173,8 @@ cat /tmp/pharo-image-fs/repositories/pharo-image-fs.repository.json
 
 Use `/repositories` for repository operations and non-image files such as docs.
 For Pharo code, edit `/tonel` so writes are compiled in the live image and
-exported coherently when the package belongs to a loaded Iceberg repository.
+exported coherently. The default repository-ownership check rejects writes to
+packages that are not attached to a loaded Iceberg repository.
 
 The projection is lazy and backed by the live image. Directory listings, stat
 requests, and reads ask Pharo for the current state as the filesystem needs
@@ -174,12 +189,14 @@ already-open file handle can still contain the contents read when it was opened.
 - existing `.class.st` files;
 - existing `.extension.st` files;
 - new `.class.st` files whose Tonel class definition matches the projection
-  path, creating the package when necessary;
+  path, creating the package when repository-ownership checks are disabled;
 - new `.extension.st` files for existing classes.
 
 `/tonel/<Package>` directories can be created and removed. Creating a directory
-creates a package in the live image. Removing a directory removes the package
-only when it is empty; delete class and extension files explicitly first.
+creates a package in the live image when repository-ownership checks are
+disabled. With the default checks enabled, creating an unowned package is
+rejected with a clear error. Removing a directory removes the package only when
+it is empty; delete class and extension files explicitly first.
 
 Editor-safe temporary-file save patterns are supported. Temporary files stay
 local to the daemon until they are renamed over a real projected Tonel path,
@@ -194,19 +211,20 @@ Class-file deletion removes the class from the image. Extension-file deletion
 removes only extension methods for that class/package.
 
 Moving projected `.class.st` files across package directories is supported. The
-class is moved in the live image. Source and target packages are exported when
-they belong to loaded Iceberg repositories.
+class is moved in the live image. With the default repository-ownership check,
+both source and target packages must belong to loaded Iceberg repositories.
 
 Renaming projected `.class.st` files inside the same package is supported. The
 class is renamed in the live image, same-package references are updated, and the
-package is exported when it belongs to a loaded Iceberg repository.
+package is exported.
 
 Combined cross-package move plus class rename is supported.
 
 Moving projected `.extension.st` files across package directories is supported
 when the extension filename stays the same. The extension method protocols are
-rewritten from the source package to the target package. Source and target
-packages are exported when they belong to loaded Iceberg repositories.
+rewritten from the source package to the target package. With the default
+repository-ownership check, both source and target packages must belong to
+loaded Iceberg repositories.
 
 Renaming projected `.extension.st` files is not supported.
 
