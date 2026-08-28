@@ -4,6 +4,9 @@ Image-side projection backend for pharo-image-fs. It owns Pharo semantics and an
 Class {
 	#name : 'PharoImageFSProjectionBackend',
 	#superclass : 'Object',
+	#instVars : [
+		'critiqueEntries'
+	],
 	#category : 'PharoImageFS',
 	#package : 'PharoImageFS'
 }
@@ -135,35 +138,6 @@ PharoImageFSProjectionBackend >> blockingPreCompileRuleClasses [
 	^ { ruleClass }
 ]
 
-{ #category : 'private - critiques' }
-PharoImageFSProjectionBackend >> classCritiqueDataForClass: aClass [
-
-	| methods |
-	methods := OrderedCollection new.
-	aClass selectors asArray sorted do: [ :selector |
-			methods add: (OrderedDictionary new
-					 at: #side put: 'instance';
-					 at: #selector put: selector asString;
-					 at: #critiques put: (self critiqueDataForCompiledMethod: aClass >> selector);
-					 yourself) ].
-	aClass classSide selectors asArray sorted do: [ :selector |
-			methods add: (OrderedDictionary new
-					 at: #side put: 'class';
-					 at: #selector put: selector asString;
-					 at: #critiques put: (self critiqueDataForCompiledMethod: aClass classSide >> selector);
-					 yourself) ].
-	^ OrderedDictionary new
-		  at: #class put: (self critiqueDataForBehavior: aClass);
-		  at: #methods put: (methods reject: [ :each | (each at: #critiques) isEmpty ]) asArray;
-		  yourself
-]
-
-{ #category : 'private - critiques' }
-PharoImageFSProjectionBackend >> classCritiquesForClass: aClass [
-
-	^ self critiqueDataForBehavior: aClass
-]
-
 { #category : 'private - writing' }
 PharoImageFSProjectionBackend >> classDefinitionFrom: definitions originalPath: aString [
 
@@ -181,13 +155,6 @@ PharoImageFSProjectionBackend >> classForName: className packageName: packageNam
 	class := Smalltalk at: className asSymbol ifAbsent: [ self signalNotFound: aString ].
 	class package name asString = packageName ifFalse: [ self signalNotFound: aString ].
 	^ class
-]
-
-{ #category : 'private - critiques' }
-PharoImageFSProjectionBackend >> classHasCritiqueEntries: aClass [
-
-	(self classCritiquesForClass: aClass) ifNotEmpty: [ ^ true ].
-	^ (self selectorsWithCritiquesForClass: aClass) isNotEmpty
 ]
 
 { #category : 'private - paths' }
@@ -260,15 +227,39 @@ PharoImageFSProjectionBackend >> critiqueDictionariesFor: critiques [
 				  ifFalse: [ (left at: #title ifAbsent: [ '' ]) <= (right at: #title ifAbsent: [ '' ]) ] ]
 ]
 
+{ #category : 'private - critiques' }
+PharoImageFSProjectionBackend >> critiqueEntries [
+
+	^ critiqueEntries ifNil: [ critiqueEntries := Dictionary new ]
+]
+
+{ #category : 'private - critiques' }
+PharoImageFSProjectionBackend >> critiqueEntryForPackageNamed: packageName classNamed: className ifAbsent: absentBlock [
+
+	^ (self critiqueEntries at: packageName ifAbsent: [ ^ absentBlock value ]) at: className ifAbsent: absentBlock
+]
+
+{ #category : 'private - critiques' }
+PharoImageFSProjectionBackend >> critiqueEntryForPackageNamed: packageName classNamed: className ifPresent: presentBlock ifAbsent: absentBlock [
+
+	^ presentBlock value: (self critiqueEntryForPackageNamed: packageName classNamed: className ifAbsent: [ ^ absentBlock value ])
+]
+
+{ #category : 'private - critiques' }
+PharoImageFSProjectionBackend >> critiqueMethodDataIn: classEntry forSelector: aSelector ifAbsent: absentBlock [
+
+	^ (classEntry at: #methods ifAbsent: [ ^ absentBlock value ]) at: aSelector ifAbsent: absentBlock
+]
+
 { #category : 'private - listing' }
 PharoImageFSProjectionBackend >> critiqueMethodEntriesForClass: aClass [
 
-	| entries selectors |
+	| classEntry entries methods |
+	classEntry := self critiqueEntryForPackageNamed: aClass package name asString classNamed: aClass name ifAbsent: [ ^ #(  ) ].
 	entries := OrderedCollection new.
-	(self classCritiquesForClass: aClass) ifNotEmpty: [
-		entries add: (self fileNamed: 'class-critiques.json' size: 0 writable: false) ].
-	selectors := self selectorsWithCritiquesForClass: aClass.
-	selectors do: [ :selector |
+	(classEntry includesKey: #class) ifTrue: [ entries add: (self fileNamed: 'class-critiques.json' size: 0 writable: false) ].
+	methods := classEntry at: #methods ifAbsent: [ Dictionary new ].
+	methods keys asArray sorted do: [ :selector |
 		entries add: (self fileNamed: (self pathSegmentForSelector: selector) , '.json' size: 0 writable: false) ].
 	^ entries asArray
 ]
@@ -276,22 +267,15 @@ PharoImageFSProjectionBackend >> critiqueMethodEntriesForClass: aClass [
 { #category : 'private - listing' }
 PharoImageFSProjectionBackend >> critiquePackageEntriesForPackageNamed: packageName originalPath: aString [
 
-	| entries package |
-	package := self packageNamed: packageName ifAbsent: [ self signalNotFound: aString ].
-	entries := OrderedCollection new.
-	(self packageCritiquesForPackage: package) ifNotEmpty: [
-		entries add: (self fileNamed: 'package-critiques.json' size: 0 writable: false) ].
-	(self classesInPackageNamed: packageName) do: [ :class |
-		(self classHasCritiqueEntries: class) ifTrue: [ entries add: (self directoryNamed: class name) ] ].
-	^ entries asArray
+	| packageEntry |
+	packageEntry := self critiqueEntries at: packageName ifAbsent: [ self signalNotFound: aString ].
+	^ packageEntry keys asArray sorted collect: [ :className | self directoryNamed: className ]
 ]
 
 { #category : 'private - listing' }
 PharoImageFSProjectionBackend >> critiqueRootEntries [
 
-	^ self packageNames
-		  select: [ :packageName | self packageHasCritiqueEntriesNamed: packageName ]
-		  thenCollect: [ :packageName | self directoryNamed: packageName ]
+	^ self critiqueEntries keys asArray sorted collect: [ :packageName | self directoryNamed: packageName ]
 ]
 
 { #category : 'private - paths' }
@@ -329,7 +313,8 @@ PharoImageFSProjectionBackend >> deleteTonelClassFileNamed: fileName packageName
 	previousText := self classTonelTextFor: class.
 	[
 		class removeFromSystem.
-		self exportPackageNamed: packageName ]
+		self exportPackageNamed: packageName.
+		self removeCritiquesForClassNamed: className packageName: packageName ]
 		on: Error
 		do: [ :error |
 				failureMessage := error messageText ifNil: [ error asString ].
@@ -360,7 +345,8 @@ PharoImageFSProjectionBackend >> deleteTonelExtensionFileNamed: fileName package
 	previousText := self extensionTextForClassName: className package: package originalPath: aString.
 	[
 		self removeCompiledMethods: methods.
-		self exportPackageNamed: packageName ]
+		self exportPackageNamed: packageName.
+		self removeCritiquesForClassNamed: className packageName: packageName ]
 		on: Error
 		do: [ :error |
 				failureMessage := error messageText ifNil: [ error asString ].
@@ -642,14 +628,6 @@ PharoImageFSProjectionBackend >> methodCritiqueDataForClass: aClass selector: aS
 	^ data
 ]
 
-{ #category : 'private - critiques' }
-PharoImageFSProjectionBackend >> methodCritiquesForClass: aClass selector: aSelector [
-
-	| data |
-	data := self methodCritiqueDataForClass: aClass selector: aSelector.
-	^ data values flatCollect: [ :each | each ]
-]
-
 { #category : 'private - writing' }
 PharoImageFSProjectionBackend >> methodDefinitionsByIdentityFor: methodDefinitions [
 
@@ -734,20 +712,25 @@ PharoImageFSProjectionBackend >> moveTonelClassFileNamed: fileName packageName: 
 	className := self classNameFromFileName: fileName suffix: '.class.st'.
 	className ifNil: [ self signalUnsupportedWrite: sourcePath ].
 	class := self classForName: className packageName: sourcePackageName originalPath: sourcePath.
-	self repositoryOwningPackageNamed: sourcePackageName ifAbsent: [ Error signal: 'No Iceberg repository owns package ' , sourcePackageName ].
-	self repositoryOwningPackageNamed: targetPackageName ifAbsent: [ Error signal: 'No Iceberg repository owns package ' , targetPackageName ].
+	self
+		repositoryOwningPackageNamed: sourcePackageName
+		ifAbsent: [ Error signal: 'No Iceberg repository owns package ' , sourcePackageName ].
+	self
+		repositoryOwningPackageNamed: targetPackageName
+		ifAbsent: [ Error signal: 'No Iceberg repository owns package ' , targetPackageName ].
 	self packageNamed: targetPackageName ifAbsent: [ self signalNotFound: targetPath ].
 	[
 		self executeClassMoveNamed: className toPackage: targetPackageName.
 		self exportPackagesNamed: {
 				sourcePackageName.
-				targetPackageName } ]
+				targetPackageName }.
+		self removeCritiquesForClassNamed: className packageName: sourcePackageName.
+		self removeCritiquesForClassNamed: className packageName: targetPackageName ]
 		on: Error
 		do: [ :error |
 				failureMessage := error messageText ifNil: [ error asString ].
 				[
-					class package name asString = targetPackageName ifTrue: [
-						self executeClassMoveNamed: className toPackage: sourcePackageName ].
+					class package name asString = targetPackageName ifTrue: [ self executeClassMoveNamed: className toPackage: sourcePackageName ].
 					self exportPackagesNamed: {
 							targetPackageName.
 							sourcePackageName } ]
@@ -765,8 +748,12 @@ PharoImageFSProjectionBackend >> moveTonelExtensionFileNamed: fileName packageNa
 	className := self classNameFromFileName: fileName suffix: '.extension.st'.
 	className ifNil: [ self signalUnsupportedWrite: sourcePath ].
 	self classNamed: className originalPath: sourcePath.
-	self repositoryOwningPackageNamed: sourcePackageName ifAbsent: [ Error signal: 'No Iceberg repository owns package ' , sourcePackageName ].
-	self repositoryOwningPackageNamed: targetPackageName ifAbsent: [ Error signal: 'No Iceberg repository owns package ' , targetPackageName ].
+	self
+		repositoryOwningPackageNamed: sourcePackageName
+		ifAbsent: [ Error signal: 'No Iceberg repository owns package ' , sourcePackageName ].
+	self
+		repositoryOwningPackageNamed: targetPackageName
+		ifAbsent: [ Error signal: 'No Iceberg repository owns package ' , targetPackageName ].
 	sourcePackage := self packageNamed: sourcePackageName ifAbsent: [ self signalNotFound: sourcePath ].
 	targetPackage := self packageNamed: targetPackageName ifAbsent: [ self signalNotFound: targetPath ].
 	sourceMethods := self extensionMethodsForClassName: className inPackage: sourcePackage.
@@ -788,7 +775,9 @@ PharoImageFSProjectionBackend >> moveTonelExtensionFileNamed: fileName packageNa
 			originalPath: targetPath.
 		self exportPackagesNamed: {
 				sourcePackageName.
-				targetPackageName } ]
+				targetPackageName }.
+		self removeCritiquesForClassNamed: className packageName: sourcePackageName.
+		self removeCritiquesForClassNamed: className packageName: targetPackageName ]
 		on: Error
 		do: [ :error |
 				failureMessage := error messageText ifNil: [ error asString ].
@@ -805,24 +794,9 @@ PharoImageFSProjectionBackend >> moveTonelExtensionFileNamed: fileName packageNa
 							sourcePackageName } ]
 					on: Error
 					do: [ :rollbackError |
-							Error signal: 'Projection extension move failed and rollback failed. Move error: ' , failureMessage
-								, '. Rollback error: ' , (rollbackError messageText ifNil: [ rollbackError asString ]) ].
+							Error signal: 'Projection extension move failed and rollback failed. Move error: ' , failureMessage , '. Rollback error: '
+								, (rollbackError messageText ifNil: [ rollbackError asString ]) ].
 				Error signal: failureMessage ]
-]
-
-{ #category : 'private - critiques' }
-PharoImageFSProjectionBackend >> packageCritiquesForPackage: aPackage [
-
-	^ self critiqueDictionariesFor: (ReCriticEngine critiquesOf: aPackage)
-]
-
-{ #category : 'private - critiques' }
-PharoImageFSProjectionBackend >> packageHasCritiqueEntriesNamed: packageName [
-
-	| package |
-	package := self packageNamed: packageName ifAbsent: [ ^ false ].
-	(self packageCritiquesForPackage: package) ifNotEmpty: [ ^ true ].
-	^ (self classesInPackageNamed: packageName) anySatisfy: [ :class | self classHasCritiqueEntries: class ]
 ]
 
 { #category : 'private - packages' }
@@ -883,37 +857,30 @@ PharoImageFSProjectionBackend >> read: aString [
 { #category : 'private - reading' }
 PharoImageFSProjectionBackend >> readCritiqueClassFileNamed: fileName packageName: packageName className: className originalPath: aString [
 
-	| class |
 	fileName = 'class-critiques.json' ifFalse: [ self signalNotFound: aString ].
-	class := self classNamed: className originalPath: aString.
-	class package name asString = packageName ifFalse: [ self signalNotFound: aString ].
-	^ self jsonTextFor: (self classCritiquesForClass: class)
+	^ self jsonTextFor: (self
+			   critiqueEntryForPackageNamed: packageName
+			   classNamed: className
+			   ifPresent: [ :classEntry | classEntry at: #class ifAbsent: [ self signalNotFound: aString ] ]
+			   ifAbsent: [ self signalNotFound: aString ])
 ]
 
 { #category : 'private - reading' }
 PharoImageFSProjectionBackend >> readCritiqueMethodFileNamed: fileName packageName: packageName className: className originalPath: aString [
 
-	| class selector |
-	class := self classNamed: className originalPath: aString.
-	class package name asString = packageName ifFalse: [ self signalNotFound: aString ].
+	| selector |
 	selector := self selectorFromPathSegment: fileName originalPath: aString.
-	^ self jsonTextFor: (self methodCritiqueDataForClass: class selector: selector)
-]
-
-{ #category : 'private - reading' }
-PharoImageFSProjectionBackend >> readCritiquePackageFileNamed: fileName packageName: packageName originalPath: aString [
-
-	| package |
-	fileName = 'package-critiques.json' ifFalse: [ self signalNotFound: aString ].
-	package := self packageNamed: packageName ifAbsent: [ self signalNotFound: aString ].
-	^ self jsonTextFor: (self packageCritiquesForPackage: package)
+	^ self jsonTextFor: (self
+			   critiqueEntryForPackageNamed: packageName
+			   classNamed: className
+			   ifPresent: [ :classEntry |
+			   self critiqueMethodDataIn: classEntry forSelector: selector ifAbsent: [ self signalNotFound: aString ] ]
+			   ifAbsent: [ self signalNotFound: aString ])
 ]
 
 { #category : 'private - reading' }
 PharoImageFSProjectionBackend >> readCritiqueSegments: segments originalPath: aString [
 
-	segments size = 2 ifTrue: [
-		^ self readCritiquePackageFileNamed: segments second packageName: segments first originalPath: aString ].
 	segments size = 3 ifTrue: [
 			segments third = 'class-critiques.json'
 				ifTrue: [
@@ -977,6 +944,50 @@ PharoImageFSProjectionBackend >> readTonelSegments: segments originalPath: aStri
 	self signalNotFound: aString
 ]
 
+{ #category : 'private - critiques' }
+PharoImageFSProjectionBackend >> recordCritiquesForClassNamed: className packageName: packageName methodDefinitions: methodDefinitions [
+
+	self
+		recordCritiquesForClassNamed: className
+		packageName: packageName
+		methodDefinitions: methodDefinitions
+		includeClass: true
+]
+
+{ #category : 'private - critiques' }
+PharoImageFSProjectionBackend >> recordCritiquesForClassNamed: className packageName: packageName methodDefinitions: methodDefinitions includeClass: includeClass [
+
+	| class classEntry methods packageEntry selectors |
+	class := self classNamed: className originalPath: '/critiques/' , packageName , '/' , className.
+	packageEntry := self critiqueEntries at: packageName ifAbsentPut: [ Dictionary new ].
+	classEntry := OrderedDictionary new.
+	includeClass ifTrue: [
+			| classCritiques |
+			classCritiques := self critiqueDataForBehavior: class.
+			classCritiques ifNotEmpty: [ classEntry at: #class put: classCritiques ] ].
+	methods := Dictionary new.
+	selectors := (methodDefinitions collect: [ :methodDefinition | methodDefinition selector ]) asSet asArray sorted.
+	selectors do: [ :selector |
+			| methodCritiques |
+			methodCritiques := self methodCritiqueDataForClass: class selector: selector.
+			(methodCritiques values anySatisfy: [ :critiques | critiques notEmpty ]) ifTrue: [ methods at: selector put: methodCritiques ] ].
+	methods ifNotEmpty: [ classEntry at: #methods put: methods ].
+	classEntry
+		ifEmpty: [ packageEntry removeKey: className ifAbsent: [ ] ]
+		ifNotEmpty: [ packageEntry at: className put: classEntry ].
+	packageEntry ifEmpty: [ self critiqueEntries removeKey: packageName ifAbsent: [ ] ]
+]
+
+{ #category : 'private - critiques' }
+PharoImageFSProjectionBackend >> recordCritiquesForExtensionClassNamed: className packageName: packageName methodDefinitions: methodDefinitions [
+
+	self
+		recordCritiquesForClassNamed: className
+		packageName: packageName
+		methodDefinitions: methodDefinitions
+		includeClass: false
+]
+
 { #category : 'private - writing' }
 PharoImageFSProjectionBackend >> reformatLoadedMethodDefinition: methodDefinition [
 
@@ -1001,6 +1012,13 @@ PharoImageFSProjectionBackend >> removeClassNamed: className ifPresentInPackage:
 PharoImageFSProjectionBackend >> removeCompiledMethods: compiledMethods [
 
 	compiledMethods do: [ :method | method asRingDefinition asMCMethodDefinition unload ]
+]
+
+{ #category : 'private - critiques' }
+PharoImageFSProjectionBackend >> removeCritiquesForClassNamed: className packageName: packageName [
+
+	(self critiqueEntries at: packageName ifAbsent: [ ^ self ]) removeKey: className ifAbsent: [ ].
+	(self critiqueEntries at: packageName) ifEmpty: [ self critiqueEntries removeKey: packageName ifAbsent: [ ] ]
 ]
 
 { #category : 'private - writing' }
@@ -1083,13 +1101,14 @@ PharoImageFSProjectionBackend >> renameTonelClassFileNamed: sourceFileName toFil
 	self validateRenameReferencesForClass: class packageName: packageName originalPath: sourcePath.
 	[
 		self executeClassRenameFrom: oldClassName to: newClassName.
-		self exportPackageNamed: packageName ]
+		self exportPackageNamed: packageName.
+		self removeCritiquesForClassNamed: oldClassName packageName: packageName.
+		self removeCritiquesForClassNamed: newClassName packageName: packageName ]
 		on: Error
 		do: [ :error |
 				failureMessage := error messageText ifNil: [ error asString ].
 				[
-					(Smalltalk globals includesKey: newClassName asSymbol) ifTrue: [
-						self executeClassRenameFrom: newClassName to: oldClassName ].
+					(Smalltalk globals includesKey: newClassName asSymbol) ifTrue: [ self executeClassRenameFrom: newClassName to: oldClassName ].
 					self exportPackageNamed: packageName ]
 					on: Error
 					do: [ :rollbackError |
@@ -1302,14 +1321,6 @@ PharoImageFSProjectionBackend >> selectorFromPathSegment: aString originalPath: 
 					   stream nextPut: $: ] ]) asSymbol
 ]
 
-{ #category : 'private - critiques' }
-PharoImageFSProjectionBackend >> selectorsWithCritiquesForClass: aClass [
-
-	| selectors |
-	selectors := (aClass selectors , aClass classSide selectors) asSet asArray sorted.
-	^ selectors select: [ :selector | (self methodCritiquesForClass: aClass selector: selector) isNotEmpty ]
-]
-
 { #category : 'private - errors' }
 PharoImageFSProjectionBackend >> signalNotFound: aString [
 
@@ -1359,41 +1370,29 @@ PharoImageFSProjectionBackend >> statCritiqueMethodFileNamed: fileName packageNa
 ]
 
 { #category : 'private - accessing' }
-PharoImageFSProjectionBackend >> statCritiquePackageFileNamed: fileName packageName: packageName originalPath: aString [
-
-	| text |
-	text := self readCritiquePackageFileNamed: fileName packageName: packageName originalPath: aString.
-	^ self fileNamed: fileName text: text writable: false
-]
-
-{ #category : 'private - accessing' }
 PharoImageFSProjectionBackend >> statCritiqueSegments: segments originalPath: aString [
 
-	| class |
+	| classEntry |
 	segments isEmpty ifTrue: [ ^ self directoryNamed: 'critiques' ].
 	segments size = 1 ifTrue: [
-			self packageNamed: segments first ifAbsent: [ self signalNotFound: aString ].
+			self critiqueEntries at: segments first ifAbsent: [ self signalNotFound: aString ].
 			^ self directoryNamed: segments first ].
 	segments size = 2 ifTrue: [
-			segments second = 'package-critiques.json' ifTrue: [
-				^ self statCritiquePackageFileNamed: segments second packageName: segments first originalPath: aString ].
-			class := self classNamed: segments second originalPath: aString.
-			class package name asString = segments first ifFalse: [ self signalNotFound: aString ].
+			self critiqueEntryForPackageNamed: segments first classNamed: segments second ifAbsent: [ self signalNotFound: aString ].
 			^ self directoryNamed: segments second ].
 	segments size = 3 ifTrue: [
+			classEntry := self
+				              critiqueEntryForPackageNamed: segments first
+				              classNamed: segments second
+				              ifAbsent: [ self signalNotFound: aString ].
 			segments third = 'class-critiques.json'
-				ifTrue: [
-						^ self
-							  statCritiqueClassFileNamed: segments third
-							  packageName: segments first
-							  className: segments second
-							  originalPath: aString ]
+				ifTrue: [ (classEntry includesKey: #class) ifFalse: [ self signalNotFound: aString ] ]
 				ifFalse: [
-						^ self
-							  statCritiqueMethodFileNamed: segments third
-							  packageName: segments first
-							  className: segments second
-							  originalPath: aString ] ].
+						self
+							critiqueMethodDataIn: classEntry
+							forSelector: (self selectorFromPathSegment: segments third originalPath: aString)
+							ifAbsent: [ self signalNotFound: aString ] ].
+			^ self fileNamed: segments third size: 0 writable: false ].
 	self signalNotFound: aString
 ]
 
@@ -1599,13 +1598,13 @@ PharoImageFSProjectionBackend >> writeTonelClassRenameFromDefinition: classDefin
 { #category : 'private - writing' }
 PharoImageFSProjectionBackend >> writeTonelClassText: textString fileName: fileName packageName: packageName originalPath: aString [
 
-	| class classDefinition classExists className failureMessage previousText |
+	| class classDefinition classExists className definitions failureMessage methodDefinitions previousText |
 	className := self classNameFromFileName: fileName suffix: '.class.st'.
 	className ifNil: [ self signalUnsupportedWrite: aString ].
 	self repositoryOwningPackageNamed: packageName ifAbsent: [ Error signal: 'No Iceberg repository owns package ' , packageName ].
-	classDefinition := self
-		                   classDefinitionFrom: (self parseTonelDefinitionsFrom: textString originalPath: aString)
-		                   originalPath: aString.
+	definitions := self parseTonelDefinitionsFrom: textString originalPath: aString.
+	classDefinition := self classDefinitionFrom: definitions originalPath: aString.
+	methodDefinitions := self methodDefinitionsFrom: definitions.
 	classDefinition packageName asString = packageName ifFalse: [
 			Error signal:
 				'Class definition package ' , classDefinition packageName asString , ' does not match projection path package ' , packageName
@@ -1636,7 +1635,8 @@ PharoImageFSProjectionBackend >> writeTonelClassText: textString fileName: fileN
 						className: className
 						packageName: packageName
 						originalPath: aString ].
-		self exportPackageNamed: packageName ]
+		self exportPackageNamed: packageName.
+		self recordCritiquesForClassNamed: className packageName: packageName methodDefinitions: methodDefinitions ]
 		on: Error
 		do: [ :error |
 				failureMessage := error messageText ifNil: [ error asString ].
@@ -1686,7 +1686,8 @@ PharoImageFSProjectionBackend >> writeTonelExtensionText: textString fileName: f
 						className: className
 						packageName: packageName
 						originalPath: aString ].
-		self exportPackageNamed: packageName ]
+		self exportPackageNamed: packageName.
+		self recordCritiquesForExtensionClassNamed: className packageName: packageName methodDefinitions: methodDefinitions ]
 		on: Error
 		do: [ :error |
 				failureMessage := error messageText ifNil: [ error asString ].

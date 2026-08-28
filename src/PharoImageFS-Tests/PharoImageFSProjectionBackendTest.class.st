@@ -63,6 +63,18 @@ PharoImageFSProjectionBackendTest >> classTonelSourceWithDeadBlock [
 ]
 
 { #category : 'private' }
+PharoImageFSProjectionBackendTest >> classTonelSourceWithExcessiveArgumentsMethod [
+
+	^ self classTonelSource , '
+{ #category : ''accessing'' }
+' , self originalClassName , ' >> manyArguments: first second: second third: third fourth: fourth fifth: fifth [
+
+	^ first
+]
+'
+]
+
+{ #category : 'private' }
 PharoImageFSProjectionBackendTest >> classTonelSourceWithExtraMethod [
 
 	^ self classTonelSource , '
@@ -272,22 +284,6 @@ PharoImageFSProjectionBackendTest >> tearDown [
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testClassHasCritiqueEntriesUsesRenrakuWhenClassDefinesCritiques [
-
-	| backend class hasEntries |
-	backend := self newBackend.
-	backend write: self classTonelSource at: self originalClassTonelPath.
-	class := Smalltalk at: self originalClassName asSymbol.
-	class classSide
-		compile: 'critiques
-
-	^ self'
-		classified: 'accessing'.
-	hasEntries := backend classHasCritiqueEntries: class.
-	self assert: (hasEntries isKindOf: Boolean)
-]
-
-{ #category : 'tests' }
 PharoImageFSProjectionBackendTest >> testClassTonelFileDoesNotIncludeExtensionMethods [
 
 	| backend classText extensionText |
@@ -337,6 +333,14 @@ PharoImageFSProjectionBackendTest >> testCompileFailureDuringExtensionRewriteRol
 	targetClass := Smalltalk globals at: #PharoImageFSProjectionExtensionTarget.
 	self assert: (targetClass new perform: #projectedExtensionAnswer) equals: 7.
 	self deny: (targetClass includesSelector: #brokenProjectedExtensionAnswer)
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testCritiquesAreEmptyBeforeProjectionWrites [
+
+	| backend |
+	backend := self newBackend.
+	self assert: (backend list: '/critiques') isEmpty
 ]
 
 { #category : 'tests' }
@@ -572,11 +576,11 @@ PharoImageFSProjectionBackendTest >> testReadMethodCritiqueFileReturnsSideKeys [
 
 	| backend data |
 	backend := self newBackend.
-	backend write: self classTonelSource at: self originalClassTonelPath.
-	data := self decodedJsonFrom:
-		        (backend read: '/critiques/' , self fixturePackageName , '/' , self originalClassName , '/answer.json').
-	self assert: (data includesKey: 'instance').
-	self assert: (data at: 'instance') isEmpty
+	backend write: self classTonelSourceWithExcessiveArgumentsMethod at: self originalClassTonelPath.
+	data := self decodedJsonFrom: (backend read:
+			         '/critiques/' , self fixturePackageName , '/' , self originalClassName
+			         , '/manyArguments.second.third.fourth.fifth..json').
+	self assert: (data includesKey: 'instance')
 ]
 
 { #category : 'tests' }
@@ -728,6 +732,24 @@ PharoImageFSProjectionBackendTest >> testWriteCreatesNewExtensionFromTonelFile [
 	targetClass := Smalltalk globals at: #PharoImageFSProjectionExtensionTarget.
 	self assert: (targetClass new perform: #projectedExtensionAnswer) equals: 7.
 	self assert: backend exportedPackageNames equals: { self fixturePackageName }
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testWriteRecordsCritiquesForEditedMethod [
+
+	| backend classEntries data methodEntries packageEntries |
+	backend := self newBackend.
+	backend write: self classTonelSourceWithExcessiveArgumentsMethod at: self originalClassTonelPath.
+	packageEntries := backend list: '/critiques'.
+	self assert: (packageEntries collect: #name) asArray equals: { self fixturePackageName }.
+	classEntries := backend list: '/critiques/' , self fixturePackageName.
+	self assert: (classEntries collect: #name) asArray equals: { self originalClassName }.
+	methodEntries := backend list: '/critiques/' , self fixturePackageName , '/' , self originalClassName.
+	self assert: ((methodEntries collect: #name) includes: 'manyArguments.second.third.fourth.fifth..json').
+	data := self decodedJsonFrom: (backend read:
+			         '/critiques/' , self fixturePackageName , '/' , self originalClassName
+			         , '/manyArguments.second.third.fourth.fifth..json').
+	self assert: ((data at: 'instance') first at: 'rule') equals: 'ReExcessiveArgumentsRule'
 ]
 
 { #category : 'tests' }

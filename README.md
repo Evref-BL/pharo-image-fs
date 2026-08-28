@@ -127,13 +127,16 @@ compiled in the live image and exported back to Tonel. If parsing, compilation,
 or blocking critiques fail, the write is rejected and the previous image state
 is restored.
 
-Read critique feedback:
+Read critique feedback for code edited through the projection:
 
 ```sh
 find /tmp/pharo-image-fs/critiques -type f
-cat /tmp/pharo-image-fs/critiques/PharoImageFS/PharoImageFSProjectionBackend/class-critiques.json
 cat /tmp/pharo-image-fs/critiques/PharoImageFS/PharoImageFSProjectionBackend/write.at..json
 ```
+
+`/critiques` does not scan the whole image. Accepted writes through `/tonel`
+refresh critique files for the affected class or extension methods only, and
+files appear only when actual Pharo critiques exist.
 
 If a filesystem write fails with a generic editor or OS error, inspect the
 latest operational error:
@@ -224,7 +227,6 @@ normal Git checkout on disk.
 
   critiques/
     <package>/
-      package-critiques.json
       <Class>/
         class-critiques.json
         <selector-encoded>.json
@@ -240,8 +242,10 @@ normal Git checkout on disk.
 
 - `/tonel` is the code editing surface. It mirrors Tonel class and extension
   files from the live image.
-- `/critiques` is read-only diagnostic feedback from the live image. It is
-  listed lazily and contains only entries with actual Pharo critiques.
+- `/critiques` is read-only diagnostic feedback for code edited through the
+  projection. It does not scan the whole image; accepted writes refresh entries
+  for the affected class or extension methods, and entries appear only when
+  actual Pharo critiques exist.
   Keyword-selector colons are encoded as dots, and binary selector characters
   use caret escape names, for example `responseObjectForOperation.request..json`
   and `^slash.json`.
@@ -272,5 +276,4 @@ its expected daemon version in `PharoImageFSVersion`.
 
 The useful next improvements are:
 
-- add more useful critique projections;
 - evaluate Linux and Windows mount backends after the macOS workflow is stable.
