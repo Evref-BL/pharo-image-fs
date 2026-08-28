@@ -526,14 +526,7 @@ PharoImageFSProjectionBackend >> icePackageNamed: packageName in: aRepository if
 { #category : 'private - repositories' }
 PharoImageFSProjectionBackend >> iceRepositoryDirectoryFor: aRepository [
 
-	^ [
-		  | directory |
-		  directory := (aRepository respondsTo: #repositoryDirectory)
-			               ifTrue: [ aRepository repositoryDirectory ]
-			               ifFalse: [ nil ].
-		  directory ifNil: [ nil ] ifNotNil: [ directory asFileReference ] ]
-		  on: Error
-		  do: [ nil ]
+	^ aRepository repositoryDirectory asFileReference
 ]
 
 { #category : 'private - critiques' }
