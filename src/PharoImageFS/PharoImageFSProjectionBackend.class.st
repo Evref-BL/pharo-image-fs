@@ -187,7 +187,7 @@ PharoImageFSProjectionBackend >> classForName: className packageName: packageNam
 PharoImageFSProjectionBackend >> classHasCritiqueEntries: aClass [
 
 	(self classCritiquesForClass: aClass) ifNotEmpty: [ ^ true ].
-	^ self selectorsWithCritiquesForClass: aClass isNotEmpty
+	^ (self selectorsWithCritiquesForClass: aClass) isNotEmpty
 ]
 
 { #category : 'private - paths' }
@@ -242,13 +242,13 @@ PharoImageFSProjectionBackend >> commaSeparated: strings [
 { #category : 'private - critiques' }
 PharoImageFSProjectionBackend >> critiqueDataForBehavior: aBehavior [
 
-	^ self critiqueDictionariesFor: aBehavior critiques
+	^ self critiqueDictionariesFor: (ReCriticEngine critiquesOf: aBehavior)
 ]
 
 { #category : 'private - critiques' }
 PharoImageFSProjectionBackend >> critiqueDataForCompiledMethod: aCompiledMethod [
 
-	^ self critiqueDictionariesFor: aCompiledMethod critiques
+	^ self critiqueDictionariesFor: (ReCriticEngine critiquesOf: aCompiledMethod) , (ReCriticEngine nodeCritiquesOf: aCompiledMethod)
 ]
 
 { #category : 'private - critiques' }
@@ -399,13 +399,16 @@ PharoImageFSProjectionBackend >> deleteTonelSegments: segments originalPath: aSt
 PharoImageFSProjectionBackend >> dictionaryForCritique: aCritique [
 
 	| data rule |
-	rule := aCritique rule.
+	rule := (aCritique class canUnderstand: #rule)
+		        ifTrue: [ aCritique rule ]
+		        ifFalse: [ nil ].
 	data := OrderedDictionary new.
-	data at: #rule put: rule class name asString.
-	(rule class canUnderstand: #severity) ifTrue: [
-		rule severity ifNotNil: [ :severity | data at: #severity put: severity asString ] ].
+	rule ifNotNil: [
+			data at: #rule put: rule class name asString.
+			(rule class canUnderstand: #severity) ifTrue: [
+				rule severity ifNotNil: [ :severity | data at: #severity put: severity asString ] ].
+			(rule class canUnderstand: #rationale) ifTrue: [ rule rationale ifNotNil: [ :hint | data at: #hint put: hint asString ] ] ].
 	data at: #title put: aCritique title asString.
-	(rule class canUnderstand: #rationale) ifTrue: [ rule rationale ifNotNil: [ :hint | data at: #hint put: hint asString ] ].
 	self addSourceIntervalFromCritique: aCritique to: data.
 	^ data
 ]
@@ -810,8 +813,7 @@ PharoImageFSProjectionBackend >> moveTonelExtensionFileNamed: fileName packageNa
 { #category : 'private - critiques' }
 PharoImageFSProjectionBackend >> packageCritiquesForPackage: aPackage [
 
-	(aPackage class canUnderstand: #critiques) ifFalse: [ ^ #(  ) ].
-	^ self critiqueDictionariesFor: aPackage critiques
+	^ self critiqueDictionariesFor: (ReCriticEngine critiquesOf: aPackage)
 ]
 
 { #category : 'private - critiques' }

@@ -272,6 +272,22 @@ PharoImageFSProjectionBackendTest >> tearDown [
 ]
 
 { #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testClassHasCritiqueEntriesUsesRenrakuWhenClassDefinesCritiques [
+
+	| backend class hasEntries |
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	class := Smalltalk at: self originalClassName asSymbol.
+	class classSide
+		compile: 'critiques
+
+	^ self'
+		classified: 'accessing'.
+	hasEntries := backend classHasCritiqueEntries: class.
+	self assert: (hasEntries isKindOf: Boolean)
+]
+
+{ #category : 'tests' }
 PharoImageFSProjectionBackendTest >> testClassTonelFileDoesNotIncludeExtensionMethods [
 
 	| backend classText extensionText |
