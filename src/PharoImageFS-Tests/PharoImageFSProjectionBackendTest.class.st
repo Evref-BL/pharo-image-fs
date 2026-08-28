@@ -27,6 +27,12 @@ PharoImageFSProjectionBackendTest >> classTonelSource [
 ]
 
 { #category : 'private' }
+PharoImageFSProjectionBackendTest >> classTonelSourceForPackageNamed: packageName [
+
+	^ self classTonelSource copyReplaceAll: self fixturePackageName with: packageName
+]
+
+{ #category : 'private' }
 PharoImageFSProjectionBackendTest >> classTonelSourceWithBrokenExtraMethod [
 
 	^ self classTonelSource , '
@@ -508,11 +514,52 @@ PharoImageFSProjectionBackendTest >> testExtensionMethodWrittenThroughClassFileM
 ]
 
 { #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testFailedWriteDoesNotLeaveImplicitPackage [
+
+	| backend |
+	backend := self newBackend.
+	backend requiresRepositoryOwnershipForWrites: false.
+	self deny: (PackageOrganizer default hasPackage: self targetPackageName).
+	self
+		should: [
+				backend
+					write: (self classTonelSourceWithBrokenExtraMethod copyReplaceAll: self fixturePackageName with: self targetPackageName)
+					at: self targetPackageTonelPath ]
+		raise: Error.
+	self deny: (PackageOrganizer default hasPackage: self targetPackageName)
+]
+
+{ #category : 'tests' }
 PharoImageFSProjectionBackendTest >> testListRootExposesTonelAndCritiques [
 
 	| names |
 	names := (self newBackend list: '/') collect: [ :entry | entry name ].
 	self assert: names asArray equals: #( 'tonel' 'critiques' 'repositories' )
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testMakeDirectoryCreatesTonelPackageWhenRepositoryOwnershipCheckDisabled [
+
+	| backend |
+	backend := self newBackend.
+	backend requiresRepositoryOwnershipForWrites: false.
+	self deny: (PackageOrganizer default hasPackage: self targetPackageName).
+	backend makeDirectory: '/tonel/' , self targetPackageName.
+	self assert: (PackageOrganizer default hasPackage: self targetPackageName)
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testMakeDirectoryRejectsUnownedPackageByDefault [
+
+	| backend |
+	backend := self newBackend.
+	self deny: (PackageOrganizer default hasPackage: self targetPackageName).
+	self
+		should: [ backend makeDirectory: '/tonel/' , self targetPackageName ]
+		raise: Error
+		whoseDescriptionIncludes: 'is not owned by a loaded Iceberg repository'
+		description: 'Repository ownership checks are enabled by default'.
+	self deny: (PackageOrganizer default hasPackage: self targetPackageName)
 ]
 
 { #category : 'tests' }
@@ -592,6 +639,32 @@ PharoImageFSProjectionBackendTest >> testReadMethodCritiqueFileReturnsSideKeys [
 			         '/critiques/' , self fixturePackageName , '/' , self originalClassName
 			         , '/manyArguments.second.third.fourth.fifth..json').
 	self assert: (data includesKey: 'instance')
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testRemoveDirectoryRejectsNonEmptyTonelPackage [
+
+	| backend |
+	backend := self newBackend.
+	backend requiresRepositoryOwnershipForWrites: false.
+	backend makeDirectory: '/tonel/' , self targetPackageName.
+	backend write: (self classTonelSourceForPackageNamed: self targetPackageName) at: self targetPackageTonelPath.
+	self
+		should: [ backend removeDirectory: '/tonel/' , self targetPackageName ]
+		raise: Error
+		whoseDescriptionIncludes: 'Cannot remove non-empty package'
+		description: 'Non-empty packages must be emptied through explicit file deletes before rmdir'
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testRemoveDirectoryRemovesEmptyTonelPackage [
+
+	| backend |
+	backend := self newBackend.
+	backend requiresRepositoryOwnershipForWrites: false.
+	backend makeDirectory: '/tonel/' , self targetPackageName.
+	backend removeDirectory: '/tonel/' , self targetPackageName.
+	self deny: (PackageOrganizer default hasPackage: self targetPackageName)
 ]
 
 { #category : 'tests' }
@@ -746,6 +819,19 @@ PharoImageFSProjectionBackendTest >> testWriteCreatesNewExtensionFromTonelFile [
 ]
 
 { #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testWriteCreatesPackageForNewClassWhenRepositoryOwnershipCheckDisabled [
+
+	| backend class |
+	backend := self newBackend.
+	backend requiresRepositoryOwnershipForWrites: false.
+	self deny: (PackageOrganizer default hasPackage: self targetPackageName).
+	backend write: (self classTonelSourceForPackageNamed: self targetPackageName) at: self targetPackageTonelPath.
+	self assert: (PackageOrganizer default hasPackage: self targetPackageName).
+	class := Smalltalk at: self originalClassName asSymbol.
+	self assert: class package name equals: self targetPackageName
+]
+
+{ #category : 'tests' }
 PharoImageFSProjectionBackendTest >> testWriteRecordsCritiquesForEditedMethod [
 
 	| backend classEntries data methodEntries packageEntries |
@@ -773,4 +859,18 @@ PharoImageFSProjectionBackendTest >> testWriteReformatsAcceptedMethodSource [
 	source := class sourceCodeAt: #messyAnswer.
 	self assert: source equals: ((class >> #messyAnswer) ast formattedCodeIn: class).
 	self deny: (source includesSubstring: '^(1+2)')
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testWriteRejectsUnownedPackageByDefault [
+
+	| backend |
+	backend := self newBackend.
+	self deny: (PackageOrganizer default hasPackage: self targetPackageName).
+	self
+		should: [ backend write: (self classTonelSourceForPackageNamed: self targetPackageName) at: self targetPackageTonelPath ]
+		raise: Error
+		whoseDescriptionIncludes: 'is not owned by a loaded Iceberg repository'
+		description: 'Repository ownership checks are enabled by default'.
+	self deny: (PackageOrganizer default hasPackage: self targetPackageName)
 ]

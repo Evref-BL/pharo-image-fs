@@ -5,7 +5,8 @@ Class {
 	#name : 'PharoImageFSProjectionBackend',
 	#superclass : 'Object',
 	#instVars : [
-		'critiqueEntries'
+		'critiqueEntries',
+		'requiresRepositoryOwnershipForWrites'
 	],
 	#category : 'PharoImageFS',
 	#package : 'PharoImageFS'
@@ -100,6 +101,23 @@ PharoImageFSProjectionBackend >> applyNewExtensionTonelText: textString classNam
 			  methodDefinitions ifEmpty: [ Error signal: 'Extension file must contain at least one method for ' , aString ].
 			  self validateBlockingCritiquesForMethodDefinitions: methodDefinitions originalPath: aString.
 			  methodDefinitions do: [ :methodDefinition | self loadMethodDefinition: methodDefinition ] ]
+]
+
+{ #category : 'private - repositories' }
+PharoImageFSProjectionBackend >> assertRepositoriesOwnPackageNames: packageNames originalPath: aString [
+
+	packageNames do: [ :packageName | self assertRepositoryOwnsPackageNamed: packageName originalPath: aString ]
+]
+
+{ #category : 'private - repositories' }
+PharoImageFSProjectionBackend >> assertRepositoryOwnsPackageNamed: packageName originalPath: aString [
+
+	self requiresRepositoryOwnershipForWrites ifFalse: [ ^ self ].
+	self repositoryOwningPackageNamed: packageName ifAbsent: [
+			Error signal: 'Package ' , packageName
+				,
+				' is not owned by a loaded Iceberg repository. Attach it to a repository or disable repository ownership checks before writing through '
+				, aString ]
 ]
 
 { #category : 'private - critiques' }
@@ -306,7 +324,7 @@ PharoImageFSProjectionBackend >> deleteTonelClassFileNamed: fileName packageName
 	| class className failureMessage previousText |
 	className := self classNameFromFileName: fileName suffix: '.class.st'.
 	className ifNil: [ self signalUnsupportedWrite: aString ].
-	self repositoryOwningPackageNamed: packageName ifAbsent: [ Error signal: 'No Iceberg repository owns package ' , packageName ].
+	self assertRepositoryOwnsPackageNamed: packageName originalPath: aString.
 	class := self classForName: className packageName: packageName originalPath: aString.
 	previousText := self classTonelTextFor: class.
 	[
@@ -336,7 +354,7 @@ PharoImageFSProjectionBackend >> deleteTonelExtensionFileNamed: fileName package
 	className := self classNameFromFileName: fileName suffix: '.extension.st'.
 	className ifNil: [ self signalUnsupportedWrite: aString ].
 	self classNamed: className originalPath: aString.
-	self repositoryOwningPackageNamed: packageName ifAbsent: [ Error signal: 'No Iceberg repository owns package ' , packageName ].
+	self assertRepositoryOwnsPackageNamed: packageName originalPath: aString.
 	package := self packageNamed: packageName ifAbsent: [ self signalNotFound: aString ].
 	methods := self extensionMethodsForClassName: className inPackage: package.
 	methods ifEmpty: [ self signalNotFound: aString ].
@@ -438,9 +456,7 @@ PharoImageFSProjectionBackend >> exportIcePackage: anIcePackage to: sourceDirect
 PharoImageFSProjectionBackend >> exportPackageNamed: packageName [
 
 	| icePackage repository |
-	repository := self
-		              repositoryOwningPackageNamed: packageName
-		              ifAbsent: [ Error signal: 'No Iceberg repository owns package ' , packageName ].
+	repository := self repositoryOwningPackageNamed: packageName ifAbsent: [ ^ self ].
 	icePackage := self
 		              icePackageNamed: packageName
 		              in: repository
@@ -603,6 +619,31 @@ PharoImageFSProjectionBackend >> localMethodsForClass: aBehavior [
 	^ aBehavior localMethods reject: [ :method | method protocol name beginsWith: '*' ]
 ]
 
+{ #category : 'accessing' }
+PharoImageFSProjectionBackend >> makeDirectory: aString [
+
+	| segments |
+	segments := self pathSegmentsFor: aString.
+	segments size = 2 ifFalse: [ self signalUnsupportedWrite: aString ].
+	segments first = 'tonel' ifTrue: [ ^ self makeTonelPackageDirectoryNamed: segments second originalPath: aString ].
+	self signalUnsupportedWrite: aString
+]
+
+{ #category : 'protocol responses' }
+PharoImageFSProjectionBackend >> makeDirectoryResponseForPath: aString [
+
+	self makeDirectory: aString.
+	^ Dictionary new
+]
+
+{ #category : 'private - packages' }
+PharoImageFSProjectionBackend >> makeTonelPackageDirectoryNamed: packageName originalPath: aString [
+
+	packageName ifEmpty: [ self signalUnsupportedWrite: aString ].
+	self assertRepositoryOwnsPackageNamed: packageName originalPath: aString.
+	PackageOrganizer default ensurePackage: packageName
+]
+
 { #category : 'private - critiques' }
 PharoImageFSProjectionBackend >> methodCritiqueDataForClass: aClass selector: aSelector [
 
@@ -661,8 +702,11 @@ PharoImageFSProjectionBackend >> moveAndRenameTonelClassFileNamed: sourceFileNam
 	oldClassName ifNil: [ self signalUnsupportedWrite: sourcePath ].
 	newClassName ifNil: [ self signalUnsupportedWrite: targetPath ].
 	class := self classForName: oldClassName packageName: sourcePackageName originalPath: sourcePath.
-	self repositoryOwningPackageNamed: sourcePackageName ifAbsent: [ Error signal: 'No Iceberg repository owns package ' , sourcePackageName ].
-	self repositoryOwningPackageNamed: targetPackageName ifAbsent: [ Error signal: 'No Iceberg repository owns package ' , targetPackageName ].
+	self
+		assertRepositoriesOwnPackageNames: {
+				sourcePackageName.
+				targetPackageName }
+		originalPath: sourcePath.
 	self packageNamed: targetPackageName ifAbsent: [ self signalNotFound: targetPath ].
 	(Smalltalk globals includesKey: newClassName asSymbol) ifTrue: [
 		Error signal: 'Cannot rename class ' , oldClassName , ' to existing global ' , newClassName , ' for ' , targetPath ].
@@ -687,8 +731,9 @@ PharoImageFSProjectionBackend >> moveAndRenameTonelClassFileNamed: sourceFileNam
 							sourcePackageName } ]
 					on: Error
 					do: [ :rollbackError |
-							Error signal: 'Projection class move and rename failed and rollback failed. Move and rename error: '
-								, failureMessage , '. Rollback error: ' , (rollbackError messageText ifNil: [ rollbackError asString ]) ].
+							Error signal:
+								'Projection class move and rename failed and rollback failed. Move and rename error: ' , failureMessage
+								, '. Rollback error: ' , (rollbackError messageText ifNil: [ rollbackError asString ]) ].
 				Error signal: failureMessage ]
 ]
 
@@ -700,11 +745,10 @@ PharoImageFSProjectionBackend >> moveTonelClassFileNamed: fileName packageName: 
 	className ifNil: [ self signalUnsupportedWrite: sourcePath ].
 	class := self classForName: className packageName: sourcePackageName originalPath: sourcePath.
 	self
-		repositoryOwningPackageNamed: sourcePackageName
-		ifAbsent: [ Error signal: 'No Iceberg repository owns package ' , sourcePackageName ].
-	self
-		repositoryOwningPackageNamed: targetPackageName
-		ifAbsent: [ Error signal: 'No Iceberg repository owns package ' , targetPackageName ].
+		assertRepositoriesOwnPackageNames: {
+				sourcePackageName.
+				targetPackageName }
+		originalPath: sourcePath.
 	self packageNamed: targetPackageName ifAbsent: [ self signalNotFound: targetPath ].
 	[
 		self executeClassMoveNamed: className toPackage: targetPackageName.
@@ -736,11 +780,10 @@ PharoImageFSProjectionBackend >> moveTonelExtensionFileNamed: fileName packageNa
 	className ifNil: [ self signalUnsupportedWrite: sourcePath ].
 	self classNamed: className originalPath: sourcePath.
 	self
-		repositoryOwningPackageNamed: sourcePackageName
-		ifAbsent: [ Error signal: 'No Iceberg repository owns package ' , sourcePackageName ].
-	self
-		repositoryOwningPackageNamed: targetPackageName
-		ifAbsent: [ Error signal: 'No Iceberg repository owns package ' , targetPackageName ].
+		assertRepositoriesOwnPackageNames: {
+				sourcePackageName.
+				targetPackageName }
+		originalPath: sourcePath.
 	sourcePackage := self packageNamed: sourcePackageName ifAbsent: [ self signalNotFound: sourcePath ].
 	targetPackage := self packageNamed: targetPackageName ifAbsent: [ self signalNotFound: targetPath ].
 	sourceMethods := self extensionMethodsForClassName: className inPackage: sourcePackage.
@@ -1008,10 +1051,45 @@ PharoImageFSProjectionBackend >> removeCritiquesForClassNamed: className package
 	(self critiqueEntries at: packageName) ifEmpty: [ self critiqueEntries removeKey: packageName ifAbsent: [ ] ]
 ]
 
+{ #category : 'accessing' }
+PharoImageFSProjectionBackend >> removeDirectory: aString [
+
+	| segments |
+	segments := self pathSegmentsFor: aString.
+	segments size = 2 ifFalse: [ self signalUnsupportedWrite: aString ].
+	segments first = 'tonel' ifTrue: [ ^ self removeTonelPackageDirectoryNamed: segments second originalPath: aString ].
+	self signalUnsupportedWrite: aString
+]
+
+{ #category : 'protocol responses' }
+PharoImageFSProjectionBackend >> removeDirectoryResponseForPath: aString [
+
+	self removeDirectory: aString.
+	^ Dictionary new
+]
+
 { #category : 'private - writing' }
 PharoImageFSProjectionBackend >> removeMethodDefinitions: methodDefinitions [
 
 	methodDefinitions do: [ :methodDefinition | self unloadMethodDefinition: methodDefinition ]
+]
+
+{ #category : 'private - packages' }
+PharoImageFSProjectionBackend >> removePackageNamedIfEmpty: packageName [
+
+	| package |
+	package := self packageNamed: packageName ifAbsent: [ ^ self ].
+	package isEmpty ifTrue: [ PackageOrganizer default removePackage: package ]
+]
+
+{ #category : 'private - packages' }
+PharoImageFSProjectionBackend >> removeTonelPackageDirectoryNamed: packageName originalPath: aString [
+
+	| package |
+	packageName ifEmpty: [ self signalUnsupportedWrite: aString ].
+	package := self packageNamed: packageName ifAbsent: [ self signalNotFound: aString ].
+	package isEmpty ifFalse: [ Error signal: 'Cannot remove non-empty package ' , packageName , ' through ' , aString ].
+	PackageOrganizer default removePackage: package
 ]
 
 { #category : 'accessing' }
@@ -1198,6 +1276,18 @@ PharoImageFSProjectionBackend >> repositoryProjectionNameFor: aString [
 			  ((character = $/) or: [ character = $: ])
 				  ifTrue: [ stream nextPut: $- ]
 				  ifFalse: [ stream nextPut: character ] ] ]
+]
+
+{ #category : 'accessing' }
+PharoImageFSProjectionBackend >> requiresRepositoryOwnershipForWrites [
+
+	^ requiresRepositoryOwnershipForWrites ifNil: [ true ]
+]
+
+{ #category : 'accessing' }
+PharoImageFSProjectionBackend >> requiresRepositoryOwnershipForWrites: aBoolean [
+
+	requiresRepositoryOwnershipForWrites := aBoolean
 ]
 
 { #category : 'private - deleting' }
@@ -1585,10 +1675,9 @@ PharoImageFSProjectionBackend >> writeTonelClassRenameFromDefinition: classDefin
 { #category : 'private - writing' }
 PharoImageFSProjectionBackend >> writeTonelClassText: textString fileName: fileName packageName: packageName originalPath: aString [
 
-	| class classDefinition classExists className definitions failureMessage methodDefinitions previousText |
+	| class classDefinition classExists className definitions failureMessage methodDefinitions packageExists previousText |
 	className := self classNameFromFileName: fileName suffix: '.class.st'.
 	className ifNil: [ self signalUnsupportedWrite: aString ].
-	self repositoryOwningPackageNamed: packageName ifAbsent: [ Error signal: 'No Iceberg repository owns package ' , packageName ].
 	definitions := self parseTonelDefinitionsFrom: textString originalPath: aString.
 	classDefinition := self classDefinitionFrom: definitions originalPath: aString.
 	methodDefinitions := self methodDefinitionsFrom: definitions.
@@ -1602,12 +1691,15 @@ PharoImageFSProjectionBackend >> writeTonelClassText: textString fileName: fileN
 				  toClassName: className
 				  packageName: packageName
 				  originalPath: aString ].
+	self assertRepositoryOwnsPackageNamed: packageName originalPath: aString.
+	packageExists := PackageOrganizer default hasPackage: packageName.
 	class := Smalltalk at: className asSymbol ifAbsent: [ nil ].
 	classExists := class notNil.
 	(classExists and: [ class package name asString ~= packageName ]) ifTrue: [
 		Error signal: 'Class ' , className , ' already exists in package ' , class package name asString , ' for ' , aString ].
 	previousText := classExists ifTrue: [ self readTonelClassFileNamed: fileName packageName: packageName originalPath: aString ].
 	[
+		self makeTonelPackageDirectoryNamed: packageName originalPath: '/tonel/' , packageName.
 		classExists
 			ifTrue: [
 					self
@@ -1637,7 +1729,8 @@ PharoImageFSProjectionBackend >> writeTonelClassText: textString fileName: fileN
 									originalPath: aString ]
 						ifFalse: [
 								self removeClassNamed: className ifPresentInPackage: packageName.
-								self exportPackageNamed: packageName ] ]
+								self exportPackageNamed: packageName ].
+					packageExists ifFalse: [ self removePackageNamedIfEmpty: packageName ] ]
 					on: Error
 					do: [ :rollbackError |
 							Error signal: 'Projection write failed and rollback failed. Write error: ' , failureMessage , '. Rollback error: '
@@ -1648,28 +1741,36 @@ PharoImageFSProjectionBackend >> writeTonelClassText: textString fileName: fileN
 { #category : 'private - writing' }
 PharoImageFSProjectionBackend >> writeTonelExtensionText: textString fileName: fileName packageName: packageName originalPath: aString [
 
-	| className extensionExists failureMessage methodDefinitions package previousText |
+	| className definitions failureMessage methodDefinitions packageExists previousText |
 	className := self classNameFromFileName: fileName suffix: '.extension.st'.
 	className ifNil: [ self signalUnsupportedWrite: aString ].
 	self classNamed: className originalPath: aString.
-	self repositoryOwningPackageNamed: packageName ifAbsent: [ Error signal: 'No Iceberg repository owns package ' , packageName ].
-	package := self packageNamed: packageName ifAbsent: [ self signalNotFound: aString ].
-	extensionExists := (self extensionMethodsForClassName: className inPackage: package) notEmpty.
-	previousText := extensionExists ifTrue: [
-		                self readTonelExtensionFileNamed: fileName packageName: packageName originalPath: aString ].
-	methodDefinitions := self methodDefinitionsFrom: (self parseTonelDefinitionsFrom: textString originalPath: aString).
+	self assertRepositoryOwnsPackageNamed: packageName originalPath: aString.
+	packageExists := PackageOrganizer default hasPackage: packageName.
+	definitions := self parseTonelDefinitionsFrom: textString originalPath: aString.
+	methodDefinitions := self methodDefinitionsFrom: definitions.
+	methodDefinitions ifEmpty: [ self signalUnsupportedWrite: aString ].
+	self
+		validateExtensionDefinitions: methodDefinitions
+		className: className
+		packageName: packageName
+		originalPath: aString.
+	previousText := [ self readTonelExtensionFileNamed: fileName packageName: packageName originalPath: aString ]
+		                on: Error
+		                do: [ nil ].
 	[
-		extensionExists
-			ifTrue: [
+		self makeTonelPackageDirectoryNamed: packageName originalPath: '/tonel/' , packageName.
+		previousText
+			ifNil: [
 					self
-						applyExtensionTonelText: textString
-						replacing: previousText
+						applyNewExtensionTonelText: textString
 						className: className
 						packageName: packageName
 						originalPath: aString ]
-			ifFalse: [
+			ifNotNil: [
 					self
-						applyNewExtensionTonelText: textString
+						applyExtensionTonelText: textString
+						replacing: previousText
 						className: className
 						packageName: packageName
 						originalPath: aString ].
@@ -1679,19 +1780,21 @@ PharoImageFSProjectionBackend >> writeTonelExtensionText: textString fileName: f
 		do: [ :error |
 				failureMessage := error messageText ifNil: [ error asString ].
 				[
-					extensionExists
-						ifTrue: [
+					previousText
+						ifNil: [
+								self removeMethodDefinitions: methodDefinitions.
+								self exportPackageNamed: packageName ]
+						ifNotNil: [
 								self
 									rollbackExtensionTonelText: previousText
 									afterFailedWriteToClassName: className
 									packageName: packageName
-									originalPath: aString ]
-						ifFalse: [
-								self removeMethodDefinitions: methodDefinitions.
-								self exportPackageNamed: packageName ] ]
+									originalPath: aString ].
+					packageExists ifFalse: [ self removePackageNamedIfEmpty: packageName ] ]
 					on: Error
 					do: [ :rollbackError |
-							Error signal: 'Projection write failed and rollback failed. Write error: ' , failureMessage , '. Rollback error: '
+							Error signal:
+								'Projection extension write failed and rollback failed. Write error: ' , failureMessage , '. Rollback error: '
 								, (rollbackError messageText ifNil: [ rollbackError asString ]) ].
 				Error signal: failureMessage ]
 ]
