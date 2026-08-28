@@ -159,7 +159,7 @@ cat /tmp/pharo-image-fs/repositories/pharo-image-fs.repository.json
 
 Use `/repositories` for repository operations and non-image files such as docs.
 For Pharo code, edit `/tonel` so writes are compiled in the live image and
-exported coherently.
+exported coherently when the package belongs to a loaded Iceberg repository.
 
 The projection is lazy and backed by the live image. Directory listings, stat
 requests, and reads ask Pharo for the current state as the filesystem needs
@@ -174,8 +174,12 @@ already-open file handle can still contain the contents read when it was opened.
 - existing `.class.st` files;
 - existing `.extension.st` files;
 - new `.class.st` files whose Tonel class definition matches the projection
-  path;
+  path, creating the package when necessary;
 - new `.extension.st` files for existing classes.
+
+`/tonel/<Package>` directories can be created and removed. Creating a directory
+creates a package in the live image. Removing a directory removes the package
+only when it is empty; delete class and extension files explicitly first.
 
 Editor-safe temporary-file save patterns are supported. Temporary files stay
 local to the daemon until they are renamed over a real projected Tonel path,
@@ -190,19 +194,19 @@ Class-file deletion removes the class from the image. Extension-file deletion
 removes only extension methods for that class/package.
 
 Moving projected `.class.st` files across package directories is supported. The
-class is moved in the live image, and both source and target packages are
-exported.
+class is moved in the live image. Source and target packages are exported when
+they belong to loaded Iceberg repositories.
 
 Renaming projected `.class.st` files inside the same package is supported. The
 class is renamed in the live image, same-package references are updated, and the
-package is exported.
+package is exported when it belongs to a loaded Iceberg repository.
 
 Combined cross-package move plus class rename is supported.
 
 Moving projected `.extension.st` files across package directories is supported
 when the extension filename stays the same. The extension method protocols are
-rewritten from the source package to the target package, and both packages are
-exported.
+rewritten from the source package to the target package. Source and target
+packages are exported when they belong to loaded Iceberg repositories.
 
 Renaming projected `.extension.st` files is not supported.
 
@@ -264,6 +268,8 @@ The Go daemon talks to the Pharo endpoint through a narrow JSON protocol:
 - `POST /write` with `{ "path": "/tonel/PharoImageFS/PharoImageFSProjectionBackend.class.st", "text": "..." }`
 - `POST /delete` with `{ "path": "/tonel/PharoImageFS/Old.class.st" }`
 - `POST /rename` with `{ "path": "/tonel/PharoImageFS/Old.class.st", "targetPath": "/tonel/PharoImageFS/New.class.st" }`
+- `POST /mkdir` with `{ "path": "/tonel/NewPackage" }`
+- `POST /rmdir` with `{ "path": "/tonel/OldPackage" }`
 
 The daemon does not parse or validate Pharo code. It owns mount lifecycle,
 filesystem callbacks, transport, timeouts, and generic errors. The Pharo backend

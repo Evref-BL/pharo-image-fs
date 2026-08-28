@@ -365,6 +365,8 @@ PharoImageFSProjectionHTTPServer >> responseObjectForOperation: operation reques
 	operation = 'write' ifTrue: [ ^ backend writeResponseForPath: path text: (self valueAt: #text in: body) ].
 	operation = 'delete' ifTrue: [ ^ backend deleteResponseForPath: path ].
 	operation = 'rename' ifTrue: [ ^ backend renameResponseForPath: path to: (self valueAt: #targetPath in: body) ].
+	operation = 'mkdir' ifTrue: [ ^ backend makeDirectoryResponseForPath: path ].
+	operation = 'rmdir' ifTrue: [ ^ backend removeDirectoryResponseForPath: path ].
 	Error signal: 'Unknown projection operation: ' , operation
 ]
 

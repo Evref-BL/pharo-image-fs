@@ -27,6 +27,12 @@ PharoImageFSProjectionBackendTest >> classTonelSource [
 ]
 
 { #category : 'private' }
+PharoImageFSProjectionBackendTest >> classTonelSourceForPackageNamed: packageName [
+
+	^ self classTonelSource copyReplaceAll: self fixturePackageName with: packageName
+]
+
+{ #category : 'private' }
 PharoImageFSProjectionBackendTest >> classTonelSourceWithBrokenExtraMethod [
 
 	^ self classTonelSource , '
@@ -508,11 +514,36 @@ PharoImageFSProjectionBackendTest >> testExtensionMethodWrittenThroughClassFileM
 ]
 
 { #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testFailedWriteDoesNotLeaveImplicitPackage [
+
+	| backend |
+	backend := self newBackend.
+	self deny: (PackageOrganizer default hasPackage: self targetPackageName).
+	self
+		should: [
+				backend
+					write: (self classTonelSourceWithBrokenExtraMethod copyReplaceAll: self fixturePackageName with: self targetPackageName)
+					at: self targetPackageTonelPath ]
+		raise: Error.
+	self deny: (PackageOrganizer default hasPackage: self targetPackageName)
+]
+
+{ #category : 'tests' }
 PharoImageFSProjectionBackendTest >> testListRootExposesTonelAndCritiques [
 
 	| names |
 	names := (self newBackend list: '/') collect: [ :entry | entry name ].
 	self assert: names asArray equals: #( 'tonel' 'critiques' 'repositories' )
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testMakeDirectoryCreatesTonelPackage [
+
+	| backend |
+	backend := self newBackend.
+	self deny: (PackageOrganizer default hasPackage: self targetPackageName).
+	backend makeDirectory: '/tonel/' , self targetPackageName.
+	self assert: (PackageOrganizer default hasPackage: self targetPackageName)
 ]
 
 { #category : 'tests' }
@@ -592,6 +623,30 @@ PharoImageFSProjectionBackendTest >> testReadMethodCritiqueFileReturnsSideKeys [
 			         '/critiques/' , self fixturePackageName , '/' , self originalClassName
 			         , '/manyArguments.second.third.fourth.fifth..json').
 	self assert: (data includesKey: 'instance')
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testRemoveDirectoryRejectsNonEmptyTonelPackage [
+
+	| backend |
+	backend := self newBackend.
+	backend makeDirectory: '/tonel/' , self targetPackageName.
+	backend write: (self classTonelSourceForPackageNamed: self targetPackageName) at: self targetPackageTonelPath.
+	self
+		should: [ backend removeDirectory: '/tonel/' , self targetPackageName ]
+		raise: Error
+		whoseDescriptionIncludes: 'Cannot remove non-empty package'
+		description: 'Non-empty packages must be emptied through explicit file deletes before rmdir'
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testRemoveDirectoryRemovesEmptyTonelPackage [
+
+	| backend |
+	backend := self newBackend.
+	backend makeDirectory: '/tonel/' , self targetPackageName.
+	backend removeDirectory: '/tonel/' , self targetPackageName.
+	self deny: (PackageOrganizer default hasPackage: self targetPackageName)
 ]
 
 { #category : 'tests' }
@@ -743,6 +798,18 @@ PharoImageFSProjectionBackendTest >> testWriteCreatesNewExtensionFromTonelFile [
 	targetClass := Smalltalk globals at: #PharoImageFSProjectionExtensionTarget.
 	self assert: (targetClass new perform: #projectedExtensionAnswer) equals: 7.
 	self assert: backend exportedPackageNames equals: { self fixturePackageName }
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testWriteCreatesPackageForNewClass [
+
+	| backend class |
+	backend := self newBackend.
+	self deny: (PackageOrganizer default hasPackage: self targetPackageName).
+	backend write: (self classTonelSourceForPackageNamed: self targetPackageName) at: self targetPackageTonelPath.
+	self assert: (PackageOrganizer default hasPackage: self targetPackageName).
+	class := Smalltalk at: self originalClassName asSymbol.
+	self assert: class package name equals: self targetPackageName
 ]
 
 { #category : 'tests' }
