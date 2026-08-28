@@ -236,7 +236,7 @@ PharoImageFSProjectionBackend >> critiqueEntries [
 { #category : 'private - critiques' }
 PharoImageFSProjectionBackend >> critiqueEntryForPackageNamed: packageName classNamed: className ifAbsent: absentBlock [
 
-	^ (self critiqueEntries at: packageName ifAbsent: [ ^ absentBlock value ]) at: className ifAbsent: absentBlock
+	^ self critiqueEntries at: packageName at: className ifAbsent: absentBlock
 ]
 
 { #category : 'private - critiques' }
@@ -248,7 +248,7 @@ PharoImageFSProjectionBackend >> critiqueEntryForPackageNamed: packageName class
 { #category : 'private - critiques' }
 PharoImageFSProjectionBackend >> critiqueMethodDataIn: classEntry forSelector: aSelector ifAbsent: absentBlock [
 
-	^ (classEntry at: #methods ifAbsent: [ ^ absentBlock value ]) at: aSelector ifAbsent: absentBlock
+	^ classEntry at: #methods at: aSelector ifAbsent: absentBlock
 ]
 
 { #category : 'private - listing' }
