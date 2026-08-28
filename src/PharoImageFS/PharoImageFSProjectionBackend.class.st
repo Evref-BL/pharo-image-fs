@@ -15,10 +15,8 @@ Class {
 PharoImageFSProjectionBackend >> addSourceIntervalFromCritique: aCritique to: data [
 
 	| interval sourceAnchor |
-	(aCritique class canUnderstand: #sourceAnchor) ifFalse: [ ^ self ].
 	sourceAnchor := aCritique sourceAnchor.
 	sourceAnchor ifNil: [ ^ self ].
-	(sourceAnchor class canUnderstand: #interval) ifFalse: [ ^ self ].
 	interval := sourceAnchor interval.
 	interval ifNil: [ ^ self ].
 	data at: #interval put: {
@@ -385,15 +383,11 @@ PharoImageFSProjectionBackend >> deleteTonelSegments: segments originalPath: aSt
 PharoImageFSProjectionBackend >> dictionaryForCritique: aCritique [
 
 	| data rule |
-	rule := (aCritique class canUnderstand: #rule)
-		        ifTrue: [ aCritique rule ]
-		        ifFalse: [ nil ].
+	rule := aCritique rule.
 	data := OrderedDictionary new.
-	rule ifNotNil: [
-			data at: #rule put: rule class name asString.
-			(rule class canUnderstand: #severity) ifTrue: [
-				rule severity ifNotNil: [ :severity | data at: #severity put: severity asString ] ].
-			(rule class canUnderstand: #rationale) ifTrue: [ rule rationale ifNotNil: [ :hint | data at: #hint put: hint asString ] ] ].
+	data at: #rule put: rule class name asString.
+	rule severity ifNotNil: [ :severity | data at: #severity put: severity asString ].
+	rule rationale ifNotNil: [ :hint | data at: #hint put: hint asString ].
 	data at: #title put: aCritique title asString.
 	self addSourceIntervalFromCritique: aCritique to: data.
 	^ data
