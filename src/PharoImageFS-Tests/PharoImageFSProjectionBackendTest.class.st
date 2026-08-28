@@ -344,6 +344,17 @@ PharoImageFSProjectionBackendTest >> testCritiquesAreEmptyBeforeProjectionWrites
 ]
 
 { #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testDeleteClearsCritiquesForEditedClass [
+
+	| backend |
+	backend := self newBackend.
+	backend write: self classTonelSourceWithExcessiveArgumentsMethod at: self originalClassTonelPath.
+	self assert: (backend list: '/critiques') isNotEmpty.
+	backend delete: self originalClassTonelPath.
+	self assert: (backend list: '/critiques') isEmpty
+]
+
+{ #category : 'tests' }
 PharoImageFSProjectionBackendTest >> testDeleteRemovesClassTonelFile [
 
 	| backend |
