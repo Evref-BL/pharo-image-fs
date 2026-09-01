@@ -86,10 +86,16 @@ PharoImageFSProjectionHTTPServer
 	named: 'pharo-image-fs'
 ```
 
-By default, writes require the target package to belong to a loaded Iceberg
-repository. This keeps filesystem edits coherent with exported source. To allow
-live-image-only writes, for example in a scratch image, disable the check on the
-projection backend:
+By default, writes require the target package to belong to a loaded,
+file-backed Iceberg repository with an existing source directory. Merely having
+an Iceberg repository entry that lists the package is not enough: the projection
+must know where to export the changed Tonel source. This keeps filesystem edits
+coherent with exported source.
+
+Packages loaded from the image itself, system packages, or repositories without
+an attached checkout are rejected in this default mode with a clear repository
+ownership error. To allow live-image-only writes, for example in a scratch image,
+disable the check on the projection backend:
 
 ```smalltalk
 | projection |
@@ -174,7 +180,10 @@ cat /tmp/pharo-image-fs/repositories/pharo-image-fs.repository.json
 Use `/repositories` for repository operations and non-image files such as docs.
 For Pharo code, edit `/tonel` so writes are compiled in the live image and
 exported coherently. The default repository-ownership check rejects writes to
-packages that are not attached to a loaded Iceberg repository.
+packages that are not attached to a loaded, file-backed Iceberg repository. If
+the package is visible in the image but has no writable checkout, either attach
+it to an Iceberg repository first or explicitly disable repository ownership
+checks for live-image-only writes.
 
 The projection is lazy and backed by the live image. Directory listings, stat
 requests, and reads ask Pharo for the current state as the filesystem needs
@@ -194,9 +203,10 @@ already-open file handle can still contain the contents read when it was opened.
 
 `/tonel/<Package>` directories can be created and removed. Creating a directory
 creates a package in the live image when repository-ownership checks are
-disabled. With the default checks enabled, creating an unowned package is
-rejected with a clear error. Removing a directory removes the package only when
-it is empty; delete class and extension files explicitly first.
+disabled. With the default checks enabled, creating a package that has no
+file-backed repository owner is rejected with a clear error. Removing a
+directory removes the package only when it is empty; delete class and extension
+files explicitly first.
 
 Editor-safe temporary-file save patterns are supported. Temporary files stay
 local to the daemon until they are renamed over a real projected Tonel path,

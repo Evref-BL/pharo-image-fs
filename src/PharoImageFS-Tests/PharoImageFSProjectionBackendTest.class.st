@@ -706,6 +706,47 @@ PharoImageFSProjectionBackendTest >> testRepositoryMetadataCanBeRead [
 ]
 
 { #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testRepositoryOwnershipIgnoresRepositoriesWithoutDirectory [
+
+	| backend missingDirectoryRepository ownedPackage repositoryDirectory writableRepository |
+	ownedPackage := PharoImageFSPackageTestDouble named: self fixturePackageName.
+	repositoryDirectory := FileSystem memory root / 'repository'.
+	repositoryDirectory ensureCreateDirectory.
+	missingDirectoryRepository := PharoImageFSRepositoryTestDouble
+		                              named: 'Missing Directory Repository'
+		                              directory: nil
+		                              loadedPackages: { ownedPackage }.
+	writableRepository := PharoImageFSRepositoryTestDouble
+		                      named: 'Writable Repository'
+		                      directory: repositoryDirectory
+		                      loadedPackages: { ownedPackage }.
+	backend := PharoImageFSRepositoryOwnershipTestBackend new.
+	backend iceRepositories: {
+			missingDirectoryRepository.
+			writableRepository }.
+	self assert: (backend repositoryOwningPackageNamed: self fixturePackageName ifAbsent: [ nil ]) equals: writableRepository
+]
+
+{ #category : 'tests' }
+PharoImageFSProjectionBackendTest >> testRepositoryOwnershipRejectsRepositoryWithoutDirectory [
+
+	| backend missingDirectoryRepository ownedPackage |
+	ownedPackage := PharoImageFSPackageTestDouble named: self fixturePackageName.
+	missingDirectoryRepository := PharoImageFSRepositoryTestDouble
+		                              named: 'Missing Directory Repository'
+		                              directory: nil
+		                              loadedPackages: { ownedPackage }.
+	backend := PharoImageFSRepositoryOwnershipTestBackend new.
+	backend iceRepositories: { missingDirectoryRepository }.
+	self
+		should: [
+		backend assertRepositoryOwnsPackageNamed: self fixturePackageName originalPath: '/tonel/AST-Core/ManifestASTCore.class.st' ]
+		raise: Error
+		whoseDescriptionIncludes: 'is not owned by a loaded Iceberg repository'
+		description: 'A repository without a source directory is not a writable projection owner.'
+]
+
+{ #category : 'tests' }
 PharoImageFSProjectionBackendTest >> testRepositoryRootListsSymlinkAndMetadata [
 
 	| names |

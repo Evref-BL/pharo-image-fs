@@ -14,9 +14,10 @@ BaselineOfPharoImageFS >> baseline: spec [
 	<baseline>
 	spec for: #common do: [
 			spec package: 'PharoImageFS' with: [ spec requires: #( 'PharoImageFS-Compatibility' ) ].
-			spec package: 'PharoImageFS-Tests' with: [ spec requires: #( 'PharoImageFS' ) ].
+			spec package: 'PharoImageFS-Tests-Resources' with: [ spec requires: #( 'PharoImageFS' ) ].
+			spec package: 'PharoImageFS-Tests' with: [ spec requires: #( 'PharoImageFS' 'PharoImageFS-Tests-Resources' ) ].
 			spec group: 'Core' with: #( 'PharoImageFS' ).
-			spec group: 'Tests' with: #( 'PharoImageFS-Tests' ).
+			spec group: 'Tests' with: #( 'PharoImageFS-Tests-Resources' 'PharoImageFS-Tests' ).
 			spec group: 'default' with: #( 'Core' 'Tests' ) ].
 	spec for: self pharoVersionsBefore14 do: [
 			spec package: 'PharoImageFS-Compatibility-Pre14'.

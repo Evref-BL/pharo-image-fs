@@ -540,9 +540,17 @@ PharoImageFSProjectionBackend >> icePackageNamed: packageName in: aRepository if
 ]
 
 { #category : 'private - repositories' }
+PharoImageFSProjectionBackend >> iceRepositories [
+
+	^ IceRepository repositories
+]
+
+{ #category : 'private - repositories' }
 PharoImageFSProjectionBackend >> iceRepositoryDirectoryFor: aRepository [
 
-	^ aRepository repositoryDirectory asFileReference
+	| directory |
+	directory := aRepository repositoryDirectory.
+	^ directory ifNotNil: [ directory asFileReference ]
 ]
 
 { #category : 'private - critiques' }
@@ -1183,6 +1191,14 @@ PharoImageFSProjectionBackend >> renameTonelClassFileNamed: sourceFileName toFil
 ]
 
 { #category : 'private - repositories' }
+PharoImageFSProjectionBackend >> repositoryCanExportSourceFor: aRepository [
+
+	| directory |
+	directory := self iceRepositoryDirectoryFor: aRepository.
+	^ directory notNil and: [ directory exists ]
+]
+
+{ #category : 'private - repositories' }
 PharoImageFSProjectionBackend >> repositoryEntries [
 
 	| entries |
@@ -1218,8 +1234,8 @@ PharoImageFSProjectionBackend >> repositoryInfoForProjectionName: projectionName
 PharoImageFSProjectionBackend >> repositoryInfoForRepository: repository ifPresent: presentBlock [
 
 	| directory info |
+	(self repositoryCanExportSourceFor: repository) ifFalse: [ ^ self ].
 	directory := self iceRepositoryDirectoryFor: repository.
-	(directory isNil or: [ directory exists not ]) ifTrue: [ ^ self ].
 	info := OrderedDictionary new.
 	info
 		at: #name put: repository name asString;
@@ -1234,8 +1250,7 @@ PharoImageFSProjectionBackend >> repositoryInfos [
 
 	| infos |
 	infos := OrderedCollection new.
-	IceRepository registry do: [ :repository |
-		self repositoryInfoForRepository: repository ifPresent: [ :info | infos add: info ] ].
+	self iceRepositories do: [ :repository | self repositoryInfoForRepository: repository ifPresent: [ :info | infos add: info ] ].
 	^ infos asArray sorted: [ :left :right | (left at: #projectionName) <= (right at: #projectionName) ]
 ]
 
@@ -1263,8 +1278,10 @@ PharoImageFSProjectionBackend >> repositoryMetadataTextForFileNamed: fileName or
 { #category : 'private - repositories' }
 PharoImageFSProjectionBackend >> repositoryOwningPackageNamed: packageName ifAbsent: absentBlock [
 
-	^ IceRepository repositories
-		  detect: [ :repository | repository loadedPackages anySatisfy: [ :package | package packageName asString = packageName ] ]
+	^ self iceRepositories
+		  detect: [ :repository |
+				  (self repositoryCanExportSourceFor: repository) and: [
+					  repository loadedPackages anySatisfy: [ :package | package packageName asString = packageName ] ] ]
 		  ifNone: absentBlock
 ]
 
