@@ -66,13 +66,13 @@ local cache before starting the mount. For local development, set
 Start the Pharo-side projection endpoint and daemon from the image:
 
 ```smalltalk
-PharoImageFSProjectionHTTPServer startAndMountOn: 9013
+PIFSServer startAndMountOn: 9013
 ```
 
 To use the default mountpoint with an explicit volume name:
 
 ```smalltalk
-PharoImageFSProjectionHTTPServer
+PIFSServer
 	startOn: 9013
 	mountNamed: 'pharo-image-fs'
 ```
@@ -80,7 +80,7 @@ PharoImageFSProjectionHTTPServer
 To use an explicit mountpoint and volume name:
 
 ```smalltalk
-PharoImageFSProjectionHTTPServer
+PIFSServer
 	startOn: 9013
 	mountAt: '/tmp/pharo-image-fs' asFileReference
 	named: 'pharo-image-fs'
@@ -99,7 +99,7 @@ disable the check on the projection backend:
 
 ```smalltalk
 | projection |
-projection := PharoImageFSProjectionHTTPServer
+projection := PIFSServer
 	              startOn: 9013
 	              mountAt: '/tmp/pharo-image-fs' asFileReference
 	              named: 'pharo-image-fs'.
@@ -109,10 +109,10 @@ projection backend requiresRepositoryOwnershipForWrites: false
 Stop it from Pharo with:
 
 ```smalltalk
-PharoImageFSProjectionHTTPServer stopOn: 9013
+PIFSServer stopOn: 9013
 ```
 
-Use `PharoImageFSProjectionHTTPServer stopAll` to stop every projection server
+Use `PIFSServer stopAll` to stop every projection server
 started through this API.
 
 The mountpoint path is created when it is missing. If the path already exists,
@@ -139,7 +139,7 @@ Read and search Pharo code with normal file tools:
 
 ```sh
 rg "projection" /tmp/pharo-image-fs/tonel
-sed -n '1,120p' /tmp/pharo-image-fs/tonel/PharoImageFS/PharoImageFSProjectionBackend.class.st
+sed -n '1,120p' /tmp/pharo-image-fs/tonel/PharoImageFS/PIFSBackend.class.st
 ```
 
 Edit projected Tonel files with an editor or patch tool. Successful writes are
@@ -151,7 +151,7 @@ Read critique feedback for code edited through the projection:
 
 ```sh
 find /tmp/pharo-image-fs/critiques -type f
-cat /tmp/pharo-image-fs/critiques/PharoImageFS/PharoImageFSProjectionBackend/write.at..json
+cat /tmp/pharo-image-fs/critiques/PharoImageFS/PIFSBackend/write.at..json
 ```
 
 `/critiques` does not scan the whole image. Accepted writes through `/tonel`
@@ -291,9 +291,9 @@ normal Git checkout on disk.
 The Go daemon talks to the Pharo endpoint through a narrow JSON protocol:
 
 - `POST /list` with `{ "path": "/tonel" }`
-- `POST /stat` with `{ "path": "/tonel/PharoImageFS/PharoImageFSProjectionBackend.class.st" }`
-- `POST /read` with `{ "path": "/tonel/PharoImageFS/PharoImageFSProjectionBackend.class.st" }`
-- `POST /write` with `{ "path": "/tonel/PharoImageFS/PharoImageFSProjectionBackend.class.st", "text": "..." }`
+- `POST /stat` with `{ "path": "/tonel/PharoImageFS/PIFSBackend.class.st" }`
+- `POST /read` with `{ "path": "/tonel/PharoImageFS/PIFSBackend.class.st" }`
+- `POST /write` with `{ "path": "/tonel/PharoImageFS/PIFSBackend.class.st", "text": "..." }`
 - `POST /delete` with `{ "path": "/tonel/PharoImageFS/Old.class.st" }`
 - `POST /rename` with `{ "path": "/tonel/PharoImageFS/Old.class.st", "targetPath": "/tonel/PharoImageFS/New.class.st" }`
 - `POST /mkdir` with `{ "path": "/tonel/NewPackage" }`
@@ -304,7 +304,7 @@ filesystem callbacks, transport, timeouts, and generic errors. The Pharo backend
 owns source rendering, write transactions, compilation, critiques, and export.
 
 Matching project releases use the same version number. The Pharo package keeps
-its expected daemon version in `PharoImageFSVersion`.
+its expected daemon version in `PIFSVersion`.
 
 ## Development goals
 
