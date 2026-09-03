@@ -234,28 +234,36 @@ PharoImageFSProjectionHTTPServer >> backend: aBackend [
 ]
 
 { #category : 'private - daemon' }
+PharoImageFSProjectionHTTPServer >> closeInheritedFileDescriptorsShellSnippet [
+
+	^ 'for fd in /dev/fd/*; do fd=${fd##*/}; case "$fd" in 0|1|2|*[!0-9]*|'''') ;; *) eval "exec $fd>&-" 2>/dev/null || true ;; esac; done; '
+]
+
+{ #category : 'private - daemon' }
 PharoImageFSProjectionHTTPServer >> daemonCommandMountedAt: aFileReference named: aString [
 
-	| daemonDirectory executable endpoint |
-	executable := self class daemonExecutable.
-	daemonDirectory := executable parent.
+	| daemonDirectory endpoint executableName |
+	daemonDirectory := self class daemonExecutable parent.
+	executableName := self class daemonExecutableName.
 	endpoint := 'http://127.0.0.1:' , port asString , '/projection'.
 	^ String streamContents: [ :stream |
-		  stream
-			  nextPutAll: 'cd ';
-			  nextPutAll: (self shellQuote: daemonDirectory pathString);
-			  nextPutAll: ' && nohup ';
-			  nextPutAll: (self shellQuote: executable pathString);
-			  nextPutAll: ' --endpoint ';
-			  nextPutAll: (self shellQuote: endpoint);
-			  nextPutAll: ' --mount-option ';
-			  nextPutAll: (self shellQuote: 'volname=' , aString);
-			  nextPut: Character space;
-			  nextPutAll: (self shellQuote: aFileReference pathString);
-			  nextPutAll: ' > ';
-			  nextPutAll: (self shellQuote: daemonLogFile pathString);
-			  nextPutAll: ' 2>&1 & echo $! > ';
-			  nextPutAll: (self shellQuote: daemonPidFile pathString) ]
+			  stream
+				  nextPutAll: '( cd ';
+				  nextPutAll: (self shellQuote: daemonDirectory pathString);
+				  nextPutAll: ' && { ';
+				  nextPutAll: self closeInheritedFileDescriptorsShellSnippet;
+				  nextPutAll: 'exec nohup ';
+				  nextPutAll: (self shellQuote: './' , executableName);
+				  nextPutAll: ' --endpoint ';
+				  nextPutAll: (self shellQuote: endpoint);
+				  nextPutAll: ' --mount-option ';
+				  nextPutAll: (self shellQuote: 'volname=' , aString);
+				  nextPut: Character space;
+				  nextPutAll: (self shellQuote: aFileReference pathString);
+				  nextPutAll: ' > ';
+				  nextPutAll: (self shellQuote: daemonLogFile pathString);
+				  nextPutAll: ' 2>&1; } ) & echo $! > ';
+				  nextPutAll: (self shellQuote: daemonPidFile pathString) ]
 ]
 
 { #category : 'private - daemon' }
