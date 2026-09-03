@@ -22,6 +22,18 @@ PharoImageFSProjectionHTTPServerTest >> tearDown [
 ]
 
 { #category : 'tests' }
+PharoImageFSProjectionHTTPServerTest >> testDaemonCommandClosesInheritedFileDescriptorsBeforeExec [
+
+	| command projectionServer |
+	projectionServer := PharoImageFSProjectionHTTPServer startOn: self testPort.
+	projectionServer instVarNamed: 'daemonPidFile' put: FileLocator temp / 'pharo-image-fs-test.pid'.
+	projectionServer instVarNamed: 'daemonLogFile' put: FileLocator temp / 'pharo-image-fs-test.log'.
+	command := projectionServer daemonCommandMountedAt: FileLocator temp / 'Pharo Image FS Test' named: 'Pharo Image'.
+	self assert: (command includesSubstring: 'for fd in /dev/fd/*').
+	self assert: (command includesSubstring: 'exec nohup ''./pharo-image-fs''')
+]
+
+{ #category : 'tests' }
 PharoImageFSProjectionHTTPServerTest >> testDaemonCommandIncludesEndpointMountPointAndMountName [
 
 	| command projectionServer |
