@@ -2,7 +2,7 @@
 A file or directory entry exposed by the pharo-image-fs projection protocol.
 "
 Class {
-	#name : 'PharoImageFSProjectionEntry',
+	#name : 'PIFSEntry',
 	#superclass : 'Object',
 	#instVars : [
 		'name',
@@ -16,7 +16,7 @@ Class {
 }
 
 { #category : 'instance creation' }
-PharoImageFSProjectionEntry class >> directoryNamed: aString [
+PIFSEntry class >> directoryNamed: aString [
 
 	^ self
 		  name: aString
@@ -26,7 +26,7 @@ PharoImageFSProjectionEntry class >> directoryNamed: aString [
 ]
 
 { #category : 'instance creation' }
-PharoImageFSProjectionEntry class >> fileNamed: aString size: anInteger writable: aBoolean [
+PIFSEntry class >> fileNamed: aString size: anInteger writable: aBoolean [
 
 	^ self
 		  name: aString
@@ -36,7 +36,7 @@ PharoImageFSProjectionEntry class >> fileNamed: aString size: anInteger writable
 ]
 
 { #category : 'instance creation' }
-PharoImageFSProjectionEntry class >> name: nameString kind: kindString size: anInteger writable: aBoolean [
+PIFSEntry class >> name: nameString kind: kindString size: anInteger writable: aBoolean [
 
 	^ self new
 		  name: nameString;
@@ -47,7 +47,7 @@ PharoImageFSProjectionEntry class >> name: nameString kind: kindString size: anI
 ]
 
 { #category : 'instance creation' }
-PharoImageFSProjectionEntry class >> symlinkNamed: aString target: targetString [
+PIFSEntry class >> symlinkNamed: aString target: targetString [
 
 	^ (self
 		   name: aString
@@ -59,7 +59,7 @@ PharoImageFSProjectionEntry class >> symlinkNamed: aString target: targetString 
 ]
 
 { #category : 'converting' }
-PharoImageFSProjectionEntry >> asDictionary [
+PIFSEntry >> asDictionary [
 
 	| dictionary |
 	dictionary := OrderedDictionary new.
@@ -73,79 +73,79 @@ PharoImageFSProjectionEntry >> asDictionary [
 ]
 
 { #category : 'testing' }
-PharoImageFSProjectionEntry >> isDirectory [
+PIFSEntry >> isDirectory [
 
 	^ kind = 'directory'
 ]
 
 { #category : 'testing' }
-PharoImageFSProjectionEntry >> isFile [
+PIFSEntry >> isFile [
 
 	^ kind = 'file'
 ]
 
 { #category : 'testing' }
-PharoImageFSProjectionEntry >> isSymlink [
+PIFSEntry >> isSymlink [
 
 	^ kind = 'symlink'
 ]
 
 { #category : 'accessing' }
-PharoImageFSProjectionEntry >> kind [
+PIFSEntry >> kind [
 
 	^ kind
 ]
 
 { #category : 'accessing' }
-PharoImageFSProjectionEntry >> kind: aString [
+PIFSEntry >> kind: aString [
 
 	kind := aString
 ]
 
 { #category : 'accessing' }
-PharoImageFSProjectionEntry >> name [
+PIFSEntry >> name [
 
 	^ name
 ]
 
 { #category : 'accessing' }
-PharoImageFSProjectionEntry >> name: aString [
+PIFSEntry >> name: aString [
 
 	name := aString
 ]
 
 { #category : 'accessing' }
-PharoImageFSProjectionEntry >> size [
+PIFSEntry >> size [
 
 	^ size
 ]
 
 { #category : 'accessing' }
-PharoImageFSProjectionEntry >> size: anInteger [
+PIFSEntry >> size: anInteger [
 
 	size := anInteger
 ]
 
 { #category : 'accessing' }
-PharoImageFSProjectionEntry >> target [
+PIFSEntry >> target [
 
 	^ target
 ]
 
 { #category : 'accessing' }
-PharoImageFSProjectionEntry >> target: aString [
+PIFSEntry >> target: aString [
 
 	target := aString
 ]
 
 { #category : 'accessing' }
-PharoImageFSProjectionEntry >> writable [
+PIFSEntry >> writable [
 
 	^ writable
 ]
 
 { #category : 'accessing' }
-PharoImageFSProjectionEntry >> writable: aBoolean [
+PIFSEntry >> writable: aBoolean [
 
 	writable := aBoolean
 ]

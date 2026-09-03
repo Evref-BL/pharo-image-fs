@@ -1,24 +1,24 @@
 Class {
-	#name : 'PharoImageFSVersion',
+	#name : 'PIFSVersion',
 	#superclass : 'Object',
 	#category : 'PharoImageFS',
 	#package : 'PharoImageFS'
 }
 
 { #category : 'accessing' }
-PharoImageFSVersion class >> current [
+PIFSVersion class >> current [
 
 	^ '0.2.4'
 ]
 
 { #category : 'accessing' }
-PharoImageFSVersion class >> daemonArchiveName [
+PIFSVersion class >> daemonArchiveName [
 
 	^ self daemonAssetName , '.zip'
 ]
 
 { #category : 'accessing' }
-PharoImageFSVersion class >> daemonAssetArchitecture [
+PIFSVersion class >> daemonAssetArchitecture [
 
 	| architecture |
 	architecture := Smalltalk vm getSystemAttribute: 1003.
@@ -29,32 +29,32 @@ PharoImageFSVersion class >> daemonAssetArchitecture [
 ]
 
 { #category : 'accessing' }
-PharoImageFSVersion class >> daemonAssetName [
+PIFSVersion class >> daemonAssetName [
 
 	^ 'pharo-image-fs-daemon-' , self daemonAssetOperatingSystem , '-' , self daemonAssetArchitecture
 ]
 
 { #category : 'accessing' }
-PharoImageFSVersion class >> daemonAssetOperatingSystem [
+PIFSVersion class >> daemonAssetOperatingSystem [
 
 	OSPlatform current isMacOS ifTrue: [ ^ 'darwin' ].
 	Error signal: 'Unsupported daemon operating system: ' , OSPlatform current class name
 ]
 
 { #category : 'accessing' }
-PharoImageFSVersion class >> daemonReleaseURL [
+PIFSVersion class >> daemonReleaseURL [
 
 	^ self daemonRepositoryURL , '/releases/download/' , self releaseTag , '/' , self daemonArchiveName
 ]
 
 { #category : 'accessing' }
-PharoImageFSVersion class >> daemonRepositoryURL [
+PIFSVersion class >> daemonRepositoryURL [
 
 	^ 'https://github.com/Evref-BL/pharo-image-fs-daemon'
 ]
 
 { #category : 'accessing' }
-PharoImageFSVersion class >> releaseTag [
+PIFSVersion class >> releaseTag [
 
 	^ 'v' , self current
 ]

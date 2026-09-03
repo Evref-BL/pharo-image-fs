@@ -2,7 +2,7 @@
 Image-side projection backend for pharo-image-fs. It owns Pharo semantics and answers the narrow filesystem projection protocol used by the Go mount daemon. It has no dependency on MCP-Pharo.
 "
 Class {
-	#name : 'PharoImageFSProjectionBackend',
+	#name : 'PIFSBackend',
 	#superclass : 'Object',
 	#instVars : [
 		'critiqueEntries',
@@ -13,7 +13,7 @@ Class {
 }
 
 { #category : 'private - critiques' }
-PharoImageFSProjectionBackend >> addSourceIntervalFromCritique: aCritique to: data [
+PIFSBackend >> addSourceIntervalFromCritique: aCritique to: data [
 
 	| interval sourceAnchor |
 	sourceAnchor := aCritique sourceAnchor.
@@ -26,9 +26,9 @@ PharoImageFSProjectionBackend >> addSourceIntervalFromCritique: aCritique to: da
 ]
 
 { #category : 'private - writing' }
-PharoImageFSProjectionBackend >> applyClassTonelText: textString replacing: previousTextString className: className packageName: packageName originalPath: aString [
+PIFSBackend >> applyClassTonelText: textString replacing: previousTextString className: className packageName: packageName originalPath: aString [
 
-	^ PharoImageFSCompatibility activeDuring: [
+	^ PIFSCompatibility activeDuring: [
 			  | changedMethodDefinitions classDefinition definitions methodDefinitions previousClassDefinition previousDefinitions previousMethodDefinitions |
 			  definitions := self parseTonelDefinitionsFrom: textString originalPath: aString.
 			  previousDefinitions := self parseTonelDefinitionsFrom: previousTextString originalPath: aString.
@@ -49,9 +49,9 @@ PharoImageFSProjectionBackend >> applyClassTonelText: textString replacing: prev
 ]
 
 { #category : 'private - writing' }
-PharoImageFSProjectionBackend >> applyExtensionTonelText: textString replacing: previousTextString className: className packageName: packageName originalPath: aString [
+PIFSBackend >> applyExtensionTonelText: textString replacing: previousTextString className: className packageName: packageName originalPath: aString [
 
-	^ PharoImageFSCompatibility activeDuring: [
+	^ PIFSCompatibility activeDuring: [
 			  | changedMethodDefinitions definitions methodDefinitions previousDefinitions previousMethodDefinitions |
 			  definitions := self parseTonelDefinitionsFrom: textString originalPath: aString.
 			  previousDefinitions := self parseTonelDefinitionsFrom: previousTextString originalPath: aString.
@@ -69,9 +69,9 @@ PharoImageFSProjectionBackend >> applyExtensionTonelText: textString replacing: 
 ]
 
 { #category : 'private - writing' }
-PharoImageFSProjectionBackend >> applyNewClassTonelText: textString className: className packageName: packageName originalPath: aString [
+PIFSBackend >> applyNewClassTonelText: textString className: className packageName: packageName originalPath: aString [
 
-	^ PharoImageFSCompatibility activeDuring: [
+	^ PIFSCompatibility activeDuring: [
 			  | classDefinition definitions methodDefinitions |
 			  definitions := self parseTonelDefinitionsFrom: textString originalPath: aString.
 			  classDefinition := self classDefinitionFrom: definitions originalPath: aString.
@@ -87,9 +87,9 @@ PharoImageFSProjectionBackend >> applyNewClassTonelText: textString className: c
 ]
 
 { #category : 'private - writing' }
-PharoImageFSProjectionBackend >> applyNewExtensionTonelText: textString className: className packageName: packageName originalPath: aString [
+PIFSBackend >> applyNewExtensionTonelText: textString className: className packageName: packageName originalPath: aString [
 
-	^ PharoImageFSCompatibility activeDuring: [
+	^ PIFSCompatibility activeDuring: [
 			  | definitions methodDefinitions |
 			  definitions := self parseTonelDefinitionsFrom: textString originalPath: aString.
 			  self
@@ -104,13 +104,13 @@ PharoImageFSProjectionBackend >> applyNewExtensionTonelText: textString classNam
 ]
 
 { #category : 'private - repositories' }
-PharoImageFSProjectionBackend >> assertRepositoriesOwnPackageNames: packageNames originalPath: aString [
+PIFSBackend >> assertRepositoriesOwnPackageNames: packageNames originalPath: aString [
 
 	packageNames do: [ :packageName | self assertRepositoryOwnsPackageNamed: packageName originalPath: aString ]
 ]
 
 { #category : 'private - repositories' }
-PharoImageFSProjectionBackend >> assertRepositoryOwnsPackageNamed: packageName originalPath: aString [
+PIFSBackend >> assertRepositoryOwnsPackageNamed: packageName originalPath: aString [
 
 	self requiresRepositoryOwnershipForWrites ifFalse: [ ^ self ].
 	self repositoryOwningPackageNamed: packageName ifAbsent: [
@@ -121,7 +121,7 @@ PharoImageFSProjectionBackend >> assertRepositoryOwnsPackageNamed: packageName o
 ]
 
 { #category : 'private - critiques' }
-PharoImageFSProjectionBackend >> blockingCritiqueSummaryFor: critiqueDictionaries [
+PIFSBackend >> blockingCritiqueSummaryFor: critiqueDictionaries [
 
 	^ String streamContents: [ :stream |
 			  critiqueDictionaries
@@ -134,7 +134,7 @@ PharoImageFSProjectionBackend >> blockingCritiqueSummaryFor: critiqueDictionarie
 ]
 
 { #category : 'private - critiques' }
-PharoImageFSProjectionBackend >> blockingCritiquesForMethodNode: aMethodNode [
+PIFSBackend >> blockingCritiquesForMethodNode: aMethodNode [
 
 	| critiques |
 	critiques := OrderedCollection new.
@@ -146,7 +146,7 @@ PharoImageFSProjectionBackend >> blockingCritiquesForMethodNode: aMethodNode [
 ]
 
 { #category : 'private - critiques' }
-PharoImageFSProjectionBackend >> blockingPreCompileRuleClasses [
+PIFSBackend >> blockingPreCompileRuleClasses [
 
 	| ruleClass |
 	ruleClass := Smalltalk globals at: #ReDeadBlockRule ifAbsent: [ nil ].
@@ -155,7 +155,7 @@ PharoImageFSProjectionBackend >> blockingPreCompileRuleClasses [
 ]
 
 { #category : 'private - writing' }
-PharoImageFSProjectionBackend >> classDefinitionFrom: definitions originalPath: aString [
+PIFSBackend >> classDefinitionFrom: definitions originalPath: aString [
 
 	| classDefinitions |
 	classDefinitions := definitions select: #isClassDefinition.
@@ -165,7 +165,7 @@ PharoImageFSProjectionBackend >> classDefinitionFrom: definitions originalPath: 
 ]
 
 { #category : 'private - reading' }
-PharoImageFSProjectionBackend >> classForName: className packageName: packageName originalPath: aString [
+PIFSBackend >> classForName: className packageName: packageName originalPath: aString [
 
 	| class |
 	class := Smalltalk at: className asSymbol ifAbsent: [ self signalNotFound: aString ].
@@ -174,26 +174,26 @@ PharoImageFSProjectionBackend >> classForName: className packageName: packageNam
 ]
 
 { #category : 'private - paths' }
-PharoImageFSProjectionBackend >> classNameFromFileName: fileName suffix: suffixString [
+PIFSBackend >> classNameFromFileName: fileName suffix: suffixString [
 
 	(fileName endsWith: suffixString) ifFalse: [ ^ nil ].
 	^ fileName allButLast: suffixString size
 ]
 
 { #category : 'private - reading' }
-PharoImageFSProjectionBackend >> classNamed: className originalPath: aString [
+PIFSBackend >> classNamed: className originalPath: aString [
 
 	^ Smalltalk at: className asSymbol ifAbsent: [ self signalNotFound: aString ]
 ]
 
 { #category : 'private - classes' }
-PharoImageFSProjectionBackend >> classNames [
+PIFSBackend >> classNames [
 
 	^ (Smalltalk globals allClasses collect: [ :class | class name asString ] as: Array) sorted
 ]
 
 { #category : 'private - reading' }
-PharoImageFSProjectionBackend >> classTonelTextFor: aClass [
+PIFSBackend >> classTonelTextFor: aClass [
 
 	| methodDefinitions writer |
 	writer := TonelWriter new.
@@ -207,14 +207,14 @@ PharoImageFSProjectionBackend >> classTonelTextFor: aClass [
 ]
 
 { #category : 'private - classes' }
-PharoImageFSProjectionBackend >> classesInPackageNamed: packageName [
+PIFSBackend >> classesInPackageNamed: packageName [
 
 	^ (Smalltalk globals allClasses select: [ :class | class package name asString = packageName ]) sorted: [ :left :right |
 		  left name <= right name ]
 ]
 
 { #category : 'private - writing' }
-PharoImageFSProjectionBackend >> commaSeparated: strings [
+PIFSBackend >> commaSeparated: strings [
 
 	^ String streamContents: [ :stream |
 		  strings do: [ :each |
@@ -223,19 +223,19 @@ PharoImageFSProjectionBackend >> commaSeparated: strings [
 ]
 
 { #category : 'private - critiques' }
-PharoImageFSProjectionBackend >> critiqueDataForBehavior: aBehavior [
+PIFSBackend >> critiqueDataForBehavior: aBehavior [
 
 	^ self critiqueDictionariesFor: (ReCriticEngine critiquesOf: aBehavior)
 ]
 
 { #category : 'private - critiques' }
-PharoImageFSProjectionBackend >> critiqueDataForCompiledMethod: aCompiledMethod [
+PIFSBackend >> critiqueDataForCompiledMethod: aCompiledMethod [
 
 	^ self critiqueDictionariesFor: (ReCriticEngine critiquesOf: aCompiledMethod) , (ReCriticEngine nodeCritiquesOf: aCompiledMethod)
 ]
 
 { #category : 'private - critiques' }
-PharoImageFSProjectionBackend >> critiqueDictionariesFor: critiques [
+PIFSBackend >> critiqueDictionariesFor: critiques [
 
 	^ (critiques collect: [ :critique | self dictionaryForCritique: critique ] as: Array) sorted: [ :left :right |
 			  (left at: #title ifAbsent: [ '' ]) = (right at: #title ifAbsent: [ '' ])
@@ -244,31 +244,31 @@ PharoImageFSProjectionBackend >> critiqueDictionariesFor: critiques [
 ]
 
 { #category : 'private - critiques' }
-PharoImageFSProjectionBackend >> critiqueEntries [
+PIFSBackend >> critiqueEntries [
 
 	^ critiqueEntries ifNil: [ critiqueEntries := Dictionary new ]
 ]
 
 { #category : 'private - critiques' }
-PharoImageFSProjectionBackend >> critiqueEntryForPackageNamed: packageName classNamed: className ifAbsent: absentBlock [
+PIFSBackend >> critiqueEntryForPackageNamed: packageName classNamed: className ifAbsent: absentBlock [
 
 	^ self critiqueEntries at: packageName at: className ifAbsent: absentBlock
 ]
 
 { #category : 'private - critiques' }
-PharoImageFSProjectionBackend >> critiqueEntryForPackageNamed: packageName classNamed: className ifPresent: presentBlock ifAbsent: absentBlock [
+PIFSBackend >> critiqueEntryForPackageNamed: packageName classNamed: className ifPresent: presentBlock ifAbsent: absentBlock [
 
 	^ presentBlock value: (self critiqueEntryForPackageNamed: packageName classNamed: className ifAbsent: [ ^ absentBlock value ])
 ]
 
 { #category : 'private - critiques' }
-PharoImageFSProjectionBackend >> critiqueMethodDataIn: classEntry forSelector: aSelector ifAbsent: absentBlock [
+PIFSBackend >> critiqueMethodDataIn: classEntry forSelector: aSelector ifAbsent: absentBlock [
 
 	^ classEntry at: #methods at: aSelector ifAbsent: absentBlock
 ]
 
 { #category : 'private - listing' }
-PharoImageFSProjectionBackend >> critiqueMethodEntriesForClass: aClass [
+PIFSBackend >> critiqueMethodEntriesForClass: aClass [
 
 	| classEntry entries methods |
 	classEntry := self critiqueEntryForPackageNamed: aClass package name asString classNamed: aClass name ifAbsent: [ ^ #(  ) ].
@@ -281,7 +281,7 @@ PharoImageFSProjectionBackend >> critiqueMethodEntriesForClass: aClass [
 ]
 
 { #category : 'private - listing' }
-PharoImageFSProjectionBackend >> critiquePackageEntriesForPackageNamed: packageName originalPath: aString [
+PIFSBackend >> critiquePackageEntriesForPackageNamed: packageName originalPath: aString [
 
 	| packageEntry |
 	packageEntry := self critiqueEntries at: packageName ifAbsent: [ self signalNotFound: aString ].
@@ -289,20 +289,20 @@ PharoImageFSProjectionBackend >> critiquePackageEntriesForPackageNamed: packageN
 ]
 
 { #category : 'private - listing' }
-PharoImageFSProjectionBackend >> critiqueRootEntries [
+PIFSBackend >> critiqueRootEntries [
 
 	^ self critiqueEntries keys sorted collect: [ :packageName | self directoryNamed: packageName ]
 ]
 
 { #category : 'private - paths' }
-PharoImageFSProjectionBackend >> decodedSelectorToken: token originalPath: originalPath [
+PIFSBackend >> decodedSelectorToken: token originalPath: originalPath [
 
 	(token beginsWith: '^') ifFalse: [ ^ token ].
 	^ self selectorCharacterForEscapeName: token allButFirst originalPath: originalPath
 ]
 
 { #category : 'accessing' }
-PharoImageFSProjectionBackend >> delete: aString [
+PIFSBackend >> delete: aString [
 
 	| segments |
 	segments := self pathSegmentsFor: aString.
@@ -312,14 +312,14 @@ PharoImageFSProjectionBackend >> delete: aString [
 ]
 
 { #category : 'protocol responses' }
-PharoImageFSProjectionBackend >> deleteResponseForPath: aString [
+PIFSBackend >> deleteResponseForPath: aString [
 
 	self delete: aString.
 	^ Dictionary new
 ]
 
 { #category : 'private - deleting' }
-PharoImageFSProjectionBackend >> deleteTonelClassFileNamed: fileName packageName: packageName originalPath: aString [
+PIFSBackend >> deleteTonelClassFileNamed: fileName packageName: packageName originalPath: aString [
 
 	| class className failureMessage previousText |
 	className := self classNameFromFileName: fileName suffix: '.class.st'.
@@ -348,7 +348,7 @@ PharoImageFSProjectionBackend >> deleteTonelClassFileNamed: fileName packageName
 ]
 
 { #category : 'private - deleting' }
-PharoImageFSProjectionBackend >> deleteTonelExtensionFileNamed: fileName packageName: packageName originalPath: aString [
+PIFSBackend >> deleteTonelExtensionFileNamed: fileName packageName: packageName originalPath: aString [
 
 	| className failureMessage methods package previousText |
 	className := self classNameFromFileName: fileName suffix: '.extension.st'.
@@ -381,7 +381,7 @@ PharoImageFSProjectionBackend >> deleteTonelExtensionFileNamed: fileName package
 ]
 
 { #category : 'private - deleting' }
-PharoImageFSProjectionBackend >> deleteTonelSegments: segments originalPath: aString [
+PIFSBackend >> deleteTonelSegments: segments originalPath: aString [
 
 	segments size = 2 ifFalse: [ self signalUnsupportedWrite: aString ].
 	(segments second endsWith: '.class.st') ifTrue: [
@@ -398,7 +398,7 @@ PharoImageFSProjectionBackend >> deleteTonelSegments: segments originalPath: aSt
 ]
 
 { #category : 'private - critiques' }
-PharoImageFSProjectionBackend >> dictionaryForCritique: aCritique [
+PIFSBackend >> dictionaryForCritique: aCritique [
 
 	| data rule |
 	rule := aCritique rule.
@@ -412,25 +412,25 @@ PharoImageFSProjectionBackend >> dictionaryForCritique: aCritique [
 ]
 
 { #category : 'private - entries' }
-PharoImageFSProjectionBackend >> directoryNamed: aString [
+PIFSBackend >> directoryNamed: aString [
 
-	^ PharoImageFSProjectionEntry directoryNamed: aString
+	^ PIFSEntry directoryNamed: aString
 ]
 
 { #category : 'private - entries' }
-PharoImageFSProjectionBackend >> entryNamed: aString in: entries ifAbsent: absentBlock [
+PIFSBackend >> entryNamed: aString in: entries ifAbsent: absentBlock [
 
 	^ entries detect: [ :each | each name = aString ] ifNone: absentBlock
 ]
 
 { #category : 'private - moving' }
-PharoImageFSProjectionBackend >> executeClassMoveNamed: className toPackage: packageName [
+PIFSBackend >> executeClassMoveNamed: className toPackage: packageName [
 
-	PharoImageFSCompatibility moveClassNamed: className toPackage: packageName
+	PIFSCompatibility moveClassNamed: className toPackage: packageName
 ]
 
 { #category : 'private - renaming' }
-PharoImageFSProjectionBackend >> executeClassRenameFrom: oldClassName to: newClassName [
+PIFSBackend >> executeClassRenameFrom: oldClassName to: newClassName [
 
 	[ (ReRenameClassRefactoring rename: oldClassName asSymbol to: newClassName asSymbol) execute ]
 		on: ProvideAnswerNotification
@@ -438,7 +438,7 @@ PharoImageFSProjectionBackend >> executeClassRenameFrom: oldClassName to: newCla
 ]
 
 { #category : 'private - repositories' }
-PharoImageFSProjectionBackend >> exportIcePackage: anIcePackage to: sourceDirectory [
+PIFSBackend >> exportIcePackage: anIcePackage to: sourceDirectory [
 
 	| versionInfo |
 	versionInfo := MCVersionInfo
@@ -453,7 +453,7 @@ PharoImageFSProjectionBackend >> exportIcePackage: anIcePackage to: sourceDirect
 ]
 
 { #category : 'private - repositories' }
-PharoImageFSProjectionBackend >> exportPackageNamed: packageName [
+PIFSBackend >> exportPackageNamed: packageName [
 
 	| icePackage repository |
 	repository := self repositoryOwningPackageNamed: packageName ifAbsent: [ ^ self ].
@@ -467,19 +467,19 @@ PharoImageFSProjectionBackend >> exportPackageNamed: packageName [
 ]
 
 { #category : 'private - repositories' }
-PharoImageFSProjectionBackend >> exportPackagesNamed: packageNames [
+PIFSBackend >> exportPackagesNamed: packageNames [
 
 	packageNames do: [ :packageName | self exportPackageNamed: packageName ]
 ]
 
 { #category : 'private - reading' }
-PharoImageFSProjectionBackend >> extensionMethodsForClassName: className inPackage: aPackage [
+PIFSBackend >> extensionMethodsForClassName: className inPackage: aPackage [
 
 	^ (aPackage extensionMethods select: [ :method | method methodClass instanceSide name asString = className ]) asArray
 ]
 
 { #category : 'private - moving' }
-PharoImageFSProjectionBackend >> extensionText: textString movingCategoriesFromPackage: sourcePackageName toPackage: targetPackageName originalPath: aString [
+PIFSBackend >> extensionText: textString movingCategoriesFromPackage: sourcePackageName toPackage: targetPackageName originalPath: aString [
 
 	| movedText methodDefinitions sourcePrefix |
 	movedText := textString.
@@ -503,7 +503,7 @@ PharoImageFSProjectionBackend >> extensionText: textString movingCategoriesFromP
 ]
 
 { #category : 'private - reading' }
-PharoImageFSProjectionBackend >> extensionTextForClassName: className package: aPackage originalPath: aString [
+PIFSBackend >> extensionTextForClassName: className package: aPackage originalPath: aString [
 
 	| methodDefinitions methods writer |
 	methods := self extensionMethodsForClassName: className inPackage: aPackage.
@@ -522,31 +522,31 @@ PharoImageFSProjectionBackend >> extensionTextForClassName: className package: a
 ]
 
 { #category : 'private - entries' }
-PharoImageFSProjectionBackend >> fileNamed: aString size: anInteger writable: aBoolean [
+PIFSBackend >> fileNamed: aString size: anInteger writable: aBoolean [
 
-	^ PharoImageFSProjectionEntry fileNamed: aString size: anInteger writable: aBoolean
+	^ PIFSEntry fileNamed: aString size: anInteger writable: aBoolean
 ]
 
 { #category : 'private - entries' }
-PharoImageFSProjectionBackend >> fileNamed: aString text: textString writable: aBoolean [
+PIFSBackend >> fileNamed: aString text: textString writable: aBoolean [
 
 	^ self fileNamed: aString size: textString size writable: aBoolean
 ]
 
 { #category : 'private - repositories' }
-PharoImageFSProjectionBackend >> icePackageNamed: packageName in: aRepository ifAbsent: absentBlock [
+PIFSBackend >> icePackageNamed: packageName in: aRepository ifAbsent: absentBlock [
 
 	^ aRepository loadedPackages detect: [ :package | package packageName asString = packageName ] ifNone: absentBlock
 ]
 
 { #category : 'private - repositories' }
-PharoImageFSProjectionBackend >> iceRepositories [
+PIFSBackend >> iceRepositories [
 
 	^ IceRepository repositories
 ]
 
 { #category : 'private - repositories' }
-PharoImageFSProjectionBackend >> iceRepositoryDirectoryFor: aRepository [
+PIFSBackend >> iceRepositoryDirectoryFor: aRepository [
 
 	| directory |
 	directory := aRepository repositoryDirectory.
@@ -554,13 +554,13 @@ PharoImageFSProjectionBackend >> iceRepositoryDirectoryFor: aRepository [
 ]
 
 { #category : 'private - critiques' }
-PharoImageFSProjectionBackend >> jsonTextFor: anObject [
+PIFSBackend >> jsonTextFor: anObject [
 
 	^ STONJSON toString: anObject
 ]
 
 { #category : 'accessing' }
-PharoImageFSProjectionBackend >> list: aString [
+PIFSBackend >> list: aString [
 
 	| segments |
 	segments := self pathSegmentsFor: aString.
@@ -572,7 +572,7 @@ PharoImageFSProjectionBackend >> list: aString [
 ]
 
 { #category : 'private - listing' }
-PharoImageFSProjectionBackend >> listCritiqueSegments: segments originalPath: aString [
+PIFSBackend >> listCritiqueSegments: segments originalPath: aString [
 
 	| class |
 	segments isEmpty ifTrue: [ ^ self critiqueRootEntries ].
@@ -584,14 +584,14 @@ PharoImageFSProjectionBackend >> listCritiqueSegments: segments originalPath: aS
 ]
 
 { #category : 'private - listing' }
-PharoImageFSProjectionBackend >> listRepositorySegments: segments originalPath: aString [
+PIFSBackend >> listRepositorySegments: segments originalPath: aString [
 
 	segments isEmpty ifTrue: [ ^ self repositoryEntries ].
 	self signalNotFound: aString
 ]
 
 { #category : 'protocol responses' }
-PharoImageFSProjectionBackend >> listResponseForPath: aString [
+PIFSBackend >> listResponseForPath: aString [
 
 	^ Dictionary new
 		  at: #entries put: ((self list: aString) collect: [ :each | each asDictionary ]);
@@ -599,7 +599,7 @@ PharoImageFSProjectionBackend >> listResponseForPath: aString [
 ]
 
 { #category : 'private - listing' }
-PharoImageFSProjectionBackend >> listTonelSegments: segments originalPath: aString [
+PIFSBackend >> listTonelSegments: segments originalPath: aString [
 
 	| package |
 	segments isEmpty ifTrue: [ ^ self tonelRootEntries ].
@@ -609,26 +609,26 @@ PharoImageFSProjectionBackend >> listTonelSegments: segments originalPath: aStri
 ]
 
 { #category : 'private - writing' }
-PharoImageFSProjectionBackend >> loadClassDefinition: classDefinition [
+PIFSBackend >> loadClassDefinition: classDefinition [
 
-	PharoImageFSCompatibility loadMonticelloDefinition: classDefinition
+	PIFSCompatibility loadMonticelloDefinition: classDefinition
 ]
 
 { #category : 'private - writing' }
-PharoImageFSProjectionBackend >> loadMethodDefinition: methodDefinition [
+PIFSBackend >> loadMethodDefinition: methodDefinition [
 
-	PharoImageFSCompatibility loadMonticelloDefinition: methodDefinition.
+	PIFSCompatibility loadMonticelloDefinition: methodDefinition.
 	self reformatLoadedMethodDefinition: methodDefinition
 ]
 
 { #category : 'private - reading' }
-PharoImageFSProjectionBackend >> localMethodsForClass: aBehavior [
+PIFSBackend >> localMethodsForClass: aBehavior [
 
 	^ aBehavior localMethods reject: [ :method | method protocol name beginsWith: '*' ]
 ]
 
 { #category : 'accessing' }
-PharoImageFSProjectionBackend >> makeDirectory: aString [
+PIFSBackend >> makeDirectory: aString [
 
 	| segments |
 	segments := self pathSegmentsFor: aString.
@@ -638,14 +638,14 @@ PharoImageFSProjectionBackend >> makeDirectory: aString [
 ]
 
 { #category : 'protocol responses' }
-PharoImageFSProjectionBackend >> makeDirectoryResponseForPath: aString [
+PIFSBackend >> makeDirectoryResponseForPath: aString [
 
 	self makeDirectory: aString.
 	^ Dictionary new
 ]
 
 { #category : 'private - packages' }
-PharoImageFSProjectionBackend >> makeTonelPackageDirectoryNamed: packageName originalPath: aString [
+PIFSBackend >> makeTonelPackageDirectoryNamed: packageName originalPath: aString [
 
 	packageName ifEmpty: [ self signalUnsupportedWrite: aString ].
 	self assertRepositoryOwnsPackageNamed: packageName originalPath: aString.
@@ -653,7 +653,7 @@ PharoImageFSProjectionBackend >> makeTonelPackageDirectoryNamed: packageName ori
 ]
 
 { #category : 'private - critiques' }
-PharoImageFSProjectionBackend >> methodCritiqueDataForClass: aClass selector: aSelector [
+PIFSBackend >> methodCritiqueDataForClass: aClass selector: aSelector [
 
 	| data |
 	data := OrderedDictionary new.
@@ -665,7 +665,7 @@ PharoImageFSProjectionBackend >> methodCritiqueDataForClass: aClass selector: aS
 ]
 
 { #category : 'private - writing' }
-PharoImageFSProjectionBackend >> methodDefinitionsByIdentityFor: methodDefinitions [
+PIFSBackend >> methodDefinitionsByIdentityFor: methodDefinitions [
 
 	| definitionsByIdentity |
 	definitionsByIdentity := Dictionary new.
@@ -675,7 +675,7 @@ PharoImageFSProjectionBackend >> methodDefinitionsByIdentityFor: methodDefinitio
 ]
 
 { #category : 'private - writing' }
-PharoImageFSProjectionBackend >> methodDefinitionsChangedFrom: oldMethodDefinitions in: newMethodDefinitions [
+PIFSBackend >> methodDefinitionsChangedFrom: oldMethodDefinitions in: newMethodDefinitions [
 
 	| oldDefinitionsByIdentity |
 	oldDefinitionsByIdentity := self methodDefinitionsByIdentityFor: oldMethodDefinitions.
@@ -687,13 +687,13 @@ PharoImageFSProjectionBackend >> methodDefinitionsChangedFrom: oldMethodDefiniti
 ]
 
 { #category : 'private - writing' }
-PharoImageFSProjectionBackend >> methodDefinitionsFrom: definitions [
+PIFSBackend >> methodDefinitionsFrom: definitions [
 
 	^ definitions select: #isMethodDefinition
 ]
 
 { #category : 'private - writing' }
-PharoImageFSProjectionBackend >> methodIdentityFor: aMethodDefinition [
+PIFSBackend >> methodIdentityFor: aMethodDefinition [
 
 	^ {
 		  aMethodDefinition className asString.
@@ -702,7 +702,7 @@ PharoImageFSProjectionBackend >> methodIdentityFor: aMethodDefinition [
 ]
 
 { #category : 'private - moving' }
-PharoImageFSProjectionBackend >> moveAndRenameTonelClassFileNamed: sourceFileName toFileNamed: targetFileName packageName: sourcePackageName toPackageName: targetPackageName originalPath: sourcePath targetPath: targetPath [
+PIFSBackend >> moveAndRenameTonelClassFileNamed: sourceFileName toFileNamed: targetFileName packageName: sourcePackageName toPackageName: targetPackageName originalPath: sourcePath targetPath: targetPath [
 
 	| class failureMessage newClassName oldClassName |
 	oldClassName := self classNameFromFileName: sourceFileName suffix: '.class.st'.
@@ -746,7 +746,7 @@ PharoImageFSProjectionBackend >> moveAndRenameTonelClassFileNamed: sourceFileNam
 ]
 
 { #category : 'private - moving' }
-PharoImageFSProjectionBackend >> moveTonelClassFileNamed: fileName packageName: sourcePackageName toPackageName: targetPackageName originalPath: sourcePath targetPath: targetPath [
+PIFSBackend >> moveTonelClassFileNamed: fileName packageName: sourcePackageName toPackageName: targetPackageName originalPath: sourcePath targetPath: targetPath [
 
 	| class className failureMessage |
 	className := self classNameFromFileName: fileName suffix: '.class.st'.
@@ -781,7 +781,7 @@ PharoImageFSProjectionBackend >> moveTonelClassFileNamed: fileName packageName: 
 ]
 
 { #category : 'private - moving' }
-PharoImageFSProjectionBackend >> moveTonelExtensionFileNamed: fileName packageName: sourcePackageName toPackageName: targetPackageName originalPath: sourcePath targetPath: targetPath [
+PIFSBackend >> moveTonelExtensionFileNamed: fileName packageName: sourcePackageName toPackageName: targetPackageName originalPath: sourcePath targetPath: targetPath [
 
 	| className failureMessage movedText previousText sourceMethods sourcePackage targetMethods targetPackage |
 	className := self classNameFromFileName: fileName suffix: '.extension.st'.
@@ -838,19 +838,19 @@ PharoImageFSProjectionBackend >> moveTonelExtensionFileNamed: fileName packageNa
 ]
 
 { #category : 'private - packages' }
-PharoImageFSProjectionBackend >> packageNamed: aString ifAbsent: absentBlock [
+PIFSBackend >> packageNamed: aString ifAbsent: absentBlock [
 
 	^ PackageOrganizer default packageNamed: aString ifAbsent: absentBlock
 ]
 
 { #category : 'private - packages' }
-PharoImageFSProjectionBackend >> packageNames [
+PIFSBackend >> packageNames [
 
 	^ (PackageOrganizer default packages collect: [ :each | each name asString ] as: Array) sorted
 ]
 
 { #category : 'private - writing' }
-PharoImageFSProjectionBackend >> parseTonelDefinitionsFrom: textString originalPath: aString [
+PIFSBackend >> parseTonelDefinitionsFrom: textString originalPath: aString [
 
 	^ [ TonelParser parseString: textString ]
 		  on: Error
@@ -858,7 +858,7 @@ PharoImageFSProjectionBackend >> parseTonelDefinitionsFrom: textString originalP
 ]
 
 { #category : 'private - paths' }
-PharoImageFSProjectionBackend >> pathSegmentForSelector: aSelector [
+PIFSBackend >> pathSegmentForSelector: aSelector [
 
 	(aSelector includes: $:) ifTrue: [
 			^ String streamContents: [ :stream |
@@ -875,13 +875,13 @@ PharoImageFSProjectionBackend >> pathSegmentForSelector: aSelector [
 ]
 
 { #category : 'private - paths' }
-PharoImageFSProjectionBackend >> pathSegmentsFor: aString [
+PIFSBackend >> pathSegmentsFor: aString [
 
 	^ ($/ split: aString) reject: [ :each | each isEmpty ]
 ]
 
 { #category : 'accessing' }
-PharoImageFSProjectionBackend >> read: aString [
+PIFSBackend >> read: aString [
 
 	| segments |
 	segments := self pathSegmentsFor: aString.
@@ -893,7 +893,7 @@ PharoImageFSProjectionBackend >> read: aString [
 ]
 
 { #category : 'private - reading' }
-PharoImageFSProjectionBackend >> readCritiqueClassFileNamed: fileName packageName: packageName className: className originalPath: aString [
+PIFSBackend >> readCritiqueClassFileNamed: fileName packageName: packageName className: className originalPath: aString [
 
 	fileName = 'class-critiques.json' ifFalse: [ self signalNotFound: aString ].
 	^ self jsonTextFor: (self
@@ -904,7 +904,7 @@ PharoImageFSProjectionBackend >> readCritiqueClassFileNamed: fileName packageNam
 ]
 
 { #category : 'private - reading' }
-PharoImageFSProjectionBackend >> readCritiqueMethodFileNamed: fileName packageName: packageName className: className originalPath: aString [
+PIFSBackend >> readCritiqueMethodFileNamed: fileName packageName: packageName className: className originalPath: aString [
 
 	| selector |
 	selector := self selectorFromPathSegment: fileName originalPath: aString.
@@ -917,7 +917,7 @@ PharoImageFSProjectionBackend >> readCritiqueMethodFileNamed: fileName packageNa
 ]
 
 { #category : 'private - reading' }
-PharoImageFSProjectionBackend >> readCritiqueSegments: segments originalPath: aString [
+PIFSBackend >> readCritiqueSegments: segments originalPath: aString [
 
 	segments size = 3 ifTrue: [
 			segments third = 'class-critiques.json'
@@ -937,14 +937,14 @@ PharoImageFSProjectionBackend >> readCritiqueSegments: segments originalPath: aS
 ]
 
 { #category : 'private - reading' }
-PharoImageFSProjectionBackend >> readRepositorySegments: segments originalPath: aString [
+PIFSBackend >> readRepositorySegments: segments originalPath: aString [
 
 	segments size = 1 ifFalse: [ self signalNotFound: aString ].
 	^ self repositoryMetadataTextForFileNamed: segments first originalPath: aString
 ]
 
 { #category : 'protocol responses' }
-PharoImageFSProjectionBackend >> readResponseForPath: aString [
+PIFSBackend >> readResponseForPath: aString [
 
 	^ Dictionary new
 		  at: #text put: (self read: aString);
@@ -952,7 +952,7 @@ PharoImageFSProjectionBackend >> readResponseForPath: aString [
 ]
 
 { #category : 'private - reading' }
-PharoImageFSProjectionBackend >> readTonelClassFileNamed: fileName packageName: packageName originalPath: aString [
+PIFSBackend >> readTonelClassFileNamed: fileName packageName: packageName originalPath: aString [
 
 	| class className |
 	className := self classNameFromFileName: fileName suffix: '.class.st'.
@@ -962,7 +962,7 @@ PharoImageFSProjectionBackend >> readTonelClassFileNamed: fileName packageName: 
 ]
 
 { #category : 'private - reading' }
-PharoImageFSProjectionBackend >> readTonelExtensionFileNamed: fileName packageName: packageName originalPath: aString [
+PIFSBackend >> readTonelExtensionFileNamed: fileName packageName: packageName originalPath: aString [
 
 	| className package |
 	className := self classNameFromFileName: fileName suffix: '.extension.st'.
@@ -972,7 +972,7 @@ PharoImageFSProjectionBackend >> readTonelExtensionFileNamed: fileName packageNa
 ]
 
 { #category : 'private - reading' }
-PharoImageFSProjectionBackend >> readTonelSegments: segments originalPath: aString [
+PIFSBackend >> readTonelSegments: segments originalPath: aString [
 
 	segments size = 2 ifFalse: [ self signalNotFound: aString ].
 	(segments second endsWith: '.class.st') ifTrue: [
@@ -983,7 +983,7 @@ PharoImageFSProjectionBackend >> readTonelSegments: segments originalPath: aStri
 ]
 
 { #category : 'private - critiques' }
-PharoImageFSProjectionBackend >> recordCritiquesForClassNamed: className packageName: packageName methodDefinitions: methodDefinitions [
+PIFSBackend >> recordCritiquesForClassNamed: className packageName: packageName methodDefinitions: methodDefinitions [
 
 	self
 		recordCritiquesForClassNamed: className
@@ -993,7 +993,7 @@ PharoImageFSProjectionBackend >> recordCritiquesForClassNamed: className package
 ]
 
 { #category : 'private - critiques' }
-PharoImageFSProjectionBackend >> recordCritiquesForClassNamed: className packageName: packageName methodDefinitions: methodDefinitions includeClass: includeClass [
+PIFSBackend >> recordCritiquesForClassNamed: className packageName: packageName methodDefinitions: methodDefinitions includeClass: includeClass [
 
 	| class classEntry methods packageEntry selectors |
 	class := self classNamed: className originalPath: '/critiques/' , packageName , '/' , className.
@@ -1017,7 +1017,7 @@ PharoImageFSProjectionBackend >> recordCritiquesForClassNamed: className package
 ]
 
 { #category : 'private - critiques' }
-PharoImageFSProjectionBackend >> recordCritiquesForExtensionClassNamed: className packageName: packageName methodDefinitions: methodDefinitions [
+PIFSBackend >> recordCritiquesForExtensionClassNamed: className packageName: packageName methodDefinitions: methodDefinitions [
 
 	self
 		recordCritiquesForClassNamed: className
@@ -1027,7 +1027,7 @@ PharoImageFSProjectionBackend >> recordCritiquesForExtensionClassNamed: classNam
 ]
 
 { #category : 'private - writing' }
-PharoImageFSProjectionBackend >> reformatLoadedMethodDefinition: methodDefinition [
+PIFSBackend >> reformatLoadedMethodDefinition: methodDefinition [
 
 	| behavior selector |
 	behavior := methodDefinition actualClass.
@@ -1038,7 +1038,7 @@ PharoImageFSProjectionBackend >> reformatLoadedMethodDefinition: methodDefinitio
 ]
 
 { #category : 'private - writing' }
-PharoImageFSProjectionBackend >> removeClassNamed: className ifPresentInPackage: packageName [
+PIFSBackend >> removeClassNamed: className ifPresentInPackage: packageName [
 
 	| class |
 	class := Smalltalk at: className asSymbol ifAbsent: [ ^ self ].
@@ -1047,20 +1047,20 @@ PharoImageFSProjectionBackend >> removeClassNamed: className ifPresentInPackage:
 ]
 
 { #category : 'private - deleting' }
-PharoImageFSProjectionBackend >> removeCompiledMethods: compiledMethods [
+PIFSBackend >> removeCompiledMethods: compiledMethods [
 
 	compiledMethods do: [ :method | method asRingDefinition asMCMethodDefinition unload ]
 ]
 
 { #category : 'private - critiques' }
-PharoImageFSProjectionBackend >> removeCritiquesForClassNamed: className packageName: packageName [
+PIFSBackend >> removeCritiquesForClassNamed: className packageName: packageName [
 
 	(self critiqueEntries at: packageName ifAbsent: [ ^ self ]) removeKey: className ifAbsent: [ ].
 	(self critiqueEntries at: packageName) ifEmpty: [ self critiqueEntries removeKey: packageName ifAbsent: [ ] ]
 ]
 
 { #category : 'accessing' }
-PharoImageFSProjectionBackend >> removeDirectory: aString [
+PIFSBackend >> removeDirectory: aString [
 
 	| segments |
 	segments := self pathSegmentsFor: aString.
@@ -1070,20 +1070,20 @@ PharoImageFSProjectionBackend >> removeDirectory: aString [
 ]
 
 { #category : 'protocol responses' }
-PharoImageFSProjectionBackend >> removeDirectoryResponseForPath: aString [
+PIFSBackend >> removeDirectoryResponseForPath: aString [
 
 	self removeDirectory: aString.
 	^ Dictionary new
 ]
 
 { #category : 'private - writing' }
-PharoImageFSProjectionBackend >> removeMethodDefinitions: methodDefinitions [
+PIFSBackend >> removeMethodDefinitions: methodDefinitions [
 
 	methodDefinitions do: [ :methodDefinition | self unloadMethodDefinition: methodDefinition ]
 ]
 
 { #category : 'private - packages' }
-PharoImageFSProjectionBackend >> removePackageNamedIfEmpty: packageName [
+PIFSBackend >> removePackageNamedIfEmpty: packageName [
 
 	| package |
 	package := self packageNamed: packageName ifAbsent: [ ^ self ].
@@ -1091,7 +1091,7 @@ PharoImageFSProjectionBackend >> removePackageNamedIfEmpty: packageName [
 ]
 
 { #category : 'private - packages' }
-PharoImageFSProjectionBackend >> removeTonelPackageDirectoryNamed: packageName originalPath: aString [
+PIFSBackend >> removeTonelPackageDirectoryNamed: packageName originalPath: aString [
 
 	| package |
 	packageName ifEmpty: [ self signalUnsupportedWrite: aString ].
@@ -1101,7 +1101,7 @@ PharoImageFSProjectionBackend >> removeTonelPackageDirectoryNamed: packageName o
 ]
 
 { #category : 'accessing' }
-PharoImageFSProjectionBackend >> rename: sourcePath to: targetPath [
+PIFSBackend >> rename: sourcePath to: targetPath [
 
 	| sourceClassName sourceSegments targetClassName targetSegments |
 	sourceSegments := self pathSegmentsFor: sourcePath.
@@ -1153,14 +1153,14 @@ PharoImageFSProjectionBackend >> rename: sourcePath to: targetPath [
 ]
 
 { #category : 'protocol responses' }
-PharoImageFSProjectionBackend >> renameResponseForPath: sourcePath to: targetPath [
+PIFSBackend >> renameResponseForPath: sourcePath to: targetPath [
 
 	self rename: sourcePath to: targetPath.
 	^ Dictionary new
 ]
 
 { #category : 'private - renaming' }
-PharoImageFSProjectionBackend >> renameTonelClassFileNamed: sourceFileName toFileNamed: targetFileName packageName: packageName originalPath: sourcePath targetPath: targetPath [
+PIFSBackend >> renameTonelClassFileNamed: sourceFileName toFileNamed: targetFileName packageName: packageName originalPath: sourcePath targetPath: targetPath [
 
 	| class failureMessage newClassName oldClassName |
 	oldClassName := self classNameFromFileName: sourceFileName suffix: '.class.st'.
@@ -1191,7 +1191,7 @@ PharoImageFSProjectionBackend >> renameTonelClassFileNamed: sourceFileName toFil
 ]
 
 { #category : 'private - repositories' }
-PharoImageFSProjectionBackend >> repositoryCanExportSourceFor: aRepository [
+PIFSBackend >> repositoryCanExportSourceFor: aRepository [
 
 	| directory |
 	directory := self iceRepositoryDirectoryFor: aRepository.
@@ -1199,7 +1199,7 @@ PharoImageFSProjectionBackend >> repositoryCanExportSourceFor: aRepository [
 ]
 
 { #category : 'private - repositories' }
-PharoImageFSProjectionBackend >> repositoryEntries [
+PIFSBackend >> repositoryEntries [
 
 	| entries |
 	entries := OrderedCollection new.
@@ -1215,7 +1215,7 @@ PharoImageFSProjectionBackend >> repositoryEntries [
 ]
 
 { #category : 'private - repositories' }
-PharoImageFSProjectionBackend >> repositoryInfoForMetadataFileNamed: fileName originalPath: aString [
+PIFSBackend >> repositoryInfoForMetadataFileNamed: fileName originalPath: aString [
 
 	^ self repositoryInfos
 		  detect: [ :info | (self repositoryMetadataFileNameFor: info) = fileName ]
@@ -1223,7 +1223,7 @@ PharoImageFSProjectionBackend >> repositoryInfoForMetadataFileNamed: fileName or
 ]
 
 { #category : 'private - repositories' }
-PharoImageFSProjectionBackend >> repositoryInfoForProjectionName: projectionName originalPath: aString [
+PIFSBackend >> repositoryInfoForProjectionName: projectionName originalPath: aString [
 
 	^ self repositoryInfos
 		  detect: [ :info | (info at: #projectionName) = projectionName ]
@@ -1231,7 +1231,7 @@ PharoImageFSProjectionBackend >> repositoryInfoForProjectionName: projectionName
 ]
 
 { #category : 'private - repositories' }
-PharoImageFSProjectionBackend >> repositoryInfoForRepository: repository ifPresent: presentBlock [
+PIFSBackend >> repositoryInfoForRepository: repository ifPresent: presentBlock [
 
 	| directory info |
 	(self repositoryCanExportSourceFor: repository) ifFalse: [ ^ self ].
@@ -1246,7 +1246,7 @@ PharoImageFSProjectionBackend >> repositoryInfoForRepository: repository ifPrese
 ]
 
 { #category : 'private - repositories' }
-PharoImageFSProjectionBackend >> repositoryInfos [
+PIFSBackend >> repositoryInfos [
 
 	| infos |
 	infos := OrderedCollection new.
@@ -1255,7 +1255,7 @@ PharoImageFSProjectionBackend >> repositoryInfos [
 ]
 
 { #category : 'private - repositories' }
-PharoImageFSProjectionBackend >> repositoryLoadedPackageNamesFor: repository [
+PIFSBackend >> repositoryLoadedPackageNamesFor: repository [
 
 	^ [
 		  (repository loadedPackages collect: [ :package | package packageName asString ] as: Array) sorted ]
@@ -1264,19 +1264,19 @@ PharoImageFSProjectionBackend >> repositoryLoadedPackageNamesFor: repository [
 ]
 
 { #category : 'private - repositories' }
-PharoImageFSProjectionBackend >> repositoryMetadataFileNameFor: info [
+PIFSBackend >> repositoryMetadataFileNameFor: info [
 
 	^ (info at: #projectionName) , '.repository.json'
 ]
 
 { #category : 'private - repositories' }
-PharoImageFSProjectionBackend >> repositoryMetadataTextForFileNamed: fileName originalPath: aString [
+PIFSBackend >> repositoryMetadataTextForFileNamed: fileName originalPath: aString [
 
 	^ self jsonTextFor: (self repositoryInfoForMetadataFileNamed: fileName originalPath: aString)
 ]
 
 { #category : 'private - repositories' }
-PharoImageFSProjectionBackend >> repositoryOwningPackageNamed: packageName ifAbsent: absentBlock [
+PIFSBackend >> repositoryOwningPackageNamed: packageName ifAbsent: absentBlock [
 
 	^ self iceRepositories
 		  detect: [ :repository |
@@ -1286,7 +1286,7 @@ PharoImageFSProjectionBackend >> repositoryOwningPackageNamed: packageName ifAbs
 ]
 
 { #category : 'private - repositories' }
-PharoImageFSProjectionBackend >> repositoryProjectionNameFor: aString [
+PIFSBackend >> repositoryProjectionNameFor: aString [
 
 	^ String streamContents: [ :stream |
 		  aString do: [ :character |
@@ -1296,19 +1296,19 @@ PharoImageFSProjectionBackend >> repositoryProjectionNameFor: aString [
 ]
 
 { #category : 'accessing' }
-PharoImageFSProjectionBackend >> requiresRepositoryOwnershipForWrites [
+PIFSBackend >> requiresRepositoryOwnershipForWrites [
 
 	^ requiresRepositoryOwnershipForWrites ifNil: [ true ]
 ]
 
 { #category : 'accessing' }
-PharoImageFSProjectionBackend >> requiresRepositoryOwnershipForWrites: aBoolean [
+PIFSBackend >> requiresRepositoryOwnershipForWrites: aBoolean [
 
 	requiresRepositoryOwnershipForWrites := aBoolean
 ]
 
 { #category : 'private - deleting' }
-PharoImageFSProjectionBackend >> restoreClassTonelText: textString className: className packageName: packageName originalPath: aString [
+PIFSBackend >> restoreClassTonelText: textString className: className packageName: packageName originalPath: aString [
 
 	| currentClass currentText |
 	currentClass := Smalltalk at: className asSymbol ifAbsent: [ nil ].
@@ -1334,7 +1334,7 @@ PharoImageFSProjectionBackend >> restoreClassTonelText: textString className: cl
 ]
 
 { #category : 'private - writing' }
-PharoImageFSProjectionBackend >> rollbackClassTonelText: previousTextString afterFailedWriteToClassName: className packageName: packageName originalPath: aString [
+PIFSBackend >> rollbackClassTonelText: previousTextString afterFailedWriteToClassName: className packageName: packageName originalPath: aString [
 
 	| currentText |
 	currentText := self readTonelClassFileNamed: className , '.class.st' packageName: packageName originalPath: aString.
@@ -1348,7 +1348,7 @@ PharoImageFSProjectionBackend >> rollbackClassTonelText: previousTextString afte
 ]
 
 { #category : 'private - writing' }
-PharoImageFSProjectionBackend >> rollbackExtensionTonelText: previousTextString afterFailedWriteToClassName: className packageName: packageName originalPath: aString [
+PIFSBackend >> rollbackExtensionTonelText: previousTextString afterFailedWriteToClassName: className packageName: packageName originalPath: aString [
 
 	| currentText |
 	currentText := self readTonelExtensionFileNamed: className , '.extension.st' packageName: packageName originalPath: aString.
@@ -1362,7 +1362,7 @@ PharoImageFSProjectionBackend >> rollbackExtensionTonelText: previousTextString 
 ]
 
 { #category : 'private - listing' }
-PharoImageFSProjectionBackend >> rootEntries [
+PIFSBackend >> rootEntries [
 
 	^ {
 		  (self directoryNamed: 'tonel').
@@ -1371,14 +1371,14 @@ PharoImageFSProjectionBackend >> rootEntries [
 ]
 
 { #category : 'private - paths' }
-PharoImageFSProjectionBackend >> selectorCharacterForEscapeName: aString originalPath: originalPath [
+PIFSBackend >> selectorCharacterForEscapeName: aString originalPath: originalPath [
 
 	self selectorEscapeNames keysAndValuesDo: [ :character :name | name = aString ifTrue: [ ^ character asString ] ].
 	self signalNotFound: originalPath
 ]
 
 { #category : 'private - paths' }
-PharoImageFSProjectionBackend >> selectorEscapeNames [
+PIFSBackend >> selectorEscapeNames [
 
 	^ Dictionary new
 		  at: $+ put: 'plus';
@@ -1400,7 +1400,7 @@ PharoImageFSProjectionBackend >> selectorEscapeNames [
 ]
 
 { #category : 'private - paths' }
-PharoImageFSProjectionBackend >> selectorFromPathSegment: aString originalPath: originalPath [
+PIFSBackend >> selectorFromPathSegment: aString originalPath: originalPath [
 
 	| base tokens |
 	(aString endsWith: '.json') ifFalse: [ self signalNotFound: originalPath ].
@@ -1416,19 +1416,19 @@ PharoImageFSProjectionBackend >> selectorFromPathSegment: aString originalPath: 
 ]
 
 { #category : 'private - errors' }
-PharoImageFSProjectionBackend >> signalNotFound: aString [
+PIFSBackend >> signalNotFound: aString [
 
 	Error signal: 'Projection path not found: ' , aString
 ]
 
 { #category : 'private - errors' }
-PharoImageFSProjectionBackend >> signalUnsupportedWrite: aString [
+PIFSBackend >> signalUnsupportedWrite: aString [
 
 	Error signal: 'Projection path is not writable yet: ' , aString
 ]
 
 { #category : 'accessing' }
-PharoImageFSProjectionBackend >> stat: aString [
+PIFSBackend >> stat: aString [
 
 	| segments |
 	segments := self pathSegmentsFor: aString.
@@ -1440,7 +1440,7 @@ PharoImageFSProjectionBackend >> stat: aString [
 ]
 
 { #category : 'private - accessing' }
-PharoImageFSProjectionBackend >> statCritiqueClassFileNamed: fileName packageName: packageName className: className originalPath: aString [
+PIFSBackend >> statCritiqueClassFileNamed: fileName packageName: packageName className: className originalPath: aString [
 
 	| text |
 	text := self
@@ -1452,7 +1452,7 @@ PharoImageFSProjectionBackend >> statCritiqueClassFileNamed: fileName packageNam
 ]
 
 { #category : 'private - accessing' }
-PharoImageFSProjectionBackend >> statCritiqueMethodFileNamed: fileName packageName: packageName className: className originalPath: aString [
+PIFSBackend >> statCritiqueMethodFileNamed: fileName packageName: packageName className: className originalPath: aString [
 
 	| text |
 	text := self
@@ -1464,7 +1464,7 @@ PharoImageFSProjectionBackend >> statCritiqueMethodFileNamed: fileName packageNa
 ]
 
 { #category : 'private - accessing' }
-PharoImageFSProjectionBackend >> statCritiqueSegments: segments originalPath: aString [
+PIFSBackend >> statCritiqueSegments: segments originalPath: aString [
 
 	| classEntry |
 	segments isEmpty ifTrue: [ ^ self directoryNamed: 'critiques' ].
@@ -1491,7 +1491,7 @@ PharoImageFSProjectionBackend >> statCritiqueSegments: segments originalPath: aS
 ]
 
 { #category : 'private - accessing' }
-PharoImageFSProjectionBackend >> statRepositorySegments: segments originalPath: aString [
+PIFSBackend >> statRepositorySegments: segments originalPath: aString [
 
 	| info text |
 	segments isEmpty ifTrue: [ ^ self directoryNamed: 'repositories' ].
@@ -1505,7 +1505,7 @@ PharoImageFSProjectionBackend >> statRepositorySegments: segments originalPath: 
 ]
 
 { #category : 'protocol responses' }
-PharoImageFSProjectionBackend >> statResponseForPath: aString [
+PIFSBackend >> statResponseForPath: aString [
 
 	^ Dictionary new
 		  at: #entry put: (self stat: aString) asDictionary;
@@ -1513,7 +1513,7 @@ PharoImageFSProjectionBackend >> statResponseForPath: aString [
 ]
 
 { #category : 'private - accessing' }
-PharoImageFSProjectionBackend >> statTonelFileNamed: fileName packageName: packageName originalPath: aString [
+PIFSBackend >> statTonelFileNamed: fileName packageName: packageName originalPath: aString [
 
 	(fileName endsWith: '.class.st') ifTrue: [ ^ self tonelClassEntryNamed: fileName packageName: packageName originalPath: aString ].
 	(fileName endsWith: '.extension.st') ifTrue: [
@@ -1522,7 +1522,7 @@ PharoImageFSProjectionBackend >> statTonelFileNamed: fileName packageName: packa
 ]
 
 { #category : 'private - accessing' }
-PharoImageFSProjectionBackend >> statTonelSegments: segments originalPath: aString [
+PIFSBackend >> statTonelSegments: segments originalPath: aString [
 
 	| package |
 	segments isEmpty ifTrue: [ ^ self directoryNamed: 'tonel' ].
@@ -1533,13 +1533,13 @@ PharoImageFSProjectionBackend >> statTonelSegments: segments originalPath: aStri
 ]
 
 { #category : 'private - entries' }
-PharoImageFSProjectionBackend >> symlinkNamed: aString target: targetString [
+PIFSBackend >> symlinkNamed: aString target: targetString [
 
-	^ PharoImageFSProjectionEntry symlinkNamed: aString target: targetString
+	^ PIFSEntry symlinkNamed: aString target: targetString
 ]
 
 { #category : 'private - entries' }
-PharoImageFSProjectionBackend >> tonelClassEntryNamed: fileName packageName: packageName originalPath: aString [
+PIFSBackend >> tonelClassEntryNamed: fileName packageName: packageName originalPath: aString [
 
 	| class className text |
 	className := self classNameFromFileName: fileName suffix: '.class.st'.
@@ -1550,7 +1550,7 @@ PharoImageFSProjectionBackend >> tonelClassEntryNamed: fileName packageName: pac
 ]
 
 { #category : 'private - listing' }
-PharoImageFSProjectionBackend >> tonelEntriesForPackage: aPackage [
+PIFSBackend >> tonelEntriesForPackage: aPackage [
 
 	| entries extensionClassNames |
 	entries := OrderedCollection new.
@@ -1561,7 +1561,7 @@ PharoImageFSProjectionBackend >> tonelEntriesForPackage: aPackage [
 ]
 
 { #category : 'private - entries' }
-PharoImageFSProjectionBackend >> tonelExtensionEntryNamed: fileName packageName: packageName originalPath: aString [
+PIFSBackend >> tonelExtensionEntryNamed: fileName packageName: packageName originalPath: aString [
 
 	| className package text |
 	className := self classNameFromFileName: fileName suffix: '.extension.st'.
@@ -1572,19 +1572,19 @@ PharoImageFSProjectionBackend >> tonelExtensionEntryNamed: fileName packageName:
 ]
 
 { #category : 'private - listing' }
-PharoImageFSProjectionBackend >> tonelRootEntries [
+PIFSBackend >> tonelRootEntries [
 
 	^ self packageNames collect: [ :each | self directoryNamed: each ]
 ]
 
 { #category : 'private - writing' }
-PharoImageFSProjectionBackend >> unloadMethodDefinition: methodDefinition [
+PIFSBackend >> unloadMethodDefinition: methodDefinition [
 
 	methodDefinition unload
 ]
 
 { #category : 'private - writing' }
-PharoImageFSProjectionBackend >> unloadMethodDefinitionsAbsentFrom: newMethodDefinitions in: oldMethodDefinitions [
+PIFSBackend >> unloadMethodDefinitionsAbsentFrom: newMethodDefinitions in: oldMethodDefinitions [
 
 	| newIdentities |
 	newIdentities := newMethodDefinitions collect: [ :methodDefinition | self methodIdentityFor: methodDefinition ] as: Set.
@@ -1593,7 +1593,7 @@ PharoImageFSProjectionBackend >> unloadMethodDefinitionsAbsentFrom: newMethodDef
 ]
 
 { #category : 'private - critiques' }
-PharoImageFSProjectionBackend >> validateBlockingCritiquesForMethodDefinition: methodDefinition originalPath: aString [
+PIFSBackend >> validateBlockingCritiquesForMethodDefinition: methodDefinition originalPath: aString [
 
 	| critiques methodNode |
 	methodNode := RBParser parseMethod: methodDefinition source.
@@ -1605,14 +1605,14 @@ PharoImageFSProjectionBackend >> validateBlockingCritiquesForMethodDefinition: m
 ]
 
 { #category : 'private - critiques' }
-PharoImageFSProjectionBackend >> validateBlockingCritiquesForMethodDefinitions: methodDefinitions originalPath: aString [
+PIFSBackend >> validateBlockingCritiquesForMethodDefinitions: methodDefinitions originalPath: aString [
 
 	methodDefinitions do: [ :methodDefinition |
 		self validateBlockingCritiquesForMethodDefinition: methodDefinition originalPath: aString ]
 ]
 
 { #category : 'private - writing' }
-PharoImageFSProjectionBackend >> validateClassDefinition: classDefinition className: className packageName: packageName originalPath: aString [
+PIFSBackend >> validateClassDefinition: classDefinition className: className packageName: packageName originalPath: aString [
 
 	classDefinition className asString = className ifFalse: [
 			Error signal:
@@ -1625,7 +1625,7 @@ PharoImageFSProjectionBackend >> validateClassDefinition: classDefinition classN
 ]
 
 { #category : 'private - writing' }
-PharoImageFSProjectionBackend >> validateExtensionDefinitions: definitions className: className packageName: packageName originalPath: aString [
+PIFSBackend >> validateExtensionDefinitions: definitions className: className packageName: packageName originalPath: aString [
 
 	| classDefinitions methodDefinitions protocolPrefix |
 	classDefinitions := definitions select: #isClassDefinition.
@@ -1644,7 +1644,7 @@ PharoImageFSProjectionBackend >> validateExtensionDefinitions: definitions class
 ]
 
 { #category : 'private - renaming' }
-PharoImageFSProjectionBackend >> validateRenameReferencesForClass: aClass packageName: packageName originalPath: aString [
+PIFSBackend >> validateRenameReferencesForClass: aClass packageName: packageName originalPath: aString [
 
 	| referencingPackages |
 	referencingPackages := (SystemNavigation default allReferencesTo: aClass binding)
@@ -1657,7 +1657,7 @@ PharoImageFSProjectionBackend >> validateRenameReferencesForClass: aClass packag
 ]
 
 { #category : 'accessing' }
-PharoImageFSProjectionBackend >> write: textString at: aString [
+PIFSBackend >> write: textString at: aString [
 
 	| segments |
 	segments := self pathSegmentsFor: aString.
@@ -1667,7 +1667,7 @@ PharoImageFSProjectionBackend >> write: textString at: aString [
 ]
 
 { #category : 'protocol responses' }
-PharoImageFSProjectionBackend >> writeResponseForPath: aString text: textString [
+PIFSBackend >> writeResponseForPath: aString text: textString [
 
 	self write: textString at: aString.
 	^ Dictionary new
@@ -1676,7 +1676,7 @@ PharoImageFSProjectionBackend >> writeResponseForPath: aString text: textString 
 ]
 
 { #category : 'private - writing' }
-PharoImageFSProjectionBackend >> writeTonelClassRenameFromDefinition: classDefinition toClassName: className packageName: packageName originalPath: aString [
+PIFSBackend >> writeTonelClassRenameFromDefinition: classDefinition toClassName: className packageName: packageName originalPath: aString [
 
 	| oldClassName sourcePath |
 	oldClassName := classDefinition className asString.
@@ -1690,7 +1690,7 @@ PharoImageFSProjectionBackend >> writeTonelClassRenameFromDefinition: classDefin
 ]
 
 { #category : 'private - writing' }
-PharoImageFSProjectionBackend >> writeTonelClassText: textString fileName: fileName packageName: packageName originalPath: aString [
+PIFSBackend >> writeTonelClassText: textString fileName: fileName packageName: packageName originalPath: aString [
 
 	| class classDefinition classExists className definitions failureMessage methodDefinitions packageExists previousText |
 	className := self classNameFromFileName: fileName suffix: '.class.st'.
@@ -1756,7 +1756,7 @@ PharoImageFSProjectionBackend >> writeTonelClassText: textString fileName: fileN
 ]
 
 { #category : 'private - writing' }
-PharoImageFSProjectionBackend >> writeTonelExtensionText: textString fileName: fileName packageName: packageName originalPath: aString [
+PIFSBackend >> writeTonelExtensionText: textString fileName: fileName packageName: packageName originalPath: aString [
 
 	| className definitions failureMessage methodDefinitions packageExists previousText |
 	className := self classNameFromFileName: fileName suffix: '.extension.st'.
@@ -1817,7 +1817,7 @@ PharoImageFSProjectionBackend >> writeTonelExtensionText: textString fileName: f
 ]
 
 { #category : 'private - writing' }
-PharoImageFSProjectionBackend >> writeTonelSegments: segments text: textString originalPath: aString [
+PIFSBackend >> writeTonelSegments: segments text: textString originalPath: aString [
 
 	segments size = 2 ifFalse: [ self signalUnsupportedWrite: aString ].
 	(segments second endsWith: '.class.st') ifTrue: [

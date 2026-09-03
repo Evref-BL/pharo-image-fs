@@ -2,8 +2,8 @@
 Test double for projection backend tests. It keeps write validation against loaded packages but suppresses Iceberg export so tests do not depend on repository ownership or dirty the checkout.
 "
 Class {
-	#name : 'PharoImageFSTestProjectionBackend',
-	#superclass : 'PharoImageFSProjectionBackend',
+	#name : 'PIFSTestBackend',
+	#superclass : 'PIFSBackend',
 	#instVars : [
 		'exportedPackageNames',
 		'remainingExportFailures',
@@ -16,7 +16,7 @@ Class {
 }
 
 { #category : 'private - repositories' }
-PharoImageFSTestProjectionBackend >> exportPackageNamed: packageName [
+PIFSTestBackend >> exportPackageNamed: packageName [
 
 	remainingExportFailures > 0 ifTrue: [
 			remainingExportFailures := remainingExportFailures - 1.
@@ -25,25 +25,25 @@ PharoImageFSTestProjectionBackend >> exportPackageNamed: packageName [
 ]
 
 { #category : 'accessing' }
-PharoImageFSTestProjectionBackend >> exportedPackageNames [
+PIFSTestBackend >> exportedPackageNames [
 
 	^ exportedPackageNames asArray
 ]
 
 { #category : 'testing' }
-PharoImageFSTestProjectionBackend >> failNextExport [
+PIFSTestBackend >> failNextExport [
 
 	self failNextExports: 1
 ]
 
 { #category : 'testing' }
-PharoImageFSTestProjectionBackend >> failNextExports: anInteger [
+PIFSTestBackend >> failNextExports: anInteger [
 
 	remainingExportFailures := anInteger
 ]
 
 { #category : 'initialization' }
-PharoImageFSTestProjectionBackend >> initialize [
+PIFSTestBackend >> initialize [
 
 	super initialize.
 	exportedPackageNames := OrderedCollection new.
@@ -52,33 +52,33 @@ PharoImageFSTestProjectionBackend >> initialize [
 ]
 
 { #category : 'private - writing' }
-PharoImageFSTestProjectionBackend >> loadClassDefinition: classDefinition [
+PIFSTestBackend >> loadClassDefinition: classDefinition [
 
 	loadedClassDefinitionCount := loadedClassDefinitionCount + 1.
 	super loadClassDefinition: classDefinition
 ]
 
 { #category : 'private - writing' }
-PharoImageFSTestProjectionBackend >> loadMethodDefinition: methodDefinition [
+PIFSTestBackend >> loadMethodDefinition: methodDefinition [
 
 	loadedMethodSelectors add: methodDefinition selector.
 	super loadMethodDefinition: methodDefinition
 ]
 
 { #category : 'accessing' }
-PharoImageFSTestProjectionBackend >> loadedClassDefinitionCount [
+PIFSTestBackend >> loadedClassDefinitionCount [
 
 	^ loadedClassDefinitionCount
 ]
 
 { #category : 'accessing' }
-PharoImageFSTestProjectionBackend >> loadedMethodSelectors [
+PIFSTestBackend >> loadedMethodSelectors [
 
 	^ loadedMethodSelectors asArray
 ]
 
 { #category : 'private - repositories' }
-PharoImageFSTestProjectionBackend >> repositoryInfos [
+PIFSTestBackend >> repositoryInfos [
 
 	^ {
 		  (OrderedDictionary new
@@ -92,13 +92,13 @@ PharoImageFSTestProjectionBackend >> repositoryInfos [
 ]
 
 { #category : 'private - repositories' }
-PharoImageFSTestProjectionBackend >> repositoryOwningPackageNamed: packageName ifAbsent: absentBlock [
+PIFSTestBackend >> repositoryOwningPackageNamed: packageName ifAbsent: absentBlock [
 
 	^ PackageOrganizer default packageNamed: packageName ifAbsent: absentBlock
 ]
 
 { #category : 'testing' }
-PharoImageFSTestProjectionBackend >> resetAppliedDefinitions [
+PIFSTestBackend >> resetAppliedDefinitions [
 
 	loadedClassDefinitionCount := 0.
 	loadedMethodSelectors := OrderedCollection new.
@@ -106,14 +106,14 @@ PharoImageFSTestProjectionBackend >> resetAppliedDefinitions [
 ]
 
 { #category : 'private - writing' }
-PharoImageFSTestProjectionBackend >> unloadMethodDefinition: methodDefinition [
+PIFSTestBackend >> unloadMethodDefinition: methodDefinition [
 
 	unloadedMethodSelectors add: methodDefinition selector.
 	super unloadMethodDefinition: methodDefinition
 ]
 
 { #category : 'accessing' }
-PharoImageFSTestProjectionBackend >> unloadedMethodSelectors [
+PIFSTestBackend >> unloadedMethodSelectors [
 
 	^ unloadedMethodSelectors asArray
 ]

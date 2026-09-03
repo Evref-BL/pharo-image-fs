@@ -2,14 +2,14 @@
 Tests for the Pharo-side projection backend used by pharo-image-fs.
 "
 Class {
-	#name : 'PharoImageFSProjectionBackendTest',
+	#name : 'PIFSBackendTest',
 	#superclass : 'TestCase',
 	#category : 'PharoImageFS-Tests',
 	#package : 'PharoImageFS-Tests'
 }
 
 { #category : 'private' }
-PharoImageFSProjectionBackendTest >> classTonelSource [
+PIFSBackendTest >> classTonelSource [
 
 	^ 'Class {
 	#name : ''' , self originalClassName , ''',
@@ -27,13 +27,13 @@ PharoImageFSProjectionBackendTest >> classTonelSource [
 ]
 
 { #category : 'private' }
-PharoImageFSProjectionBackendTest >> classTonelSourceForPackageNamed: packageName [
+PIFSBackendTest >> classTonelSourceForPackageNamed: packageName [
 
 	^ self classTonelSource copyReplaceAll: self fixturePackageName with: packageName
 ]
 
 { #category : 'private' }
-PharoImageFSProjectionBackendTest >> classTonelSourceWithBrokenExtraMethod [
+PIFSBackendTest >> classTonelSourceWithBrokenExtraMethod [
 
 	^ self classTonelSource , '
 { #category : ''accessing'' }
@@ -51,13 +51,13 @@ PharoImageFSProjectionBackendTest >> classTonelSourceWithBrokenExtraMethod [
 ]
 
 { #category : 'private' }
-PharoImageFSProjectionBackendTest >> classTonelSourceWithChangedAnswerAndExtraMethod [
+PIFSBackendTest >> classTonelSourceWithChangedAnswerAndExtraMethod [
 
 	^ self classTonelSourceWithExtraMethod copyReplaceAll: '^ 42' with: '^ 43'
 ]
 
 { #category : 'private' }
-PharoImageFSProjectionBackendTest >> classTonelSourceWithDeadBlock [
+PIFSBackendTest >> classTonelSourceWithDeadBlock [
 
 	^ self classTonelSource , '
 { #category : ''tests'' }
@@ -69,7 +69,7 @@ PharoImageFSProjectionBackendTest >> classTonelSourceWithDeadBlock [
 ]
 
 { #category : 'private' }
-PharoImageFSProjectionBackendTest >> classTonelSourceWithExcessiveArgumentsMethod [
+PIFSBackendTest >> classTonelSourceWithExcessiveArgumentsMethod [
 
 	^ self classTonelSource , '
 { #category : ''accessing'' }
@@ -81,7 +81,7 @@ PharoImageFSProjectionBackendTest >> classTonelSourceWithExcessiveArgumentsMetho
 ]
 
 { #category : 'private' }
-PharoImageFSProjectionBackendTest >> classTonelSourceWithExtraMethod [
+PIFSBackendTest >> classTonelSourceWithExtraMethod [
 
 	^ self classTonelSource , '
 { #category : ''accessing'' }
@@ -93,7 +93,7 @@ PharoImageFSProjectionBackendTest >> classTonelSourceWithExtraMethod [
 ]
 
 { #category : 'private' }
-PharoImageFSProjectionBackendTest >> classTonelSourceWithSlot [
+PIFSBackendTest >> classTonelSourceWithSlot [
 
 	^ 'Class {
 	#name : ''' , self originalClassName , ''',
@@ -121,7 +121,7 @@ PharoImageFSProjectionBackendTest >> classTonelSourceWithSlot [
 ]
 
 { #category : 'private' }
-PharoImageFSProjectionBackendTest >> classTonelSourceWithUnformattedMethod [
+PIFSBackendTest >> classTonelSourceWithUnformattedMethod [
 
 	^ self classTonelSource , '
 { #category : ''accessing'' }
@@ -133,15 +133,19 @@ PharoImageFSProjectionBackendTest >> classTonelSourceWithUnformattedMethod [
 ]
 
 { #category : 'private' }
-PharoImageFSProjectionBackendTest >> createExtensionTargetClass [
+PIFSBackendTest >> createExtensionTargetClass [
 
-	((Object << #PharoImageFSProjectionExtensionTarget)
-		 slots: {  };
-		 package: self targetPackageName) install
+	((Object << #PIFSExtensionTarget)
+		 package: self targetPackageName;
+		 install)
+		compile: 'localAnswer
+
+	^ 7'
+		classified: 'accessing'
 ]
 
 { #category : 'private' }
-PharoImageFSProjectionBackendTest >> createReferenceUserClass [
+PIFSBackendTest >> createReferenceUserClass [
 
 	| class |
 	class := ((Object << self referenceUserClassName asSymbol)
@@ -155,19 +159,19 @@ PharoImageFSProjectionBackendTest >> createReferenceUserClass [
 ]
 
 { #category : 'private' }
-PharoImageFSProjectionBackendTest >> decodedJsonFrom: aString [
+PIFSBackendTest >> decodedJsonFrom: aString [
 
 	^ STONJSON fromString: aString
 ]
 
 { #category : 'private' }
-PharoImageFSProjectionBackendTest >> ensureTargetPackage [
+PIFSBackendTest >> ensureTargetPackage [
 
 	PackageOrganizer default ensurePackage: self targetPackageName
 ]
 
 { #category : 'private' }
-PharoImageFSProjectionBackendTest >> extensionMoveTonelSource [
+PIFSBackendTest >> extensionMoveTonelSource [
 
 	^ 'Extension { #name : ''String'' }
 
@@ -180,24 +184,24 @@ String >> pharoImageFSMoveExtensionProbe [
 ]
 
 { #category : 'private' }
-PharoImageFSProjectionBackendTest >> extensionTonelSource [
+PIFSBackendTest >> extensionTonelSource [
 
-	^ 'Extension { #name : ''PharoImageFSProjectionExtensionTarget'' }
+	^ 'Extension { #name : ''PIFSExtensionTarget'' }
 
 { #category : ''*PharoImageFS-Tests'' }
-PharoImageFSProjectionExtensionTarget >> projectedExtensionAnswer [
+PIFSExtensionTarget >> projectedExtensionAnswer [
 
-	^ 7
+	^ 88
 ]
 '
 ]
 
 { #category : 'private' }
-PharoImageFSProjectionBackendTest >> extensionTonelSourceWithBrokenExtraMethod [
+PIFSBackendTest >> extensionTonelSourceWithBrokenExtraMethod [
 
 	^ self extensionTonelSource , '
 { #category : ''*PharoImageFS-Tests'' }
-PharoImageFSProjectionExtensionTarget >> brokenProjectedExtensionAnswer [
+PIFSExtensionTarget >> brokenProjectedExtensionAnswer [
 
 	^ self +
 ]
@@ -205,107 +209,104 @@ PharoImageFSProjectionExtensionTarget >> brokenProjectedExtensionAnswer [
 ]
 
 { #category : 'private' }
-PharoImageFSProjectionBackendTest >> fixturePackageName [
+PIFSBackendTest >> fixturePackageName [
 
 	^ 'PharoImageFS-Tests'
 ]
 
 { #category : 'private' }
-PharoImageFSProjectionBackendTest >> newBackend [
+PIFSBackendTest >> newBackend [
 
-	^ PharoImageFSTestProjectionBackend new
+	^ PIFSTestBackend new
 ]
 
 { #category : 'private' }
-PharoImageFSProjectionBackendTest >> originalClassName [
+PIFSBackendTest >> originalClassName [
 
-	^ 'PharoImageFSProjection' , 'TestClass'
+	^ 'PIFS' , 'TestClass'
 ]
 
 { #category : 'private' }
-PharoImageFSProjectionBackendTest >> originalClassTonelPath [
+PIFSBackendTest >> originalClassTonelPath [
 
 	^ '/tonel/' , self fixturePackageName , '/' , self originalClassName , '.class.st'
 ]
 
 { #category : 'private' }
-PharoImageFSProjectionBackendTest >> referenceUserClassName [
+PIFSBackendTest >> referenceUserClassName [
 
-	^ 'PharoImageFSProjection' , 'ReferenceUser'
+	^ 'PIFS' , 'ReferenceUser'
 ]
 
 { #category : 'private' }
-PharoImageFSProjectionBackendTest >> removeClassNamed: className [
+PIFSBackendTest >> removeClassNamed: className [
 
 	(Smalltalk globals includesKey: className asSymbol) ifFalse: [ ^ self ].
 	(Smalltalk globals at: className asSymbol) removeFromSystem
 ]
 
 { #category : 'private' }
-PharoImageFSProjectionBackendTest >> removePackageNamed: packageName [
+PIFSBackendTest >> removePackageNamed: packageName [
 
 	(PackageOrganizer default packageNamed: packageName ifAbsent: [ nil ]) ifNotNil: [ :package | package removeFromSystem ]
 ]
 
 { #category : 'private' }
-PharoImageFSProjectionBackendTest >> renamedClassName [
+PIFSBackendTest >> renamedClassName [
 
-	^ 'PharoImageFSProjection' , 'RenamedTestClass'
+	^ 'PIFS' , 'RenamedTestClass'
 ]
 
 { #category : 'private' }
-PharoImageFSProjectionBackendTest >> renamedClassTonelPath [
+PIFSBackendTest >> renamedClassTonelPath [
 
 	^ '/tonel/' , self fixturePackageName , '/' , self renamedClassName , '.class.st'
 ]
 
 { #category : 'private' }
-PharoImageFSProjectionBackendTest >> targetPackageName [
+PIFSBackendTest >> targetPackageName [
 
 	^ 'PharoImageFS-ProjectionTargetFixture'
 ]
 
 { #category : 'private' }
-PharoImageFSProjectionBackendTest >> targetPackageTonelPath [
+PIFSBackendTest >> targetPackageTonelPath [
 
 	^ '/tonel/' , self targetPackageName , '/' , self originalClassName , '.class.st'
 ]
 
 { #category : 'private' }
-PharoImageFSProjectionBackendTest >> targetRenamedClassTonelPath [
+PIFSBackendTest >> targetRenamedClassTonelPath [
 
 	^ '/tonel/' , self targetPackageName , '/' , self renamedClassName , '.class.st'
 ]
 
 { #category : 'running' }
-PharoImageFSProjectionBackendTest >> tearDown [
+PIFSBackendTest >> tearDown [
 
 	[
 		self removeClassNamed: self originalClassName.
 		self removeClassNamed: self renamedClassName.
+		self removeClassNamed: 'PIFSExtensionTarget'.
 		self removeClassNamed: self referenceUserClassName.
-		self removeClassNamed: 'PharoImageFSProjectionExtensionTarget'.
-		(String includesSelector: #pharoImageFSMoveExtensionProbe) ifTrue: [ String removeSelector: #pharoImageFSMoveExtensionProbe ].
 		self removePackageNamed: self targetPackageName ] ensure: [ super tearDown ]
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testClassTonelFileDoesNotIncludeExtensionMethods [
+PIFSBackendTest >> testClassTonelFileDoesNotIncludeExtensionMethods [
 
 	| backend classText extensionText |
 	self createExtensionTargetClass.
 	backend := self newBackend.
-	backend
-		write: self extensionTonelSource
-		at: '/tonel/' , self fixturePackageName , '/PharoImageFSProjectionExtensionTarget.extension.st'.
-	classText := backend read: '/tonel/' , self targetPackageName , '/PharoImageFSProjectionExtensionTarget.class.st'.
-	extensionText := backend read: '/tonel/' , self fixturePackageName , '/PharoImageFSProjectionExtensionTarget.extension.st'.
+	backend write: self extensionTonelSource at: '/tonel/' , self fixturePackageName , '/PIFSExtensionTarget.extension.st'.
+	classText := backend read: '/tonel/' , self targetPackageName , '/PIFSExtensionTarget.class.st'.
+	extensionText := backend read: '/tonel/' , self fixturePackageName , '/PIFSExtensionTarget.extension.st'.
 	self deny: (classText includesSubstring: 'projectedExtensionAnswer').
 	self assert: (extensionText includesSubstring: 'projectedExtensionAnswer')
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testCompileFailureDuringClassRewriteRollsBackImage [
+PIFSBackendTest >> testCompileFailureDuringClassRewriteRollsBackImage [
 
 	| backend class |
 	backend := self newBackend.
@@ -321,28 +322,30 @@ PharoImageFSProjectionBackendTest >> testCompileFailureDuringClassRewriteRollsBa
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testCompileFailureDuringExtensionRewriteRollsBackImage [
+PIFSBackendTest >> testCompileFailureDuringExtensionRewriteRollsBackImage [
 
 	| backend targetClass |
 	self createExtensionTargetClass.
 	backend := self newBackend.
-	backend
-		write: self extensionTonelSource
-		at: '/tonel/' , self fixturePackageName , '/PharoImageFSProjectionExtensionTarget.extension.st'.
+	backend write: self extensionTonelSource at: '/tonel/' , self fixturePackageName , '/PIFSExtensionTarget.extension.st'.
 	self
 		should: [
 				backend
 					write: self extensionTonelSourceWithBrokenExtraMethod
-					at: '/tonel/' , self fixturePackageName , '/PharoImageFSProjectionExtensionTarget.extension.st' ]
+					at: '/tonel/' , self fixturePackageName , '/PIFSExtensionTarget.extension.st' ]
 		raise: Error
 		description: 'A method compilation failure after partial extension application must rollback the live image.'.
-	targetClass := Smalltalk globals at: #PharoImageFSProjectionExtensionTarget.
-	self assert: (targetClass new perform: #projectedExtensionAnswer) equals: 7.
-	self deny: (targetClass includesSelector: #brokenProjectedExtensionAnswer)
+	targetClass := Smalltalk globals at: #PIFSExtensionTarget.
+	self assert: (targetClass includesSelector: #projectedExtensionAnswer).
+	self deny: (targetClass includesSelector: #brokenProjectedExtensionAnswer).
+	self assert: targetClass new projectedExtensionAnswer equals: 88.
+	self assert: backend exportedPackageNames equals: {
+			self fixturePackageName.
+			self fixturePackageName }
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testCritiquesAreEmptyBeforeProjectionWrites [
+PIFSBackendTest >> testCritiquesAreEmptyBeforeProjectionWrites [
 
 	| backend |
 	backend := self newBackend.
@@ -350,7 +353,7 @@ PharoImageFSProjectionBackendTest >> testCritiquesAreEmptyBeforeProjectionWrites
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testDeleteClearsCritiquesForEditedClass [
+PIFSBackendTest >> testDeleteClearsCritiquesForEditedClass [
 
 	| backend |
 	backend := self newBackend.
@@ -361,7 +364,7 @@ PharoImageFSProjectionBackendTest >> testDeleteClearsCritiquesForEditedClass [
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testDeleteRemovesClassTonelFile [
+PIFSBackendTest >> testDeleteRemovesClassTonelFile [
 
 	| backend |
 	backend := self newBackend.
@@ -374,16 +377,14 @@ PharoImageFSProjectionBackendTest >> testDeleteRemovesClassTonelFile [
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testDeleteRemovesExtensionTonelFile [
+PIFSBackendTest >> testDeleteRemovesExtensionTonelFile [
 
 	| backend targetClass |
 	self createExtensionTargetClass.
 	backend := self newBackend.
-	backend
-		write: self extensionTonelSource
-		at: '/tonel/' , self fixturePackageName , '/PharoImageFSProjectionExtensionTarget.extension.st'.
-	backend delete: '/tonel/' , self fixturePackageName , '/PharoImageFSProjectionExtensionTarget.extension.st'.
-	targetClass := Smalltalk globals at: #PharoImageFSProjectionExtensionTarget.
+	backend write: self extensionTonelSource at: '/tonel/' , self fixturePackageName , '/PIFSExtensionTarget.extension.st'.
+	backend delete: '/tonel/' , self fixturePackageName , '/PIFSExtensionTarget.extension.st'.
+	targetClass := Smalltalk globals at: #PIFSExtensionTarget.
 	self deny: (targetClass includesSelector: #projectedExtensionAnswer).
 	self assert: backend exportedPackageNames equals: {
 			self fixturePackageName.
@@ -391,7 +392,7 @@ PharoImageFSProjectionBackendTest >> testDeleteRemovesExtensionTonelFile [
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testExistingClassRewriteOnlyLoadsChangedDefinitions [
+PIFSBackendTest >> testExistingClassRewriteOnlyLoadsChangedDefinitions [
 
 	| backend class |
 	backend := self newBackend.
@@ -407,7 +408,7 @@ PharoImageFSProjectionBackendTest >> testExistingClassRewriteOnlyLoadsChangedDef
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testExistingClassRewriteRemovesAbsentMethods [
+PIFSBackendTest >> testExistingClassRewriteRemovesAbsentMethods [
 
 	| backend class |
 	backend := self newBackend.
@@ -423,7 +424,7 @@ PharoImageFSProjectionBackendTest >> testExistingClassRewriteRemovesAbsentMethod
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testExistingClassRewriteUpdatesClassDefinition [
+PIFSBackendTest >> testExistingClassRewriteUpdatesClassDefinition [
 
 	| backend class |
 	backend := self newBackend.
@@ -439,7 +440,7 @@ PharoImageFSProjectionBackendTest >> testExistingClassRewriteUpdatesClassDefinit
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testExportFailureDuringClassDeleteRollsBackImage [
+PIFSBackendTest >> testExportFailureDuringClassDeleteRollsBackImage [
 
 	| backend class |
 	backend := self newBackend.
@@ -456,7 +457,7 @@ PharoImageFSProjectionBackendTest >> testExportFailureDuringClassDeleteRollsBack
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testExportFailureDuringClassMoveRollsBackImage [
+PIFSBackendTest >> testExportFailureDuringClassMoveRollsBackImage [
 
 	| backend class |
 	self ensureTargetPackage.
@@ -474,7 +475,7 @@ PharoImageFSProjectionBackendTest >> testExportFailureDuringClassMoveRollsBackIm
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testExportFailureDuringClassRewriteRollsBackImage [
+PIFSBackendTest >> testExportFailureDuringClassRewriteRollsBackImage [
 
 	| backend class |
 	backend := self newBackend.
@@ -494,27 +495,26 @@ PharoImageFSProjectionBackendTest >> testExportFailureDuringClassRewriteRollsBac
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testExtensionMethodWrittenThroughClassFileMovesToExtensionFile [
+PIFSBackendTest >> testExtensionMethodWrittenThroughClassFileMovesToExtensionFile [
 
 	| backend classText extensionText methodBlock targetClass |
 	self createExtensionTargetClass.
 	backend := self newBackend.
-	classText := backend read: '/tonel/' , self targetPackageName , '/PharoImageFSProjectionExtensionTarget.class.st'.
+	classText := backend read: '/tonel/' , self targetPackageName , '/PIFSExtensionTarget.class.st'.
 	methodBlock := String cr , '{ #category : ''*PharoImageFS-Tests'' }' , String cr
-	               , 'PharoImageFSProjectionExtensionTarget >> projectedExtensionAnswer [' , String cr , String cr , String tab
-	               , '^ 7' , String cr , ']' , String cr.
-	backend write: classText , methodBlock at: '/tonel/' , self targetPackageName , '/PharoImageFSProjectionExtensionTarget.class.st'.
-	targetClass := Smalltalk globals at: #PharoImageFSProjectionExtensionTarget.
-	extensionText := backend read: '/tonel/' , self fixturePackageName , '/PharoImageFSProjectionExtensionTarget.extension.st'.
-	self assert: (targetClass new perform: #projectedExtensionAnswer) equals: 7.
-	self deny:
-		((backend read: '/tonel/' , self targetPackageName , '/PharoImageFSProjectionExtensionTarget.class.st') includesSubstring:
-			 'projectedExtensionAnswer').
-	self assert: (extensionText includesSubstring: 'projectedExtensionAnswer')
+	               , 'PIFSExtensionTarget >> projectedExtensionAnswer [' , String cr , String cr , String tab , '^ 88' , String cr
+	               , ']' , String cr.
+	backend write: classText , methodBlock at: '/tonel/' , self targetPackageName , '/PIFSExtensionTarget.class.st'.
+	targetClass := Smalltalk globals at: #PIFSExtensionTarget.
+	self assert: targetClass new projectedExtensionAnswer equals: 88.
+	extensionText := backend read: '/tonel/' , self fixturePackageName , '/PIFSExtensionTarget.extension.st'.
+	self assert: (extensionText includesSubstring: 'projectedExtensionAnswer').
+	self deny: ((backend read: '/tonel/' , self targetPackageName , '/PIFSExtensionTarget.class.st') includesSubstring:
+			 'projectedExtensionAnswer')
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testFailedWriteDoesNotLeaveImplicitPackage [
+PIFSBackendTest >> testFailedWriteDoesNotLeaveImplicitPackage [
 
 	| backend |
 	backend := self newBackend.
@@ -530,7 +530,7 @@ PharoImageFSProjectionBackendTest >> testFailedWriteDoesNotLeaveImplicitPackage 
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testListRootExposesTonelAndCritiques [
+PIFSBackendTest >> testListRootExposesTonelAndCritiques [
 
 	| names |
 	names := (self newBackend list: '/') collect: [ :entry | entry name ].
@@ -538,7 +538,7 @@ PharoImageFSProjectionBackendTest >> testListRootExposesTonelAndCritiques [
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testMakeDirectoryCreatesTonelPackageWhenRepositoryOwnershipCheckDisabled [
+PIFSBackendTest >> testMakeDirectoryCreatesTonelPackageWhenRepositoryOwnershipCheckDisabled [
 
 	| backend |
 	backend := self newBackend.
@@ -549,7 +549,7 @@ PharoImageFSProjectionBackendTest >> testMakeDirectoryCreatesTonelPackageWhenRep
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testMakeDirectoryRejectsUnownedPackageByDefault [
+PIFSBackendTest >> testMakeDirectoryRejectsUnownedPackageByDefault [
 
 	| backend |
 	backend := self newBackend.
@@ -563,7 +563,7 @@ PharoImageFSProjectionBackendTest >> testMakeDirectoryRejectsUnownedPackageByDef
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testMoveAndRenameClassTonelFileAcrossPackages [
+PIFSBackendTest >> testMoveAndRenameClassTonelFileAcrossPackages [
 
 	| backend renamedClass |
 	self ensureTargetPackage.
@@ -581,7 +581,7 @@ PharoImageFSProjectionBackendTest >> testMoveAndRenameClassTonelFileAcrossPackag
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testMoveClassTonelFileAcrossPackagesMovesClass [
+PIFSBackendTest >> testMoveClassTonelFileAcrossPackagesMovesClass [
 
 	| backend class |
 	self ensureTargetPackage.
@@ -598,7 +598,7 @@ PharoImageFSProjectionBackendTest >> testMoveClassTonelFileAcrossPackagesMovesCl
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testMoveExtensionTonelFileAcrossPackagesMovesMethods [
+PIFSBackendTest >> testMoveExtensionTonelFileAcrossPackagesMovesMethods [
 
 	| backend movedText |
 	self ensureTargetPackage.
@@ -619,7 +619,7 @@ PharoImageFSProjectionBackendTest >> testMoveExtensionTonelFileAcrossPackagesMov
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testReadClassCritiqueFileReturnsCritiquesArray [
+PIFSBackendTest >> testReadClassCritiqueFileReturnsCritiquesArray [
 
 	| backend data |
 	backend := self newBackend.
@@ -630,7 +630,7 @@ PharoImageFSProjectionBackendTest >> testReadClassCritiqueFileReturnsCritiquesAr
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testReadMethodCritiqueFileReturnsSideKeys [
+PIFSBackendTest >> testReadMethodCritiqueFileReturnsSideKeys [
 
 	| backend data |
 	backend := self newBackend.
@@ -642,7 +642,7 @@ PharoImageFSProjectionBackendTest >> testReadMethodCritiqueFileReturnsSideKeys [
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testRemoveDirectoryRejectsNonEmptyTonelPackage [
+PIFSBackendTest >> testRemoveDirectoryRejectsNonEmptyTonelPackage [
 
 	| backend |
 	backend := self newBackend.
@@ -657,7 +657,7 @@ PharoImageFSProjectionBackendTest >> testRemoveDirectoryRejectsNonEmptyTonelPack
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testRemoveDirectoryRemovesEmptyTonelPackage [
+PIFSBackendTest >> testRemoveDirectoryRemovesEmptyTonelPackage [
 
 	| backend |
 	backend := self newBackend.
@@ -668,7 +668,7 @@ PharoImageFSProjectionBackendTest >> testRemoveDirectoryRemovesEmptyTonelPackage
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testRenameClassTonelFileRenamesClassAndReferences [
+PIFSBackendTest >> testRenameClassTonelFileRenamesClassAndReferences [
 
 	| backend referenceUser renamedClass |
 	backend := self newBackend.
@@ -686,7 +686,7 @@ PharoImageFSProjectionBackendTest >> testRenameClassTonelFileRenamesClassAndRefe
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testRenameExtensionTonelFileSignalsUnsupportedWrite [
+PIFSBackendTest >> testRenameExtensionTonelFileSignalsUnsupportedWrite [
 
 	self
 		should: [ self newBackend rename: '/tonel/PharoImageFS-Tests/Old.extension.st' to: '/tonel/PharoImageFS-Tests/New.extension.st' ]
@@ -696,7 +696,7 @@ PharoImageFSProjectionBackendTest >> testRenameExtensionTonelFileSignalsUnsuppor
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testRepositoryMetadataCanBeRead [
+PIFSBackendTest >> testRepositoryMetadataCanBeRead [
 
 	| metadata |
 	metadata := self decodedJsonFrom: (self newBackend read: '/repositories/Fixture Repository.repository.json').
@@ -706,21 +706,21 @@ PharoImageFSProjectionBackendTest >> testRepositoryMetadataCanBeRead [
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testRepositoryOwnershipIgnoresRepositoriesWithoutDirectory [
+PIFSBackendTest >> testRepositoryOwnershipIgnoresRepositoriesWithoutDirectory [
 
 	| backend missingDirectoryRepository ownedPackage repositoryDirectory writableRepository |
-	ownedPackage := PharoImageFSPackageTestDouble named: self fixturePackageName.
+	ownedPackage := PIFSPackageTestDouble named: self fixturePackageName.
 	repositoryDirectory := FileSystem memory root / 'repository'.
 	repositoryDirectory ensureCreateDirectory.
-	missingDirectoryRepository := PharoImageFSRepositoryTestDouble
+	missingDirectoryRepository := PIFSRepositoryTestDouble
 		                              named: 'Missing Directory Repository'
 		                              directory: nil
 		                              loadedPackages: { ownedPackage }.
-	writableRepository := PharoImageFSRepositoryTestDouble
+	writableRepository := PIFSRepositoryTestDouble
 		                      named: 'Writable Repository'
 		                      directory: repositoryDirectory
 		                      loadedPackages: { ownedPackage }.
-	backend := PharoImageFSRepositoryOwnershipTestBackend new.
+	backend := PIFSRepositoryOwnershipTestBackend new.
 	backend iceRepositories: {
 			missingDirectoryRepository.
 			writableRepository }.
@@ -728,15 +728,15 @@ PharoImageFSProjectionBackendTest >> testRepositoryOwnershipIgnoresRepositoriesW
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testRepositoryOwnershipRejectsRepositoryWithoutDirectory [
+PIFSBackendTest >> testRepositoryOwnershipRejectsRepositoryWithoutDirectory [
 
 	| backend missingDirectoryRepository ownedPackage |
-	ownedPackage := PharoImageFSPackageTestDouble named: self fixturePackageName.
-	missingDirectoryRepository := PharoImageFSRepositoryTestDouble
+	ownedPackage := PIFSPackageTestDouble named: self fixturePackageName.
+	missingDirectoryRepository := PIFSRepositoryTestDouble
 		                              named: 'Missing Directory Repository'
 		                              directory: nil
 		                              loadedPackages: { ownedPackage }.
-	backend := PharoImageFSRepositoryOwnershipTestBackend new.
+	backend := PIFSRepositoryOwnershipTestBackend new.
 	backend iceRepositories: { missingDirectoryRepository }.
 	self
 		should: [
@@ -747,7 +747,7 @@ PharoImageFSProjectionBackendTest >> testRepositoryOwnershipRejectsRepositoryWit
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testRepositoryRootListsSymlinkAndMetadata [
+PIFSBackendTest >> testRepositoryRootListsSymlinkAndMetadata [
 
 	| names |
 	names := (self newBackend list: '/repositories') collect: [ :entry | entry name ].
@@ -757,7 +757,7 @@ PharoImageFSProjectionBackendTest >> testRepositoryRootListsSymlinkAndMetadata [
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testRepositoryStatExposesSymlink [
+PIFSBackendTest >> testRepositoryStatExposesSymlink [
 
 	| entry |
 	entry := self newBackend stat: '/repositories/Fixture Repository'.
@@ -766,7 +766,7 @@ PharoImageFSProjectionBackendTest >> testRepositoryStatExposesSymlink [
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testRollbackFailureReportsBothErrors [
+PIFSBackendTest >> testRollbackFailureReportsBothErrors [
 
 	| backend class |
 	backend := self newBackend.
@@ -783,7 +783,7 @@ PharoImageFSProjectionBackendTest >> testRollbackFailureReportsBothErrors [
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testSelectorPathSegmentEscapesSlashInBinarySelectors [
+PIFSBackendTest >> testSelectorPathSegmentEscapesSlashInBinarySelectors [
 
 	| backend |
 	backend := self newBackend.
@@ -792,7 +792,7 @@ PharoImageFSProjectionBackendTest >> testSelectorPathSegmentEscapesSlashInBinary
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testSelectorPathSegmentUsesFileTreeColonEncoding [
+PIFSBackendTest >> testSelectorPathSegmentUsesFileTreeColonEncoding [
 
 	| backend |
 	backend := self newBackend.
@@ -803,7 +803,7 @@ PharoImageFSProjectionBackendTest >> testSelectorPathSegmentUsesFileTreeColonEnc
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testWriteBlockedByCritiqueKeepsExistingClass [
+PIFSBackendTest >> testWriteBlockedByCritiqueKeepsExistingClass [
 
 	| backend class |
 	backend := self newBackend.
@@ -819,7 +819,7 @@ PharoImageFSProjectionBackendTest >> testWriteBlockedByCritiqueKeepsExistingClas
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testWriteClassTonelFileWithDifferentPathRenamesClass [
+PIFSBackendTest >> testWriteClassTonelFileWithDifferentPathRenamesClass [
 
 	| backend renamedClass |
 	backend := self newBackend.
@@ -834,7 +834,7 @@ PharoImageFSProjectionBackendTest >> testWriteClassTonelFileWithDifferentPathRen
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testWriteCreatesNewClassFromTonelFile [
+PIFSBackendTest >> testWriteCreatesNewClassFromTonelFile [
 
 	| backend class |
 	backend := self newBackend.
@@ -846,21 +846,20 @@ PharoImageFSProjectionBackendTest >> testWriteCreatesNewClassFromTonelFile [
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testWriteCreatesNewExtensionFromTonelFile [
+PIFSBackendTest >> testWriteCreatesNewExtensionFromTonelFile [
 
 	| backend targetClass |
 	self createExtensionTargetClass.
 	backend := self newBackend.
-	backend
-		write: self extensionTonelSource
-		at: '/tonel/' , self fixturePackageName , '/PharoImageFSProjectionExtensionTarget.extension.st'.
-	targetClass := Smalltalk globals at: #PharoImageFSProjectionExtensionTarget.
-	self assert: (targetClass new perform: #projectedExtensionAnswer) equals: 7.
+	backend write: self extensionTonelSource at: '/tonel/' , self fixturePackageName , '/PIFSExtensionTarget.extension.st'.
+	targetClass := Smalltalk globals at: #PIFSExtensionTarget.
+	self assert: (targetClass includesSelector: #projectedExtensionAnswer).
+	self assert: targetClass new projectedExtensionAnswer equals: 88.
 	self assert: backend exportedPackageNames equals: { self fixturePackageName }
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testWriteCreatesPackageForNewClassWhenRepositoryOwnershipCheckDisabled [
+PIFSBackendTest >> testWriteCreatesPackageForNewClassWhenRepositoryOwnershipCheckDisabled [
 
 	| backend class |
 	backend := self newBackend.
@@ -873,7 +872,7 @@ PharoImageFSProjectionBackendTest >> testWriteCreatesPackageForNewClassWhenRepos
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testWriteRecordsCritiquesForEditedMethod [
+PIFSBackendTest >> testWriteRecordsCritiquesForEditedMethod [
 
 	| backend classEntries data methodEntries packageEntries |
 	backend := self newBackend.
@@ -891,7 +890,7 @@ PharoImageFSProjectionBackendTest >> testWriteRecordsCritiquesForEditedMethod [
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testWriteReformatsAcceptedMethodSource [
+PIFSBackendTest >> testWriteReformatsAcceptedMethodSource [
 
 	| backend class source |
 	backend := self newBackend.
@@ -903,7 +902,7 @@ PharoImageFSProjectionBackendTest >> testWriteReformatsAcceptedMethodSource [
 ]
 
 { #category : 'tests' }
-PharoImageFSProjectionBackendTest >> testWriteRejectsUnownedPackageByDefault [
+PIFSBackendTest >> testWriteRejectsUnownedPackageByDefault [
 
 	| backend |
 	backend := self newBackend.

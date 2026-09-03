@@ -1,5 +1,5 @@
 Class {
-	#name : 'PharoImageFSPackageTestDouble',
+	#name : 'PIFSPackageTestDouble',
 	#superclass : 'Object',
 	#instVars : [
 		'packageName'
@@ -9,7 +9,7 @@ Class {
 }
 
 { #category : 'instance creation' }
-PharoImageFSPackageTestDouble class >> named: aString [
+PIFSPackageTestDouble class >> named: aString [
 
 	^ self new
 		  packageName: aString;
@@ -17,13 +17,13 @@ PharoImageFSPackageTestDouble class >> named: aString [
 ]
 
 { #category : 'accessing' }
-PharoImageFSPackageTestDouble >> packageName [
+PIFSPackageTestDouble >> packageName [
 
 	^ packageName
 ]
 
 { #category : 'accessing' }
-PharoImageFSPackageTestDouble >> packageName: aString [
+PIFSPackageTestDouble >> packageName: aString [
 
 	packageName := aString
 ]

@@ -1,5 +1,5 @@
 Class {
-	#name : 'PharoImageFSRepositoryTestDouble',
+	#name : 'PIFSRepositoryTestDouble',
 	#superclass : 'Object',
 	#instVars : [
 		'name',
@@ -11,7 +11,7 @@ Class {
 }
 
 { #category : 'instance creation' }
-PharoImageFSRepositoryTestDouble class >> named: aString directory: aFileReference loadedPackages: aCollection [
+PIFSRepositoryTestDouble class >> named: aString directory: aFileReference loadedPackages: aCollection [
 
 	^ self new
 		  name: aString;
@@ -21,37 +21,37 @@ PharoImageFSRepositoryTestDouble class >> named: aString directory: aFileReferen
 ]
 
 { #category : 'accessing' }
-PharoImageFSRepositoryTestDouble >> loadedPackages [
+PIFSRepositoryTestDouble >> loadedPackages [
 
 	^ loadedPackages
 ]
 
 { #category : 'accessing' }
-PharoImageFSRepositoryTestDouble >> loadedPackages: aCollection [
+PIFSRepositoryTestDouble >> loadedPackages: aCollection [
 
 	loadedPackages := aCollection
 ]
 
 { #category : 'accessing' }
-PharoImageFSRepositoryTestDouble >> name [
+PIFSRepositoryTestDouble >> name [
 
 	^ name
 ]
 
 { #category : 'accessing' }
-PharoImageFSRepositoryTestDouble >> name: aString [
+PIFSRepositoryTestDouble >> name: aString [
 
 	name := aString
 ]
 
 { #category : 'accessing' }
-PharoImageFSRepositoryTestDouble >> repositoryDirectory [
+PIFSRepositoryTestDouble >> repositoryDirectory [
 
 	^ repositoryDirectory
 ]
 
 { #category : 'accessing' }
-PharoImageFSRepositoryTestDouble >> repositoryDirectory: aFileReference [
+PIFSRepositoryTestDouble >> repositoryDirectory: aFileReference [
 
 	repositoryDirectory := aFileReference
 ]

@@ -2,7 +2,7 @@
 Small HTTP adapter exposing the pharo-image-fs projection backend to the Go mount daemon.
 "
 Class {
-	#name : 'PharoImageFSProjectionHTTPServer',
+	#name : 'PIFSServer',
 	#superclass : 'Object',
 	#instVars : [
 		'backend',
@@ -21,26 +21,26 @@ Class {
 }
 
 { #category : 'private - daemon' }
-PharoImageFSProjectionHTTPServer class >> daemonExecutable [
+PIFSServer class >> daemonExecutable [
 
 	self daemonExecutableOverride ifNotNil: [ :override | ^ override ].
 	^ self daemonExecutableCacheDirectory / self daemonExecutableName
 ]
 
 { #category : 'private - daemon' }
-PharoImageFSProjectionHTTPServer class >> daemonExecutableCacheDirectory [
+PIFSServer class >> daemonExecutableCacheDirectory [
 
-	^ FileLocator localDirectory / 'pharo-image-fs' / PharoImageFSVersion current
+	^ FileLocator localDirectory / 'pharo-image-fs' / PIFSVersion current
 ]
 
 { #category : 'private - daemon' }
-PharoImageFSProjectionHTTPServer class >> daemonExecutableName [
+PIFSServer class >> daemonExecutableName [
 
 	^ 'pharo-image-fs'
 ]
 
 { #category : 'private - daemon' }
-PharoImageFSProjectionHTTPServer class >> daemonExecutableOverride [
+PIFSServer class >> daemonExecutableOverride [
 
 	| pathString |
 	pathString := OSEnvironment current at: 'PHARO_IMAGE_FS_DAEMON' ifAbsent: [ ^ nil ].
@@ -49,7 +49,7 @@ PharoImageFSProjectionHTTPServer class >> daemonExecutableOverride [
 ]
 
 { #category : 'defaults' }
-PharoImageFSProjectionHTTPServer class >> defaultMountName [
+PIFSServer class >> defaultMountName [
 
 	| delimiter imagePath suffix |
 	imagePath := Smalltalk imagePath.
@@ -61,25 +61,25 @@ PharoImageFSProjectionHTTPServer class >> defaultMountName [
 ]
 
 { #category : 'defaults' }
-PharoImageFSProjectionHTTPServer class >> defaultMountPath [
+PIFSServer class >> defaultMountPath [
 
 	^ FileLocator temp / self defaultMountName
 ]
 
 { #category : 'private - daemon' }
-PharoImageFSProjectionHTTPServer class >> downloadDaemonArchiveTo: aFileReference [
+PIFSServer class >> downloadDaemonArchiveTo: aFileReference [
 
 	ZnClient new
-		url: PharoImageFSVersion daemonReleaseURL;
+		url: PIFSVersion daemonReleaseURL;
 		downloadTo: aFileReference
 ]
 
 { #category : 'private - daemon' }
-PharoImageFSProjectionHTTPServer class >> downloadDaemonExecutable [
+PIFSServer class >> downloadDaemonExecutable [
 
 	| archive executable |
 	self daemonExecutableCacheDirectory ensureCreateDirectory.
-	archive := self daemonExecutableCacheDirectory / PharoImageFSVersion daemonArchiveName.
+	archive := self daemonExecutableCacheDirectory / PIFSVersion daemonArchiveName.
 	archive ensureDelete.
 	self downloadDaemonArchiveTo: archive.
 	[
@@ -87,13 +87,13 @@ PharoImageFSProjectionHTTPServer class >> downloadDaemonExecutable [
 		executable := self daemonExecutable.
 		executable exists ifFalse: [
 			Error signal:
-				'Downloaded daemon archive did not contain ' , self daemonExecutableName , ': ' , PharoImageFSVersion daemonReleaseURL ].
+				'Downloaded daemon archive did not contain ' , self daemonExecutableName , ': ' , PIFSVersion daemonReleaseURL ].
 		self makeDaemonExecutable: executable.
 		^ executable ] ensure: [ archive exists ifTrue: [ archive delete ] ]
 ]
 
 { #category : 'private - daemon' }
-PharoImageFSProjectionHTTPServer class >> ensureDaemonExecutable [
+PIFSServer class >> ensureDaemonExecutable [
 
 	self daemonExecutableOverride ifNotNil: [ :override | ^ override ].
 	self daemonExecutable exists ifFalse: [ ^ self downloadDaemonExecutable ].
@@ -101,7 +101,7 @@ PharoImageFSProjectionHTTPServer class >> ensureDaemonExecutable [
 ]
 
 { #category : 'private - daemon' }
-PharoImageFSProjectionHTTPServer class >> extractDaemonArchive: archiveReference into: directoryReference [
+PIFSServer class >> extractDaemonArchive: archiveReference into: directoryReference [
 
 	| archive |
 	archive := ZipArchive new.
@@ -111,7 +111,7 @@ PharoImageFSProjectionHTTPServer class >> extractDaemonArchive: archiveReference
 ]
 
 { #category : 'private - daemon' }
-PharoImageFSProjectionHTTPServer class >> makeDaemonExecutable: aFileReference [
+PIFSServer class >> makeDaemonExecutable: aFileReference [
 
 	| command |
 	command := 'chmod +x ' , (self shellQuote: aFileReference pathString).
@@ -119,25 +119,25 @@ PharoImageFSProjectionHTTPServer class >> makeDaemonExecutable: aFileReference [
 ]
 
 { #category : 'registry' }
-PharoImageFSProjectionHTTPServer class >> register: aProjectionServer on: portNumber [
+PIFSServer class >> register: aProjectionServer on: portNumber [
 
 	^ self serversByPort at: portNumber put: aProjectionServer
 ]
 
 { #category : 'registry' }
-PharoImageFSProjectionHTTPServer class >> serverOn: portNumber [
+PIFSServer class >> serverOn: portNumber [
 
 	^ self serversByPort at: portNumber ifAbsent: [ nil ]
 ]
 
 { #category : 'registry' }
-PharoImageFSProjectionHTTPServer class >> serversByPort [
+PIFSServer class >> serversByPort [
 
 	^ ServersByPort ifNil: [ ServersByPort := Dictionary new ]
 ]
 
 { #category : 'private - daemon' }
-PharoImageFSProjectionHTTPServer class >> shellQuote: aString [
+PIFSServer class >> shellQuote: aString [
 
 	^ String streamContents: [ :stream |
 		  stream nextPut: $'.
@@ -154,7 +154,7 @@ PharoImageFSProjectionHTTPServer class >> shellQuote: aString [
 ]
 
 { #category : 'instance creation' }
-PharoImageFSProjectionHTTPServer class >> startAndMountOn: portNumber [
+PIFSServer class >> startAndMountOn: portNumber [
 
 	^ self
 		  startOn: portNumber
@@ -163,20 +163,20 @@ PharoImageFSProjectionHTTPServer class >> startAndMountOn: portNumber [
 ]
 
 { #category : 'instance creation' }
-PharoImageFSProjectionHTTPServer class >> startOn: portNumber [
+PIFSServer class >> startOn: portNumber [
 
 	self stopOn: portNumber.
 	^ self register: (self new startOn: portNumber) on: portNumber
 ]
 
 { #category : 'instance creation' }
-PharoImageFSProjectionHTTPServer class >> startOn: portNumber mountAt: aPath [
+PIFSServer class >> startOn: portNumber mountAt: aPath [
 
 	^ self startOn: portNumber mountAt: aPath named: self defaultMountName
 ]
 
 { #category : 'instance creation' }
-PharoImageFSProjectionHTTPServer class >> startOn: portNumber mountAt: aPath named: aString [
+PIFSServer class >> startOn: portNumber mountAt: aPath named: aString [
 
 	| projectionServer |
 	projectionServer := self startOn: portNumber.
@@ -192,7 +192,7 @@ PharoImageFSProjectionHTTPServer class >> startOn: portNumber mountAt: aPath nam
 ]
 
 { #category : 'instance creation' }
-PharoImageFSProjectionHTTPServer class >> startOn: portNumber mountNamed: aString [
+PIFSServer class >> startOn: portNumber mountNamed: aString [
 
 	^ self
 		  startOn: portNumber
@@ -201,20 +201,20 @@ PharoImageFSProjectionHTTPServer class >> startOn: portNumber mountNamed: aStrin
 ]
 
 { #category : 'registry' }
-PharoImageFSProjectionHTTPServer class >> stopAll [
+PIFSServer class >> stopAll [
 
 	self serversByPort valuesDo: [ :each | each stop ].
 	self serversByPort removeAll
 ]
 
 { #category : 'registry' }
-PharoImageFSProjectionHTTPServer class >> stopOn: portNumber [
+PIFSServer class >> stopOn: portNumber [
 
 	(self serverOn: portNumber) ifNotNil: [ :projectionServer | projectionServer stop ]
 ]
 
 { #category : 'registry' }
-PharoImageFSProjectionHTTPServer class >> unregister: aProjectionServer [
+PIFSServer class >> unregister: aProjectionServer [
 
 	aProjectionServer port ifNil: [ ^ self ].
 	(self serverOn: aProjectionServer port) == aProjectionServer ifFalse: [ ^ self ].
@@ -222,25 +222,25 @@ PharoImageFSProjectionHTTPServer class >> unregister: aProjectionServer [
 ]
 
 { #category : 'accessing' }
-PharoImageFSProjectionHTTPServer >> backend [
+PIFSServer >> backend [
 
 	^ backend
 ]
 
 { #category : 'accessing' }
-PharoImageFSProjectionHTTPServer >> backend: aBackend [
+PIFSServer >> backend: aBackend [
 
 	backend := aBackend
 ]
 
 { #category : 'private - daemon' }
-PharoImageFSProjectionHTTPServer >> closeInheritedFileDescriptorsShellSnippet [
+PIFSServer >> closeInheritedFileDescriptorsShellSnippet [
 
 	^ 'for fd in /dev/fd/*; do fd=${fd##*/}; case "$fd" in 0|1|2|*[!0-9]*|'''') ;; *) eval "exec $fd>&-" 2>/dev/null || true ;; esac; done; '
 ]
 
 { #category : 'private - daemon' }
-PharoImageFSProjectionHTTPServer >> daemonCommandMountedAt: aFileReference named: aString [
+PIFSServer >> daemonCommandMountedAt: aFileReference named: aString [
 
 	| daemonDirectory endpoint executableName |
 	daemonDirectory := self class daemonExecutable parent.
@@ -267,19 +267,19 @@ PharoImageFSProjectionHTTPServer >> daemonCommandMountedAt: aFileReference named
 ]
 
 { #category : 'private - daemon' }
-PharoImageFSProjectionHTTPServer >> daemonLogFile [
+PIFSServer >> daemonLogFile [
 
 	^ daemonLogFile
 ]
 
 { #category : 'private - daemon' }
-PharoImageFSProjectionHTTPServer >> daemonPidFile [
+PIFSServer >> daemonPidFile [
 
 	^ daemonPidFile
 ]
 
 { #category : 'private - running' }
-PharoImageFSProjectionHTTPServer >> ensurePortAvailable: portNumber [
+PIFSServer >> ensurePortAvailable: portNumber [
 
 	| probeSocket |
 	portNumber isZero ifTrue: [ ^ self ].
@@ -290,7 +290,7 @@ PharoImageFSProjectionHTTPServer >> ensurePortAvailable: portNumber [
 ]
 
 { #category : 'private - json' }
-PharoImageFSProjectionHTTPServer >> errorResponseFor: anError statusCode: statusCode [
+PIFSServer >> errorResponseFor: anError statusCode: statusCode [
 
 	^ (ZnResponse statusCode: statusCode)
 		  entity: (self jsonEntityFor: (Dictionary new
@@ -300,7 +300,7 @@ PharoImageFSProjectionHTTPServer >> errorResponseFor: anError statusCode: status
 ]
 
 { #category : 'private - routing' }
-PharoImageFSProjectionHTTPServer >> handleRequest: aRequest [
+PIFSServer >> handleRequest: aRequest [
 
 	aRequest method = #POST ifFalse: [ ^ ZnResponse methodNotAllowed: aRequest ].
 	^ [ self jsonResponseFor: (self responseObjectForOperation: (self operationForRequest: aRequest) request: aRequest) ]
@@ -309,38 +309,38 @@ PharoImageFSProjectionHTTPServer >> handleRequest: aRequest [
 ]
 
 { #category : 'initialization' }
-PharoImageFSProjectionHTTPServer >> initialize [
+PIFSServer >> initialize [
 
 	super initialize.
-	backend := PharoImageFSProjectionBackend new
+	backend := PIFSBackend new
 ]
 
 { #category : 'private - json' }
-PharoImageFSProjectionHTTPServer >> jsonEntityFor: anObject [
+PIFSServer >> jsonEntityFor: anObject [
 
 	^ ZnEntity with: (STONJSON toString: anObject) type: ZnMimeType applicationJson
 ]
 
 { #category : 'private - json' }
-PharoImageFSProjectionHTTPServer >> jsonResponseFor: anObject [
+PIFSServer >> jsonResponseFor: anObject [
 
 	^ ZnResponse ok: (self jsonEntityFor: anObject)
 ]
 
 { #category : 'accessing' }
-PharoImageFSProjectionHTTPServer >> mountName [
+PIFSServer >> mountName [
 
 	^ mountName
 ]
 
 { #category : 'accessing' }
-PharoImageFSProjectionHTTPServer >> mountPath [
+PIFSServer >> mountPath [
 
 	^ mountPath
 ]
 
 { #category : 'private - routing' }
-PharoImageFSProjectionHTTPServer >> operationForRequest: aRequest [
+PIFSServer >> operationForRequest: aRequest [
 
 	| segments |
 	segments := aRequest uri pathSegments.
@@ -349,20 +349,20 @@ PharoImageFSProjectionHTTPServer >> operationForRequest: aRequest [
 ]
 
 { #category : 'accessing' }
-PharoImageFSProjectionHTTPServer >> port [
+PIFSServer >> port [
 
 	^ port
 ]
 
 { #category : 'private - json' }
-PharoImageFSProjectionHTTPServer >> requestDictionaryFrom: aRequest [
+PIFSServer >> requestDictionaryFrom: aRequest [
 
 	aRequest hasEntity ifFalse: [ ^ Dictionary new ].
 	^ STONJSON fromString: aRequest entity contents
 ]
 
 { #category : 'private - routing' }
-PharoImageFSProjectionHTTPServer >> responseObjectForOperation: operation request: aRequest [
+PIFSServer >> responseObjectForOperation: operation request: aRequest [
 
 	| body path |
 	body := self requestDictionaryFrom: aRequest.
@@ -379,19 +379,19 @@ PharoImageFSProjectionHTTPServer >> responseObjectForOperation: operation reques
 ]
 
 { #category : 'accessing' }
-PharoImageFSProjectionHTTPServer >> server [
+PIFSServer >> server [
 
 	^ server
 ]
 
 { #category : 'private - daemon' }
-PharoImageFSProjectionHTTPServer >> shellQuote: aString [
+PIFSServer >> shellQuote: aString [
 
 	^ self class shellQuote: aString
 ]
 
 { #category : 'private - running' }
-PharoImageFSProjectionHTTPServer >> signalServerStartupFailureOn: portNumber [
+PIFSServer >> signalServerStartupFailureOn: portNumber [
 
 	self stop.
 	Error signal:
@@ -399,7 +399,7 @@ PharoImageFSProjectionHTTPServer >> signalServerStartupFailureOn: portNumber [
 ]
 
 { #category : 'private - daemon' }
-PharoImageFSProjectionHTTPServer >> startDaemonMountedAt: aPath named: aString [
+PIFSServer >> startDaemonMountedAt: aPath named: aString [
 
 	| command executable |
 	OSPlatform current isMacOS ifFalse: [ Error signal: 'pharo-image-fs daemon startup is currently supported only on macOS.' ].
@@ -414,7 +414,7 @@ PharoImageFSProjectionHTTPServer >> startDaemonMountedAt: aPath named: aString [
 ]
 
 { #category : 'running' }
-PharoImageFSProjectionHTTPServer >> startOn: portNumber [
+PIFSServer >> startOn: portNumber [
 
 	server ifNotNil: [ self stop ].
 	self ensurePortAvailable: portNumber.
@@ -426,7 +426,7 @@ PharoImageFSProjectionHTTPServer >> startOn: portNumber [
 ]
 
 { #category : 'private - errors' }
-PharoImageFSProjectionHTTPServer >> statusCodeForError: anError [
+PIFSServer >> statusCodeForError: anError [
 
 	| message |
 	message := anError messageText ifNil: [ '' ].
@@ -436,7 +436,7 @@ PharoImageFSProjectionHTTPServer >> statusCodeForError: anError [
 ]
 
 { #category : 'running' }
-PharoImageFSProjectionHTTPServer >> stop [
+PIFSServer >> stop [
 
 	self stopDaemon.
 	server ifNotNil: [
@@ -447,7 +447,7 @@ PharoImageFSProjectionHTTPServer >> stop [
 ]
 
 { #category : 'private - daemon' }
-PharoImageFSProjectionHTTPServer >> stopDaemon [
+PIFSServer >> stopDaemon [
 
 	mountPath ifNil: [ ^ self ].
 	OSPlatform current isMacOS ifTrue: [
@@ -466,13 +466,13 @@ PharoImageFSProjectionHTTPServer >> stopDaemon [
 ]
 
 { #category : 'private - json' }
-PharoImageFSProjectionHTTPServer >> valueAt: aKey in: aDictionary [
+PIFSServer >> valueAt: aKey in: aDictionary [
 
 	^ aDictionary at: aKey ifAbsent: [ aDictionary at: aKey asString ]
 ]
 
 { #category : 'private - running' }
-PharoImageFSProjectionHTTPServer >> waitUntilServerStartedOn: portNumber [
+PIFSServer >> waitUntilServerStartedOn: portNumber [
 
 	100 timesRepeat: [
 			server isRunning ifTrue: [ ^ self ].
