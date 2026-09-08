@@ -9,11 +9,26 @@ Class {
 		'remainingExportFailures',
 		'loadedClassDefinitionCount',
 		'loadedMethodSelectors',
-		'unloadedMethodSelectors'
+		'unloadedMethodSelectors',
+		'classTonelTextRequestCount',
+		'extensionTextRequestCount'
 	],
 	#category : 'PharoImageFS-Tests',
 	#package : 'PharoImageFS-Tests'
 }
+
+{ #category : 'private - reading' }
+PIFSTestBackend >> classTonelTextFor: aClass [
+
+	classTonelTextRequestCount := classTonelTextRequestCount + 1.
+	^ super classTonelTextFor: aClass
+]
+
+{ #category : 'accessing' }
+PIFSTestBackend >> classTonelTextRequestCount [
+
+	^ classTonelTextRequestCount
+]
 
 { #category : 'private - repositories' }
 PIFSTestBackend >> exportPackageNamed: packageName [
@@ -28,6 +43,19 @@ PIFSTestBackend >> exportPackageNamed: packageName [
 PIFSTestBackend >> exportedPackageNames [
 
 	^ exportedPackageNames asArray
+]
+
+{ #category : 'private - reading' }
+PIFSTestBackend >> extensionTextForClassName: className package: aPackage originalPath: aString [
+
+	extensionTextRequestCount := extensionTextRequestCount + 1.
+	^ super extensionTextForClassName: className package: aPackage originalPath: aString
+]
+
+{ #category : 'accessing' }
+PIFSTestBackend >> extensionTextRequestCount [
+
+	^ extensionTextRequestCount
 ]
 
 { #category : 'testing' }
@@ -48,7 +76,8 @@ PIFSTestBackend >> initialize [
 	super initialize.
 	exportedPackageNames := OrderedCollection new.
 	remainingExportFailures := 0.
-	self resetAppliedDefinitions
+	self resetAppliedDefinitions.
+	self resetTextRequestCounts
 ]
 
 { #category : 'private - writing' }
@@ -103,6 +132,13 @@ PIFSTestBackend >> resetAppliedDefinitions [
 	loadedClassDefinitionCount := 0.
 	loadedMethodSelectors := OrderedCollection new.
 	unloadedMethodSelectors := OrderedCollection new
+]
+
+{ #category : 'testing' }
+PIFSTestBackend >> resetTextRequestCounts [
+
+	classTonelTextRequestCount := 0.
+	extensionTextRequestCount := 0
 ]
 
 { #category : 'private - writing' }
