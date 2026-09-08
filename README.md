@@ -202,7 +202,7 @@ list to hide matching prefixes. Exclusions take precedence over inclusions.
 | projection |
 projection := PIFSServer startAndMountOn: 9013.
 projection backend
-	includedPackagePrefixes: #( 'MyProject' 'MyProject-Tests' );
+	includedPackagePrefixes: #( 'MyProject' );
 	excludedPackagePrefixes: #( 'MyProject-Legacy' )
 ```
 
