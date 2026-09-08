@@ -6,7 +6,9 @@ Class {
 	#superclass : 'Object',
 	#instVars : [
 		'critiqueEntries',
-		'requiresRepositoryOwnershipForWrites'
+		'requiresRepositoryOwnershipForWrites',
+		'excludedPackagePrefixes',
+		'includedPackagePrefixes'
 	],
 	#category : 'PharoImageFS',
 	#package : 'PharoImageFS'
@@ -101,6 +103,12 @@ PIFSBackend >> applyNewExtensionTonelText: textString className: className packa
 			  methodDefinitions ifEmpty: [ Error signal: 'Extension file must contain at least one method for ' , aString ].
 			  self validateBlockingCritiquesForMethodDefinitions: methodDefinitions originalPath: aString.
 			  methodDefinitions do: [ :methodDefinition | self loadMethodDefinition: methodDefinition ] ]
+]
+
+{ #category : 'private - packages' }
+PIFSBackend >> assertPackageIsVisibleNamed: packageName originalPath: aString [
+
+	(self isPackageVisibleNamed: packageName) ifFalse: [ self signalNotFound: aString ]
 ]
 
 { #category : 'private - repositories' }
@@ -252,6 +260,7 @@ PIFSBackend >> critiqueEntries [
 { #category : 'private - critiques' }
 PIFSBackend >> critiqueEntryForPackageNamed: packageName classNamed: className ifAbsent: absentBlock [
 
+	self assertPackageIsVisibleNamed: packageName originalPath: '/critiques/' , packageName.
 	^ self critiqueEntries at: packageName at: className ifAbsent: absentBlock
 ]
 
@@ -284,6 +293,7 @@ PIFSBackend >> critiqueMethodEntriesForClass: aClass [
 PIFSBackend >> critiquePackageEntriesForPackageNamed: packageName originalPath: aString [
 
 	| packageEntry |
+	self assertPackageIsVisibleNamed: packageName originalPath: aString.
 	packageEntry := self critiqueEntries at: packageName ifAbsent: [ self signalNotFound: aString ].
 	^ packageEntry keys sorted collect: [ :className | self directoryNamed: className ]
 ]
@@ -291,7 +301,8 @@ PIFSBackend >> critiquePackageEntriesForPackageNamed: packageName originalPath: 
 { #category : 'private - listing' }
 PIFSBackend >> critiqueRootEntries [
 
-	^ self critiqueEntries keys sorted collect: [ :packageName | self directoryNamed: packageName ]
+	^ (self critiqueEntries keys select: [ :packageName | self isPackageVisibleNamed: packageName ]) sorted collect: [ :packageName |
+		  self directoryNamed: packageName ]
 ]
 
 { #category : 'private - paths' }
@@ -307,7 +318,9 @@ PIFSBackend >> delete: aString [
 	| segments |
 	segments := self pathSegmentsFor: aString.
 	segments isEmpty ifTrue: [ self signalUnsupportedWrite: aString ].
-	segments first = 'tonel' ifTrue: [ ^ self deleteTonelSegments: segments allButFirst originalPath: aString ].
+	segments first = 'tonel' ifTrue: [
+			segments size > 1 ifTrue: [ self assertPackageIsVisibleNamed: segments second originalPath: aString ].
+			^ self deleteTonelSegments: segments allButFirst originalPath: aString ].
 	self signalUnsupportedWrite: aString
 ]
 
@@ -421,6 +434,18 @@ PIFSBackend >> directoryNamed: aString [
 PIFSBackend >> entryNamed: aString in: entries ifAbsent: absentBlock [
 
 	^ entries detect: [ :each | each name = aString ] ifNone: absentBlock
+]
+
+{ #category : 'accessing' }
+PIFSBackend >> excludedPackagePrefixes [
+
+	^ excludedPackagePrefixes ifNil: [ #(  ) ]
+]
+
+{ #category : 'accessing' }
+PIFSBackend >> excludedPackagePrefixes: prefixStrings [
+
+	excludedPackagePrefixes := prefixStrings asArray
 ]
 
 { #category : 'private - moving' }
@@ -553,6 +578,26 @@ PIFSBackend >> iceRepositoryDirectoryFor: aRepository [
 	^ directory ifNotNil: [ directory asFileReference ]
 ]
 
+{ #category : 'accessing' }
+PIFSBackend >> includedPackagePrefixes [
+
+	^ includedPackagePrefixes ifNil: [ #(  ) ]
+]
+
+{ #category : 'accessing' }
+PIFSBackend >> includedPackagePrefixes: prefixStrings [
+
+	includedPackagePrefixes := prefixStrings asArray
+]
+
+{ #category : 'private - packages' }
+PIFSBackend >> isPackageVisibleNamed: packageName [
+
+	^ (self includedPackagePrefixes isEmpty or: [
+		   self includedPackagePrefixes anySatisfy: [ :prefix | packageName beginsWith: prefix ] ]) and: [
+		  self excludedPackagePrefixes noneSatisfy: [ :prefix | packageName beginsWith: prefix ] ]
+]
+
 { #category : 'private - critiques' }
 PIFSBackend >> jsonTextFor: anObject [
 
@@ -648,6 +693,7 @@ PIFSBackend >> makeDirectoryResponseForPath: aString [
 PIFSBackend >> makeTonelPackageDirectoryNamed: packageName originalPath: aString [
 
 	packageName ifEmpty: [ self signalUnsupportedWrite: aString ].
+	self assertPackageIsVisibleNamed: packageName originalPath: aString.
 	self assertRepositoryOwnsPackageNamed: packageName originalPath: aString.
 	PackageOrganizer default ensurePackage: packageName
 ]
@@ -840,13 +886,15 @@ PIFSBackend >> moveTonelExtensionFileNamed: fileName packageName: sourcePackageN
 { #category : 'private - packages' }
 PIFSBackend >> packageNamed: aString ifAbsent: absentBlock [
 
+	self assertPackageIsVisibleNamed: aString originalPath: '/tonel/' , aString.
 	^ PackageOrganizer default packageNamed: aString ifAbsent: absentBlock
 ]
 
 { #category : 'private - packages' }
 PIFSBackend >> packageNames [
 
-	^ (PackageOrganizer default packages collect: [ :each | each name asString ] as: Array) sorted
+	^ ((PackageOrganizer default packages collect: [ :each | each name asString ] as: Array) select: [ :each |
+		   self isPackageVisibleNamed: each ]) sorted
 ]
 
 { #category : 'private - writing' }
@@ -975,6 +1023,7 @@ PIFSBackend >> readTonelExtensionFileNamed: fileName packageName: packageName or
 PIFSBackend >> readTonelSegments: segments originalPath: aString [
 
 	segments size = 2 ifFalse: [ self signalNotFound: aString ].
+	self assertPackageIsVisibleNamed: segments first originalPath: aString.
 	(segments second endsWith: '.class.st') ifTrue: [
 		^ self readTonelClassFileNamed: segments second packageName: segments first originalPath: aString ].
 	(segments second endsWith: '.extension.st') ifTrue: [
@@ -1107,8 +1156,10 @@ PIFSBackend >> rename: sourcePath to: targetPath [
 	sourceSegments := self pathSegmentsFor: sourcePath.
 	targetSegments := self pathSegmentsFor: targetPath.
 	(sourceSegments size = 3 and: [
-		 sourceSegments first = 'tonel' and: [
-			 targetSegments size = 3 and: [ targetSegments first = 'tonel' ] ] ]) ifFalse: [ self signalUnsupportedWrite: sourcePath ].
+		 sourceSegments first = 'tonel' and: [ targetSegments size = 3 and: [ targetSegments first = 'tonel' ] ] ]) ifFalse: [
+		self signalUnsupportedWrite: sourcePath ].
+	self assertPackageIsVisibleNamed: sourceSegments second originalPath: sourcePath.
+	self assertPackageIsVisibleNamed: targetSegments second originalPath: targetPath.
 	(sourceSegments third endsWith: '.class.st') ifTrue: [
 			(targetSegments third endsWith: '.class.st') ifFalse: [ self signalUnsupportedWrite: sourcePath ].
 			sourceClassName := self classNameFromFileName: sourceSegments third suffix: '.class.st'.
@@ -1468,6 +1519,7 @@ PIFSBackend >> statCritiqueSegments: segments originalPath: aString [
 
 	| classEntry |
 	segments isEmpty ifTrue: [ ^ self directoryNamed: 'critiques' ].
+	self assertPackageIsVisibleNamed: segments first originalPath: aString.
 	segments size = 1 ifTrue: [
 			self critiqueEntries at: segments first ifAbsent: [ self signalNotFound: aString ].
 			^ self directoryNamed: segments first ].
@@ -1661,7 +1713,9 @@ PIFSBackend >> write: textString at: aString [
 	| segments |
 	segments := self pathSegmentsFor: aString.
 	segments isEmpty ifTrue: [ self signalUnsupportedWrite: aString ].
-	segments first = 'tonel' ifTrue: [ ^ self writeTonelSegments: segments allButFirst text: textString originalPath: aString ].
+	segments first = 'tonel' ifTrue: [
+			segments size > 1 ifTrue: [ self assertPackageIsVisibleNamed: segments second originalPath: aString ].
+			^ self writeTonelSegments: segments allButFirst text: textString originalPath: aString ].
 	self signalUnsupportedWrite: aString
 ]
 
