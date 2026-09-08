@@ -191,6 +191,27 @@ them, so image-side changes become visible through the mount on later
 filesystem operations. Filesystem metadata caches are intentionally short; an
 already-open file handle can still contain the contents read when it was opened.
 
+### Limit visible packages
+
+By default, `/tonel` exposes every package in the image. A projection can be
+limited to package-name prefixes when a large image would make that surface too
+broad. Set an inclusion list to expose only matching prefixes, or an exclusion
+list to hide matching prefixes. Exclusions take precedence over inclusions.
+
+```smalltalk
+| projection |
+projection := PIFSServer startAndMountOn: 9013.
+projection backend
+	includedPackagePrefixes: #( 'MyProject' 'MyProject-Tests' );
+	excludedPackagePrefixes: #( 'MyProject-Legacy' )
+```
+
+An empty inclusion list, the default, does not restrict packages. Filtered
+packages are treated as absent for listing, reading, writing, deleting,
+renaming, and `/critiques`; this avoids exposing a package through one path
+while hiding it through another. Update the lists on the running backend to
+change what the mount exposes on later filesystem operations.
+
 ### Supported code operations
 
 `/tonel` accepts full-file writes for:

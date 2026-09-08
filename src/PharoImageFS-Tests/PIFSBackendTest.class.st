@@ -392,6 +392,37 @@ PIFSBackendTest >> testDeleteRemovesExtensionTonelFile [
 ]
 
 { #category : 'tests' }
+PIFSBackendTest >> testExcludedPackagePrefixesHideCritiques [
+
+	| backend |
+	backend := self newBackend.
+	backend critiqueEntries at: self fixturePackageName put: Dictionary new.
+	backend excludedPackagePrefixes: { self fixturePackageName }.
+	self assert: (backend list: '/critiques') isEmpty.
+	self
+		should: [ backend list: '/critiques/' , self fixturePackageName ]
+		raise: Error
+		whoseDescriptionIncludes: 'Projection path not found'
+		description: 'Excluded packages must be inaccessible through critiques too'
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testExcludedPackagePrefixesOverrideIncludedPackages [
+
+	| backend names |
+	backend := self newBackend.
+	backend includedPackagePrefixes: { 'PharoImageFS' }.
+	backend excludedPackagePrefixes: { self fixturePackageName }.
+	names := (backend list: '/tonel') collect: [ :entry | entry name ].
+	self deny: (names includes: self fixturePackageName).
+	self
+		should: [ backend list: '/tonel/' , self fixturePackageName ]
+		raise: Error
+		whoseDescriptionIncludes: 'Projection path not found'
+		description: 'An exclusion must take precedence over an inclusion'
+]
+
+{ #category : 'tests' }
 PIFSBackendTest >> testExistingClassRewriteOnlyLoadsChangedDefinitions [
 
 	| backend class |
@@ -527,6 +558,24 @@ PIFSBackendTest >> testFailedWriteDoesNotLeaveImplicitPackage [
 					at: self targetPackageTonelPath ]
 		raise: Error.
 	self deny: (PackageOrganizer default hasPackage: self targetPackageName)
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testIncludedPackagePrefixesRestrictTonelPaths [
+
+	| backend names |
+	backend := self newBackend.
+	backend requiresRepositoryOwnershipForWrites: false.
+	backend write: (self classTonelSourceForPackageNamed: self targetPackageName) at: self targetPackageTonelPath.
+	backend includedPackagePrefixes: { self fixturePackageName }.
+	names := (backend list: '/tonel') collect: [ :entry | entry name ].
+	self assert: (names includes: self fixturePackageName).
+	self assert: (names allSatisfy: [ :each | each beginsWith: self fixturePackageName ]).
+	self
+		should: [ backend read: self targetPackageTonelPath ]
+		raise: Error
+		whoseDescriptionIncludes: 'Projection path not found'
+		description: 'Excluded packages must be inaccessible by a direct Tonel path'
 ]
 
 { #category : 'tests' }
@@ -710,6 +759,21 @@ PIFSBackendTest >> testRenameExtensionTonelFileSignalsUnsupportedWrite [
 		raise: Error
 		whoseDescriptionIncludes: 'Projection path is not writable yet:'
 		description: 'Extension file rename is intentionally unsupported.'
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testRenameRejectsExcludedTargetPackage [
+
+	| backend |
+	self ensureTargetPackage.
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	backend excludedPackagePrefixes: { self targetPackageName }.
+	self
+		should: [ backend rename: self originalClassTonelPath to: self targetPackageTonelPath ]
+		raise: Error
+		whoseDescriptionIncludes: 'Projection path not found'
+		description: 'Renames must not move code into a filtered package'
 ]
 
 { #category : 'tests' }
@@ -961,5 +1025,20 @@ PIFSBackendTest >> testWriteRejectsUnownedPackageByDefault [
 		raise: Error
 		whoseDescriptionIncludes: 'is not owned by a loaded Iceberg repository'
 		description: 'Repository ownership checks are enabled by default'.
+	self deny: (PackageOrganizer default hasPackage: self targetPackageName)
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testWritesToExcludedPackagesAreRejected [
+
+	| backend |
+	backend := self newBackend.
+	backend requiresRepositoryOwnershipForWrites: false.
+	backend excludedPackagePrefixes: { self targetPackageName }.
+	self
+		should: [ backend write: (self classTonelSourceForPackageNamed: self targetPackageName) at: self targetPackageTonelPath ]
+		raise: Error
+		whoseDescriptionIncludes: 'Projection path not found'
+		description: 'Writes must not bypass package visibility'.
 	self deny: (PackageOrganizer default hasPackage: self targetPackageName)
 ]
