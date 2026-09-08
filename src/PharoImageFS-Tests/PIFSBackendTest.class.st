@@ -538,6 +538,23 @@ PIFSBackendTest >> testListRootExposesTonelAndCritiques [
 ]
 
 { #category : 'tests' }
+PIFSBackendTest >> testListTonelPackageDoesNotRenderFileContents [
+
+	| backend extensionEntries classEntries |
+	self createExtensionTargetClass.
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	backend write: self extensionTonelSource at: '/tonel/' , self fixturePackageName , '/PIFSExtensionTarget.extension.st'.
+	backend resetTextRequestCounts.
+	classEntries := backend list: '/tonel/' , self targetPackageName.
+	extensionEntries := backend list: '/tonel/' , self fixturePackageName.
+	self assert: (classEntries anySatisfy: [ :each | each name = 'PIFSExtensionTarget.class.st' ]).
+	self assert: (extensionEntries anySatisfy: [ :each | each name = 'PIFSExtensionTarget.extension.st' ]).
+	self assert: backend classTonelTextRequestCount equals: 0.
+	self assert: backend extensionTextRequestCount equals: 0
+]
+
+{ #category : 'tests' }
 PIFSBackendTest >> testMakeDirectoryCreatesTonelPackageWhenRepositoryOwnershipCheckDisabled [
 
 	| backend |
@@ -800,6 +817,38 @@ PIFSBackendTest >> testSelectorPathSegmentUsesFileTreeColonEncoding [
 	self
 		assert: (backend selectorFromPathSegment: 'responseObjectForOperation.request..json' originalPath: '/critiques/example')
 		equals: #responseObjectForOperation:request:
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testStatClassTonelFileDoesNotRenderContents [
+
+	| backend entry |
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	backend resetTextRequestCounts.
+	entry := backend stat: self originalClassTonelPath.
+	self assert: entry isFile.
+	self assert: entry size equals: 0.
+	self assert: backend classTonelTextRequestCount equals: 0.
+	backend read: self originalClassTonelPath.
+	self assert: backend classTonelTextRequestCount equals: 1
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testStatExtensionTonelFileDoesNotRenderContents [
+
+	| backend entry path |
+	self createExtensionTargetClass.
+	backend := self newBackend.
+	path := '/tonel/' , self fixturePackageName , '/PIFSExtensionTarget.extension.st'.
+	backend write: self extensionTonelSource at: path.
+	backend resetTextRequestCounts.
+	entry := backend stat: path.
+	self assert: entry isFile.
+	self assert: entry size equals: 0.
+	self assert: backend extensionTextRequestCount equals: 0.
+	backend read: path.
+	self assert: backend extensionTextRequestCount equals: 1
 ]
 
 { #category : 'tests' }

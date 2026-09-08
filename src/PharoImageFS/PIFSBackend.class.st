@@ -1541,12 +1541,11 @@ PIFSBackend >> symlinkNamed: aString target: targetString [
 { #category : 'private - entries' }
 PIFSBackend >> tonelClassEntryNamed: fileName packageName: packageName originalPath: aString [
 
-	| class className text |
+	| className |
 	className := self classNameFromFileName: fileName suffix: '.class.st'.
 	className ifNil: [ self signalNotFound: aString ].
-	class := self classForName: className packageName: packageName originalPath: aString.
-	text := self classTonelTextFor: class.
-	^ self fileNamed: fileName text: text writable: true
+	self classForName: className packageName: packageName originalPath: aString.
+	^ self fileNamed: fileName size: 0 writable: true
 ]
 
 { #category : 'private - listing' }
@@ -1563,12 +1562,12 @@ PIFSBackend >> tonelEntriesForPackage: aPackage [
 { #category : 'private - entries' }
 PIFSBackend >> tonelExtensionEntryNamed: fileName packageName: packageName originalPath: aString [
 
-	| className package text |
+	| className package |
 	className := self classNameFromFileName: fileName suffix: '.extension.st'.
 	className ifNil: [ self signalNotFound: aString ].
 	package := self packageNamed: packageName ifAbsent: [ self signalNotFound: aString ].
-	text := self extensionTextForClassName: className package: package originalPath: aString.
-	^ self fileNamed: fileName text: text writable: true
+	(self extensionMethodsForClassName: className inPackage: package) ifEmpty: [ self signalNotFound: aString ].
+	^ self fileNamed: fileName size: 0 writable: true
 ]
 
 { #category : 'private - listing' }
