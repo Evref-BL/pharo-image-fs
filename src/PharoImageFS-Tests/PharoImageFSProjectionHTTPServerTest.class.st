@@ -28,6 +28,15 @@ PharoImageFSProjectionHTTPServerTest >> testPort [
 ]
 
 { #category : 'tests' }
+PharoImageFSProjectionHTTPServerTest >> testStartOnAvailablePortRegistersActualPort [
+
+	| projectionServer |
+	projectionServer := PharoImageFSProjectionHTTPServer startOnAvailablePort.
+	self assert: projectionServer port > 0.
+	self assert: (PharoImageFSProjectionHTTPServer serverOn: projectionServer port) equals: projectionServer
+]
+
+{ #category : 'tests' }
 PharoImageFSProjectionHTTPServerTest >> testStartOnRegistersServerByPort [
 
 	| projectionServer |

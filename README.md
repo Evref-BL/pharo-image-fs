@@ -50,8 +50,13 @@ go -C daemon build -o pharo-image-fs ./cmd/pharo-image-fs
 Start the Pharo-side projection endpoint in the image:
 
 ```smalltalk
-PharoImageFSProjectionHTTPServer startOn: 9013
+projectionServer := PharoImageFSProjectionHTTPServer startOnAvailablePort.
+projectionServer port
 ```
+
+`startOnAvailablePort` binds loopback port `0` and answers a server whose
+`port` is the operating-system-assigned port. Use that returned port in the
+daemon endpoint; it permits concurrent projections without reserving `9013`.
 
 Stop it from Pharo with:
 
@@ -66,7 +71,7 @@ Then mount the image from a terminal. The mountpoint path is created when it is
 missing. If the path already exists, it must be a directory.
 
 ```sh
-daemon/pharo-image-fs --endpoint http://127.0.0.1:9013/projection /tmp/pharo-image-fs
+daemon/pharo-image-fs --endpoint http://127.0.0.1:<projection-port>/projection /tmp/pharo-image-fs
 ```
 
 Use the same port in both commands. For example, if the Pharo endpoint runs on

@@ -37,6 +37,12 @@ PharoImageFSProjectionHTTPServer class >> serversByPort [
 ]
 
 { #category : 'instance creation' }
+PharoImageFSProjectionHTTPServer class >> startOnAvailablePort [
+
+	^ self startOn: 0
+]
+
+{ #category : 'instance creation' }
 PharoImageFSProjectionHTTPServer class >> startOn: portNumber [
 
 	self stopOn: portNumber.
@@ -161,10 +167,11 @@ PharoImageFSProjectionHTTPServer >> server [
 PharoImageFSProjectionHTTPServer >> startOn: portNumber [
 
 	server ifNotNil: [ self stop ].
-	port := portNumber.
 	server := ZnServer on: portNumber.
+	server bindingAddress: #[ 127 0 0 1 ].
 	server onRequestRespond: [ :request | self handleRequest: request ].
-	server start
+	server start.
+	port := server port
 ]
 
 { #category : 'private - errors' }
