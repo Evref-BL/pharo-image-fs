@@ -62,6 +62,15 @@ PIFSServerTest >> testPort [
 ]
 
 { #category : 'tests' }
+PIFSServerTest >> testStartOnAvailablePortRegistersActualPort [
+
+	| projectionServer |
+	projectionServer := PIFSServer startOnAvailablePort.
+	self assert: projectionServer port > 0.
+	self assert: (PIFSServer serverOn: projectionServer port) equals: projectionServer
+]
+
+{ #category : 'tests' }
 PIFSServerTest >> testStartOnOccupiedPortSignalsClearError [
 
 	| occupyingSocket |

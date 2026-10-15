@@ -69,6 +69,23 @@ Start the Pharo-side projection endpoint and daemon from the image:
 PIFSServer startAndMountOn: 9013
 ```
 
+For an automatically allocated loopback port, use:
+
+```smalltalk
+projectionServer := PIFSServer startAndMountOnAvailablePort.
+projectionServer port
+```
+
+For an automatically allocated port with a project-specific mountpoint, use
+the existing general creation message:
+
+```smalltalk
+PIFSServer
+	startOn: 0
+	mountAt: '.pharo-agent/projection' asFileReference
+	named: 'pharo-image-fs'
+```
+
 To use the default mountpoint with an explicit volume name:
 
 ```smalltalk

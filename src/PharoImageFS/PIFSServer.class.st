@@ -163,10 +163,24 @@ PIFSServer class >> startAndMountOn: portNumber [
 ]
 
 { #category : 'instance creation' }
+PIFSServer class >> startAndMountOnAvailablePort [
+
+	^ self startAndMountOn: 0
+]
+
+{ #category : 'instance creation' }
+PIFSServer class >> startOnAvailablePort [
+
+	^ self startOn: 0
+]
+
+{ #category : 'instance creation' }
 PIFSServer class >> startOn: portNumber [
 
+	| projectionServer |
 	self stopOn: portNumber.
-	^ self register: (self new startOn: portNumber) on: portNumber
+	projectionServer := self new startOn: portNumber.
+	^ self register: projectionServer on: projectionServer port
 ]
 
 { #category : 'instance creation' }
@@ -418,11 +432,12 @@ PIFSServer >> startOn: portNumber [
 
 	server ifNotNil: [ self stop ].
 	self ensurePortAvailable: portNumber.
-	port := portNumber.
 	server := ZnServer on: portNumber.
+	server bindingAddress: #[ 127 0 0 1 ].
 	server onRequestRespond: [ :request | self handleRequest: request ].
 	server start.
-	self waitUntilServerStartedOn: portNumber
+	port := server port.
+	self waitUntilServerStartedOn: port
 ]
 
 { #category : 'private - errors' }
