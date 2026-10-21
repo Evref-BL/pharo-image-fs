@@ -884,34 +884,35 @@ PIFSBackendTest >> testSelectorPathSegmentUsesFileTreeColonEncoding [
 ]
 
 { #category : 'tests' }
-PIFSBackendTest >> testStatClassTonelFileDoesNotRenderContents [
+PIFSBackendTest >> testStatClassTonelFileReportsRenderedSize [
 
-	| backend entry |
+	"A mount reads no further than the size reported here, so stat renders the
+	class to measure it."
+
+	| backend entry text |
 	backend := self newBackend.
 	backend write: self classTonelSource at: self originalClassTonelPath.
+	text := backend read: self originalClassTonelPath.
 	backend resetTextRequestCounts.
 	entry := backend stat: self originalClassTonelPath.
 	self assert: entry isFile.
-	self assert: entry size equals: 0.
-	self assert: backend classTonelTextRequestCount equals: 0.
-	backend read: self originalClassTonelPath.
+	self assert: entry size equals: text utf8Encoded size.
 	self assert: backend classTonelTextRequestCount equals: 1
 ]
 
 { #category : 'tests' }
-PIFSBackendTest >> testStatExtensionTonelFileDoesNotRenderContents [
+PIFSBackendTest >> testStatExtensionTonelFileReportsRenderedSize [
 
-	| backend entry path |
+	| backend entry path text |
 	self createExtensionTargetClass.
 	backend := self newBackend.
 	path := '/tonel/' , self fixturePackageName , '/PIFSExtensionTarget.extension.st'.
 	backend write: self extensionTonelSource at: path.
+	text := backend read: path.
 	backend resetTextRequestCounts.
 	entry := backend stat: path.
 	self assert: entry isFile.
-	self assert: entry size equals: 0.
-	self assert: backend extensionTextRequestCount equals: 0.
-	backend read: path.
+	self assert: entry size equals: text utf8Encoded size.
 	self assert: backend extensionTextRequestCount equals: 1
 ]
 
