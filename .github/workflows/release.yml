@@ -1,0 +1,130 @@
+name: Release
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    env:
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+      DAEMON_REPOSITORY: Evref-BL/pharo-image-fs-daemon
+    steps:
+      - name: Require main
+        env:
+          RELEASE_BRANCH: ${{ github.event.workflow_run.head_branch || github.ref_name }}
+        run: |
+          if [ "$RELEASE_BRANCH" != "main" ]; then
+            echo "Run this workflow from main." >&2
+            exit 1
+          fi
+
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ env.RELEASE_SHA }}
+
+      - name: Determine whether a release is needed
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          version="$(sed -nE "s/^\t\^ '([0-9]+\.[0-9]+\.[0-9]+)'$/\1/p" src/PharoImageFS/PIFSVersion.class.st)"
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "PIFSVersion current must be a release SemVer version: ${version:-<unreadable>}" >&2
+            exit 1
+          fi
+
+          tag="v$version"
+          if git ls-remote --exit-code --refs origin "refs/tags/$tag" >/dev/null; then
+            if [ "$EVENT_NAME" = "workflow_run" ]; then
+              echo "Release $tag already exists; nothing to release."
+              printf 'should_release=false\n' >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            echo "Tag $tag already exists." >&2
+            exit 1
+          fi
+
+          {
+            printf 'version=%s\n' "$version"
+            printf 'tag=%s\n' "$tag"
+            printf 'should_release=true\n'
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/create-github-app-token@v2
+        if: steps.version.outputs.should_release == 'true'
+        id: app-token
+        with:
+          app-id: ${{ secrets.DEVNEXUS_AUTOMATION_APP_ID }}
+          private-key: ${{ secrets.DEVNEXUS_AUTOMATION_PRIVATE_KEY }}
+          owner: Evref-BL
+          repositories: |
+            pharo-agent-plugin
+            pharo-image-fs-daemon
+
+      - name: Release the daemon at the same version
+        if: steps.version.outputs.should_release == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          # PIFSVersion current resolves the daemon download, so the daemon
+          # release and both macOS assets must exist before this one does.
+          expected="pharo-image-fs-daemon-darwin-amd64.zip,pharo-image-fs-daemon-darwin-arm64.zip"
+          assets() {
+            gh release view "$TAG" --repo "$DAEMON_REPOSITORY" \
+              --json assets --jq '[.assets[].name] | sort | join(",")' 2>/dev/null || true
+          }
+
+          if ! git ls-remote --exit-code --refs "https://github.com/$DAEMON_REPOSITORY" "refs/tags/$TAG" >/dev/null; then
+            # The daemon tracks this version even when its own source did not
+            # change, so tag its current main. Its Release workflow builds and
+            # publishes both assets from that tag.
+            head_sha="$(gh api "repos/$DAEMON_REPOSITORY/git/ref/heads/main" --jq .object.sha)"
+            tag_sha="$(gh api --method POST "repos/$DAEMON_REPOSITORY/git/tags" \
+              -f tag="$TAG" -f message="$TAG" -f object="$head_sha" -f type=commit --jq .sha)"
+            gh api --method POST "repos/$DAEMON_REPOSITORY/git/refs" \
+              -f ref="refs/tags/$TAG" -f sha="$tag_sha" >/dev/null
+            echo "Tagged $DAEMON_REPOSITORY $TAG at $head_sha"
+          fi
+
+          for _ in {1..60}; do
+            if [ "$(assets)" = "$expected" ]; then
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "$DAEMON_REPOSITORY $TAG did not publish $expected, found: $(assets)" >&2
+          exit 1
+
+      - name: Create GitHub release
+        if: steps.version.outputs.should_release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${{ steps.version.outputs.tag }}" \
+            --target "$RELEASE_SHA" \
+            --title "${{ steps.version.outputs.tag }}" \
+            --generate-notes
+
+      - name: Notify released consumers
+        if: steps.version.outputs.should_release == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          jq -nc --arg version "$VERSION" \
+            '{event_type: "component-release", client_payload: {component: "pifs", version: $version}}' |
+            gh api --method POST repos/Evref-BL/pharo-agent-plugin/dispatches --input -
