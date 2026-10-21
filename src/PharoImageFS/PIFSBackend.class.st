@@ -555,7 +555,9 @@ PIFSBackend >> fileNamed: aString size: anInteger writable: aBoolean [
 { #category : 'private - entries' }
 PIFSBackend >> fileNamed: aString text: textString writable: aBoolean [
 
-	^ self fileNamed: aString size: textString size writable: aBoolean
+	"The mount serves the text as UTF-8, so the entry must report its byte size."
+
+	^ self fileNamed: aString size: textString utf8Encoded size writable: aBoolean
 ]
 
 { #category : 'private - repositories' }
@@ -1593,11 +1595,14 @@ PIFSBackend >> symlinkNamed: aString target: targetString [
 { #category : 'private - entries' }
 PIFSBackend >> tonelClassEntryNamed: fileName packageName: packageName originalPath: aString [
 
-	| className |
+	| className class |
 	className := self classNameFromFileName: fileName suffix: '.class.st'.
 	className ifNil: [ self signalNotFound: aString ].
-	self classForName: className packageName: packageName originalPath: aString.
-	^ self fileNamed: fileName size: 0 writable: true
+	class := self classForName: className packageName: packageName originalPath: aString.
+	^ self
+		  fileNamed: fileName
+		  text: (self classTonelTextFor: class)
+		  writable: true
 ]
 
 { #category : 'private - listing' }
@@ -1619,7 +1624,13 @@ PIFSBackend >> tonelExtensionEntryNamed: fileName packageName: packageName origi
 	className ifNil: [ self signalNotFound: aString ].
 	package := self packageNamed: packageName ifAbsent: [ self signalNotFound: aString ].
 	(self extensionMethodsForClassName: className inPackage: package) ifEmpty: [ self signalNotFound: aString ].
-	^ self fileNamed: fileName size: 0 writable: true
+	^ self
+		  fileNamed: fileName
+		  text: (self
+				   extensionTextForClassName: className
+				   package: package
+				   originalPath: aString)
+		  writable: true
 ]
 
 { #category : 'private - listing' }
