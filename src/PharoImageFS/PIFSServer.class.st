@@ -185,12 +185,6 @@ PIFSServer class >> startAndMountOnAvailablePort [
 ]
 
 { #category : 'instance creation' }
-PIFSServer class >> startOnAvailablePort [
-
-	^ self startOn: 0
-]
-
-{ #category : 'instance creation' }
 PIFSServer class >> startOn: portNumber [
 
 	| projectionServer |
@@ -228,6 +222,12 @@ PIFSServer class >> startOn: portNumber mountNamed: aString [
 		  startOn: portNumber
 		  mountAt: self defaultMountPath
 		  named: aString
+]
+
+{ #category : 'instance creation' }
+PIFSServer class >> startOnAvailablePort [
+
+	^ self startOn: 0
 ]
 
 { #category : 'registry' }
