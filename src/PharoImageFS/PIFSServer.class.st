@@ -170,22 +170,14 @@ PIFSServer class >> shellQuote: aString [
 ]
 
 { #category : 'instance creation' }
-PIFSServer class >> startAndMountOn: portNumber [
+PIFSServer class >> start [
 
-	^ self
-		  startOn: portNumber
-		  mountAt: self defaultMountPath
-		  named: self defaultMountName
+	^ self startMountedAt: self defaultMountPath named: self defaultMountName
 ]
 
-{ #category : 'instance creation' }
-PIFSServer class >> startAndMountOnAvailablePort [
-
-	^ self startAndMountOn: 0
-]
-
-{ #category : 'instance creation' }
-PIFSServer class >> startOn: portNumber [
+{ #category : 'instance creation - endpoint' }
+PIFSServer class >> startEndpointOn: portNumber [
+	"Serve the projection protocol without mounting anything. A projection is only useful through its mount, so this is for tests and for a caller running the daemon itself."
 
 	| projectionServer |
 	self stopOn: portNumber.
@@ -194,40 +186,22 @@ PIFSServer class >> startOn: portNumber [
 ]
 
 { #category : 'instance creation' }
-PIFSServer class >> startOn: portNumber mountAt: aPath [
+PIFSServer class >> startMountedAt: aPath named: aString [
 
-	^ self startOn: portNumber mountAt: aPath named: self defaultMountName
+	^ self startOn: 0 mountedAt: aPath named: aString
 ]
 
 { #category : 'instance creation' }
-PIFSServer class >> startOn: portNumber mountAt: aPath named: aString [
+PIFSServer class >> startOn: portNumber mountedAt: aPath named: aString [
 
 	| projectionServer |
-	projectionServer := self startOn: portNumber.
-	[
-		projectionServer
-			startDaemonMountedAt: aPath
-			named: aString ]
+	projectionServer := self startEndpointOn: portNumber.
+	[ projectionServer startDaemonMountedAt: aPath named: aString ]
 		on: Error
 		do: [ :error |
 				projectionServer stop.
 				error pass ].
 	^ projectionServer
-]
-
-{ #category : 'instance creation' }
-PIFSServer class >> startOn: portNumber mountNamed: aString [
-
-	^ self
-		  startOn: portNumber
-		  mountAt: self defaultMountPath
-		  named: aString
-]
-
-{ #category : 'instance creation' }
-PIFSServer class >> startOnAvailablePort [
-
-	^ self startOn: 0
 ]
 
 { #category : 'registry' }

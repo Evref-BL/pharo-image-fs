@@ -25,7 +25,7 @@ PIFSServerTest >> tearDown [
 PIFSServerTest >> testDaemonCommandClosesInheritedFileDescriptorsBeforeExec [
 
 	| command projectionServer |
-	projectionServer := PIFSServer startOn: self testPort.
+	projectionServer := PIFSServer startEndpointOn: self testPort.
 	projectionServer instVarNamed: 'daemonPidFile' put: FileLocator temp / 'pharo-image-fs-test.pid'.
 	projectionServer instVarNamed: 'daemonLogFile' put: FileLocator temp / 'pharo-image-fs-test.log'.
 	command := projectionServer daemonCommandMountedAt: FileLocator temp / 'Pharo Image FS Test' named: 'Pharo Image'.
@@ -37,7 +37,7 @@ PIFSServerTest >> testDaemonCommandClosesInheritedFileDescriptorsBeforeExec [
 PIFSServerTest >> testDaemonCommandIncludesEndpointMountPointAndMountName [
 
 	| command projectionServer |
-	projectionServer := PIFSServer startOn: self testPort.
+	projectionServer := PIFSServer startEndpointOn: self testPort.
 	projectionServer instVarNamed: 'daemonPidFile' put: FileLocator temp / 'pharo-image-fs-test.pid'.
 	projectionServer instVarNamed: 'daemonLogFile' put: FileLocator temp / 'pharo-image-fs-test.log'.
 	command := projectionServer daemonCommandMountedAt: FileLocator temp / 'Pharo Image FS Test' named: 'Pharo Image'.
@@ -62,22 +62,31 @@ PIFSServerTest >> testPort [
 ]
 
 { #category : 'tests' }
-PIFSServerTest >> testStartOnAvailablePortRegistersActualPort [
+PIFSServerTest >> testStartEndpointOnAvailablePortRegistersActualPort [
 
 	| projectionServer |
-	projectionServer := PIFSServer startOnAvailablePort.
+	projectionServer := PIFSServer startEndpointOn: 0.
 	self assert: projectionServer port > 0.
 	self assert: (PIFSServer serverOn: projectionServer port) equals: projectionServer
 ]
 
 { #category : 'tests' }
-PIFSServerTest >> testStartOnOccupiedPortSignalsClearError [
+PIFSServerTest >> testStartEndpointOnDoesNotMount [
+
+	| projectionServer |
+	projectionServer := PIFSServer startEndpointOn: self testPort.
+	self assert: projectionServer mountPath isNil.
+	self assert: projectionServer mountName isNil
+]
+
+{ #category : 'tests' }
+PIFSServerTest >> testStartEndpointOnOccupiedPortSignalsClearError [
 
 	| occupyingSocket |
 	occupyingSocket := ZnNetworkingUtils serverSocketOn: self testPort.
 	[
 		self
-			should: [ PIFSServer startOn: self testPort ]
+			should: [ PIFSServer startEndpointOn: self testPort ]
 			raise: Error
 			whoseDescriptionIncludes: 'port may already be in use'
 			description: 'PIFS should fail clearly when the requested projection port is occupied by another server.'.
@@ -85,29 +94,20 @@ PIFSServerTest >> testStartOnOccupiedPortSignalsClearError [
 ]
 
 { #category : 'tests' }
-PIFSServerTest >> testStartOnRegistersServerByPort [
+PIFSServerTest >> testStartEndpointOnRegistersServerByPort [
 
 	| projectionServer |
-	projectionServer := PIFSServer startOn: self testPort.
+	projectionServer := PIFSServer startEndpointOn: self testPort.
 	self assert: (PIFSServer serverOn: self testPort) equals: projectionServer.
 	self assert: projectionServer port equals: self testPort
-]
-
-{ #category : 'tests' }
-PIFSServerTest >> testStartOnStartsProjectionOnly [
-
-	| projectionServer |
-	projectionServer := PIFSServer startOn: self testPort.
-	self assert: projectionServer mountPath isNil.
-	self assert: projectionServer mountName isNil
 ]
 
 { #category : 'tests' }
 PIFSServerTest >> testStartingSamePortReplacesRegisteredServer [
 
 	| firstServer secondServer |
-	firstServer := PIFSServer startOn: self testPort.
-	secondServer := PIFSServer startOn: self testPort.
+	firstServer := PIFSServer startEndpointOn: self testPort.
+	secondServer := PIFSServer startEndpointOn: self testPort.
 	self deny: firstServer == secondServer.
 	self assert: (PIFSServer serverOn: self testPort) equals: secondServer.
 	self assert: firstServer port isNil
@@ -116,7 +116,7 @@ PIFSServerTest >> testStartingSamePortReplacesRegisteredServer [
 { #category : 'tests' }
 PIFSServerTest >> testStopOnUnregistersServerByPort [
 
-	PIFSServer startOn: self testPort.
+	PIFSServer startEndpointOn: self testPort.
 	PIFSServer stopOn: self testPort.
 	self assert: (PIFSServer serverOn: self testPort) isNil
 ]
