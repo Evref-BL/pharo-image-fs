@@ -42,9 +42,21 @@ PIFSVersion class >> daemonAssetOperatingSystem [
 ]
 
 { #category : 'accessing' }
+PIFSVersion class >> daemonReleaseApiURL [
+
+	^ self daemonRepositoryApiURL , '/releases/tags/' , self releaseTag
+]
+
+{ #category : 'accessing' }
 PIFSVersion class >> daemonReleaseURL [
 
 	^ self daemonRepositoryURL , '/releases/download/' , self releaseTag , '/' , self daemonArchiveName
+]
+
+{ #category : 'accessing' }
+PIFSVersion class >> daemonRepositoryApiURL [
+
+	^ self daemonRepositoryURL copyReplaceAll: 'https://github.com/' with: 'https://api.github.com/repos/'
 ]
 
 { #category : 'accessing' }
