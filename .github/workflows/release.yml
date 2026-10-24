@@ -114,9 +114,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # No --title: --generate-notes names the release as well as writing
+          # its body, so both come from GitHub rather than from here.
           gh release create "${{ steps.version.outputs.tag }}" \
             --target "$RELEASE_SHA" \
-            --title "${{ steps.version.outputs.tag }}" \
             --generate-notes
 
       - name: Notify released consumers
