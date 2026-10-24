@@ -172,7 +172,21 @@ PIFSServer class >> shellQuote: aString [
 { #category : 'instance creation' }
 PIFSServer class >> start [
 
-	^ self startMountedAt: self defaultMountPath named: self defaultMountName
+	^ self start: PIFSConfiguration default
+]
+
+{ #category : 'instance creation' }
+PIFSServer class >> start: aConfiguration [
+
+	| projectionServer |
+	projectionServer := self startEndpointOn: aConfiguration port.
+	projectionServer backend configuration: aConfiguration.
+	[ projectionServer startDaemonMountedAt: aConfiguration mountPath named: aConfiguration mountName ]
+		on: Error
+		do: [ :error |
+				projectionServer stop.
+				error pass ].
+	^ projectionServer
 ]
 
 { #category : 'instance creation - endpoint' }
@@ -188,20 +202,10 @@ PIFSServer class >> startEndpointOn: portNumber [
 { #category : 'instance creation' }
 PIFSServer class >> startMountedAt: aPath named: aString [
 
-	^ self startOn: 0 mountedAt: aPath named: aString
-]
-
-{ #category : 'instance creation' }
-PIFSServer class >> startOn: portNumber mountedAt: aPath named: aString [
-
-	| projectionServer |
-	projectionServer := self startEndpointOn: portNumber.
-	[ projectionServer startDaemonMountedAt: aPath named: aString ]
-		on: Error
-		do: [ :error |
-				projectionServer stop.
-				error pass ].
-	^ projectionServer
+	^ self start: (PIFSConfiguration new
+			   mountPath: aPath;
+			   mountName: aString;
+			   yourself)
 ]
 
 { #category : 'registry' }

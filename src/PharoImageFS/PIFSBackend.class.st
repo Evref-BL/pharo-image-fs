@@ -6,23 +6,11 @@ Class {
 	#superclass : 'Object',
 	#instVars : [
 		'critiqueEntries',
-		'requiresRepositoryOwnershipForWrites',
-		'excludedPackagePrefixes',
-		'includedPackagePrefixes',
-		'formatsWrittenMethods'
+		'configuration'
 	],
 	#category : 'PharoImageFS',
 	#package : 'PharoImageFS'
 }
-
-{ #category : 'defaults' }
-PIFSBackend class >> formatsWrittenMethodsByDefault [
-
-	| value |
-	value := OSEnvironment current at: 'PHARO_IMAGE_FS_FORMAT' ifAbsent: [ ^ false ].
-	value ifEmpty: [ ^ false ].
-	^ (#( '0' 'false' 'no' 'off' ) includes: value asLowercase) not
-]
 
 { #category : 'private - critiques' }
 PIFSBackend >> addSourceIntervalFromCritique: aCritique to: data [
@@ -240,6 +228,18 @@ PIFSBackend >> commaSeparated: strings [
 			  stream nextPutAll: each ] ]
 ]
 
+{ #category : 'accessing' }
+PIFSBackend >> configuration [
+
+	^ configuration ifNil: [ configuration := PIFSConfiguration default ]
+]
+
+{ #category : 'accessing' }
+PIFSBackend >> configuration: aConfiguration [
+
+	configuration := aConfiguration
+]
+
 { #category : 'private - critiques' }
 PIFSBackend >> critiqueDataForBehavior: aBehavior [
 
@@ -449,13 +449,13 @@ PIFSBackend >> entryNamed: aString in: entries ifAbsent: absentBlock [
 { #category : 'accessing' }
 PIFSBackend >> excludedPackagePrefixes [
 
-	^ excludedPackagePrefixes ifNil: [ #(  ) ]
+	^ self configuration excludedPackagePrefixes
 ]
 
 { #category : 'accessing' }
 PIFSBackend >> excludedPackagePrefixes: prefixStrings [
 
-	excludedPackagePrefixes := prefixStrings asArray
+	self configuration excludedPackagePrefixes: prefixStrings
 ]
 
 { #category : 'private - moving' }
@@ -573,13 +573,13 @@ PIFSBackend >> fileNamed: aString text: textString writable: aBoolean [
 { #category : 'accessing' }
 PIFSBackend >> formatsWrittenMethods [
 
-	^ formatsWrittenMethods ifNil: [ self class formatsWrittenMethodsByDefault ]
+	^ self configuration formatsWrittenMethods
 ]
 
 { #category : 'accessing' }
 PIFSBackend >> formatsWrittenMethods: aBoolean [
 
-	formatsWrittenMethods := aBoolean
+	self configuration formatsWrittenMethods: aBoolean
 ]
 
 { #category : 'private - repositories' }
@@ -605,13 +605,13 @@ PIFSBackend >> iceRepositoryDirectoryFor: aRepository [
 { #category : 'accessing' }
 PIFSBackend >> includedPackagePrefixes [
 
-	^ includedPackagePrefixes ifNil: [ #(  ) ]
+	^ self configuration includedPackagePrefixes
 ]
 
 { #category : 'accessing' }
 PIFSBackend >> includedPackagePrefixes: prefixStrings [
 
-	includedPackagePrefixes := prefixStrings asArray
+	self configuration includedPackagePrefixes: prefixStrings
 ]
 
 { #category : 'private - packages' }
@@ -1376,13 +1376,13 @@ PIFSBackend >> repositoryProjectionNameFor: aString [
 { #category : 'accessing' }
 PIFSBackend >> requiresRepositoryOwnershipForWrites [
 
-	^ requiresRepositoryOwnershipForWrites ifNil: [ true ]
+	^ self configuration requiresRepositoryOwnershipForWrites
 ]
 
 { #category : 'accessing' }
 PIFSBackend >> requiresRepositoryOwnershipForWrites: aBoolean [
 
-	requiresRepositoryOwnershipForWrites := aBoolean
+	self configuration requiresRepositoryOwnershipForWrites: aBoolean
 ]
 
 { #category : 'private - deleting' }

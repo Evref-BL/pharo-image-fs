@@ -358,6 +358,38 @@ PIFSBackendTest >> tearDown [
 ]
 
 { #category : 'tests' }
+PIFSBackendTest >> testBackendReadsTheConfigurationItWasGiven [
+
+	| backend configuration |
+	configuration := PIFSConfiguration new
+		                 requiresRepositoryOwnershipForWrites: false;
+		                 formatsWrittenMethods: true;
+		                 includedPackagePrefixes: #( 'MyProject' );
+		                 excludedPackagePrefixes: #( 'MyProject-Legacy' );
+		                 yourself.
+	backend := self newBackend.
+	backend configuration: configuration.
+	self deny: backend requiresRepositoryOwnershipForWrites.
+	self assert: backend formatsWrittenMethods.
+	self assert: backend includedPackagePrefixes equals: #( 'MyProject' ).
+	self assert: backend excludedPackagePrefixes equals: #( 'MyProject-Legacy' )
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testBackendSettersWriteThroughToTheConfiguration [
+
+	| backend |
+	backend := self newBackend.
+	backend
+		requiresRepositoryOwnershipForWrites: false;
+		formatsWrittenMethods: true;
+		excludedPackagePrefixes: #( 'Legacy' ).
+	self deny: backend configuration requiresRepositoryOwnershipForWrites.
+	self assert: backend configuration formatsWrittenMethods.
+	self assert: backend configuration excludedPackagePrefixes equals: #( 'Legacy' )
+]
+
+{ #category : 'tests' }
 PIFSBackendTest >> testClassTonelFileDoesNotIncludeExtensionMethods [
 
 	| backend classText extensionText |
@@ -647,7 +679,7 @@ PIFSBackendTest >> testFormatsWrittenMethodsFollowsEnvironmentOverride [
 PIFSBackendTest >> testFormatsWrittenMethodsIsDisabledWithoutEnvironmentOverride [
 
 	self withFormatEnvironmentVariable: nil do: [
-			self deny: PIFSBackend formatsWrittenMethodsByDefault.
+			self deny: PIFSConfiguration formatsWrittenMethodsByDefault.
 			self deny: self newBackend formatsWrittenMethods ]
 ]
 
