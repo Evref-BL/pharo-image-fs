@@ -66,40 +66,34 @@ local cache before starting the mount. For local development, set
 Start the Pharo-side projection endpoint and daemon from the image:
 
 ```smalltalk
-PIFSServer startAndMountOn: 9013
+PIFSServer start
 ```
 
-For an automatically allocated loopback port, use:
+That mounts at the default mountpoint, under the default volume name, on an
+automatically allocated loopback port. The answered projection reports what it
+picked:
 
 ```smalltalk
-projectionServer := PIFSServer startAndMountOnAvailablePort.
-projectionServer port
+projection := PIFSServer start.
+projection port.
+projection mountPath
 ```
 
-For an automatically allocated port with a project-specific mountpoint, use
-the existing general creation message:
+For a project-specific mountpoint and volume name:
 
 ```smalltalk
 PIFSServer
-	startOn: 0
-	mountAt: '.pharo-agent/projection' asFileReference
+	startMountedAt: '.pharo-agent/projection' asFileReference
 	named: 'pharo-image-fs'
 ```
 
-To use the default mountpoint with an explicit volume name:
+A fixed port is only needed when something outside the image has to know it in
+advance:
 
 ```smalltalk
 PIFSServer
 	startOn: 9013
-	mountNamed: 'pharo-image-fs'
-```
-
-To use an explicit mountpoint and volume name:
-
-```smalltalk
-PIFSServer
-	startOn: 9013
-	mountAt: '/tmp/pharo-image-fs' asFileReference
+	mountedAt: '/tmp/pharo-image-fs' asFileReference
 	named: 'pharo-image-fs'
 ```
 
@@ -116,16 +110,14 @@ disable the check on the projection backend:
 
 ```smalltalk
 | projection |
-projection := PIFSServer
-	              startOn: 9013
-	              mountAt: '/tmp/pharo-image-fs' asFileReference
-	              named: 'pharo-image-fs'.
+projection := PIFSServer start.
 projection backend requiresRepositoryOwnershipForWrites: false
 ```
 
-Stop it from Pharo with:
+Stop it from Pharo with the projection itself, or by the port it reports:
 
 ```smalltalk
+projection stop.
 PIFSServer stopOn: 9013
 ```
 
@@ -217,7 +209,7 @@ list to hide matching prefixes. Exclusions take precedence over inclusions.
 
 ```smalltalk
 | projection |
-projection := PIFSServer startAndMountOn: 9013.
+projection := PIFSServer start.
 projection backend
 	includedPackagePrefixes: #( 'MyProject' );
 	excludedPackagePrefixes: #( 'MyProject-Legacy' )
