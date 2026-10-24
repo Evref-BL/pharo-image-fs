@@ -5,25 +5,13 @@ Class {
 	#name : 'PIFSBackend',
 	#superclass : 'Object',
 	#instVars : [
-		'critiqueEntries',
-		'configuration'
+		'configuration',
+		'critiques',
+		'repositories'
 	],
 	#category : 'PharoImageFS',
 	#package : 'PharoImageFS'
 }
-
-{ #category : 'private - critiques' }
-PIFSBackend >> addSourceIntervalFromCritique: aCritique to: data [
-
-	| interval sourceAnchor |
-	sourceAnchor := aCritique sourceAnchor.
-	sourceAnchor ifNil: [ ^ self ].
-	interval := sourceAnchor interval.
-	interval ifNil: [ ^ self ].
-	data at: #interval put: {
-			interval first.
-			interval last }
-]
 
 { #category : 'private - writing' }
 PIFSBackend >> applyClassTonelText: textString replacing: previousTextString className: className packageName: packageName originalPath: aString [
@@ -126,40 +114,6 @@ PIFSBackend >> assertRepositoryOwnsPackageNamed: packageName originalPath: aStri
 				, aString ]
 ]
 
-{ #category : 'private - critiques' }
-PIFSBackend >> blockingCritiqueSummaryFor: critiqueDictionaries [
-
-	^ String streamContents: [ :stream |
-			  critiqueDictionaries
-				  do: [ :critique |
-						  stream
-							  nextPutAll: (critique at: #rule);
-							  nextPutAll: ': ';
-							  nextPutAll: (critique at: #title) ]
-				  separatedBy: [ stream nextPutAll: '; ' ] ]
-]
-
-{ #category : 'private - critiques' }
-PIFSBackend >> blockingCritiquesForMethodNode: aMethodNode [
-
-	| critiques |
-	critiques := OrderedCollection new.
-	self blockingPreCompileRuleClasses do: [ :ruleClass |
-			| rule |
-			rule := ruleClass new.
-			aMethodNode nodesDo: [ :node | rule check: node forCritiquesDo: [ :critique | critiques add: critique ] ] ].
-	^ self critiqueDictionariesFor: critiques
-]
-
-{ #category : 'private - critiques' }
-PIFSBackend >> blockingPreCompileRuleClasses [
-
-	| ruleClass |
-	ruleClass := Smalltalk globals at: #ReDeadBlockRule ifAbsent: [ nil ].
-	ruleClass ifNil: [ ^ #(  ) ].
-	^ { ruleClass }
-]
-
 { #category : 'private - writing' }
 PIFSBackend >> classDefinitionFrom: definitions originalPath: aString [
 
@@ -241,37 +195,16 @@ PIFSBackend >> configuration: aConfiguration [
 ]
 
 { #category : 'private - critiques' }
-PIFSBackend >> critiqueDataForBehavior: aBehavior [
-
-	^ self critiqueDictionariesFor: (ReCriticEngine critiquesOf: aBehavior)
-]
-
-{ #category : 'private - critiques' }
-PIFSBackend >> critiqueDataForCompiledMethod: aCompiledMethod [
-
-	^ self critiqueDictionariesFor: (ReCriticEngine critiquesOf: aCompiledMethod) , (ReCriticEngine nodeCritiquesOf: aCompiledMethod)
-]
-
-{ #category : 'private - critiques' }
-PIFSBackend >> critiqueDictionariesFor: critiques [
-
-	^ (critiques collect: [ :critique | self dictionaryForCritique: critique ] as: Array) sorted: [ :left :right |
-			  (left at: #title ifAbsent: [ '' ]) = (right at: #title ifAbsent: [ '' ])
-				  ifTrue: [ (left at: #rule ifAbsent: [ '' ]) <= (right at: #rule ifAbsent: [ '' ]) ]
-				  ifFalse: [ (left at: #title ifAbsent: [ '' ]) <= (right at: #title ifAbsent: [ '' ]) ] ]
-]
-
-{ #category : 'private - critiques' }
 PIFSBackend >> critiqueEntries [
 
-	^ critiqueEntries ifNil: [ critiqueEntries := Dictionary new ]
+	^ self critiques entries
 ]
 
 { #category : 'private - critiques' }
 PIFSBackend >> critiqueEntryForPackageNamed: packageName classNamed: className ifAbsent: absentBlock [
 
 	self assertPackageIsVisibleNamed: packageName originalPath: '/critiques/' , packageName.
-	^ self critiqueEntries at: packageName at: className ifAbsent: absentBlock
+	^ self critiques entryForPackageNamed: packageName classNamed: className ifAbsent: absentBlock
 ]
 
 { #category : 'private - critiques' }
@@ -283,7 +216,7 @@ PIFSBackend >> critiqueEntryForPackageNamed: packageName classNamed: className i
 { #category : 'private - critiques' }
 PIFSBackend >> critiqueMethodDataIn: classEntry forSelector: aSelector ifAbsent: absentBlock [
 
-	^ classEntry at: #methods at: aSelector ifAbsent: absentBlock
+	^ self critiques methodDataIn: classEntry forSelector: aSelector ifAbsent: absentBlock
 ]
 
 { #category : 'private - listing' }
@@ -313,6 +246,12 @@ PIFSBackend >> critiqueRootEntries [
 
 	^ (self critiqueEntries keys select: [ :packageName | self isPackageVisibleNamed: packageName ]) sorted collect: [ :packageName |
 		  self directoryNamed: packageName ]
+]
+
+{ #category : 'accessing' }
+PIFSBackend >> critiques [
+
+	^ critiques ifNil: [ critiques := PIFSCritiqueIndex new ]
 ]
 
 { #category : 'private - paths' }
@@ -420,20 +359,6 @@ PIFSBackend >> deleteTonelSegments: segments originalPath: aString [
 	self signalUnsupportedWrite: aString
 ]
 
-{ #category : 'private - critiques' }
-PIFSBackend >> dictionaryForCritique: aCritique [
-
-	| data rule |
-	rule := aCritique rule.
-	data := OrderedDictionary new.
-	data at: #rule put: rule class name asString.
-	rule severity ifNotNil: [ :severity | data at: #severity put: severity asString ].
-	rule rationale ifNotNil: [ :hint | data at: #hint put: hint asString ].
-	data at: #title put: aCritique title asString.
-	self addSourceIntervalFromCritique: aCritique to: data.
-	^ data
-]
-
 { #category : 'private - entries' }
 PIFSBackend >> directoryNamed: aString [
 
@@ -473,32 +398,9 @@ PIFSBackend >> executeClassRenameFrom: oldClassName to: newClassName [
 ]
 
 { #category : 'private - repositories' }
-PIFSBackend >> exportIcePackage: anIcePackage to: sourceDirectory [
-
-	| versionInfo |
-	versionInfo := MCVersionInfo
-		               name: anIcePackage packageName
-		               id: UUID new
-		               message: ''
-		               date: Date today
-		               time: Time now
-		               ancestors: #(  )
-		               stepChildren: #(  ).
-	TonelWriter fileOut: (MCVersion package: anIcePackage mcPackage info: versionInfo) on: sourceDirectory
-]
-
-{ #category : 'private - repositories' }
 PIFSBackend >> exportPackageNamed: packageName [
 
-	| icePackage repository |
-	repository := self repositoryOwningPackageNamed: packageName ifAbsent: [ ^ self ].
-	icePackage := self
-		              icePackageNamed: packageName
-		              in: repository
-		              ifAbsent: [ Error signal: 'Repository ' , repository name , ' does not have loaded package ' , packageName ].
-	repository codeDirectory ensureCreateDirectory.
-	self exportIcePackage: icePackage to: repository codeDirectory.
-	icePackage beClean
+	self repositories exportPackageNamed: packageName
 ]
 
 { #category : 'private - repositories' }
@@ -582,26 +484,6 @@ PIFSBackend >> formatsWrittenMethods: aBoolean [
 	self configuration formatsWrittenMethods: aBoolean
 ]
 
-{ #category : 'private - repositories' }
-PIFSBackend >> icePackageNamed: packageName in: aRepository ifAbsent: absentBlock [
-
-	^ aRepository loadedPackages detect: [ :package | package packageName asString = packageName ] ifNone: absentBlock
-]
-
-{ #category : 'private - repositories' }
-PIFSBackend >> iceRepositories [
-
-	^ IceRepository repositories
-]
-
-{ #category : 'private - repositories' }
-PIFSBackend >> iceRepositoryDirectoryFor: aRepository [
-
-	| directory |
-	directory := aRepository repositoryDirectory.
-	^ directory ifNotNil: [ directory asFileReference ]
-]
-
 { #category : 'accessing' }
 PIFSBackend >> includedPackagePrefixes [
 
@@ -622,7 +504,7 @@ PIFSBackend >> isPackageVisibleNamed: packageName [
 		  self excludedPackagePrefixes noneSatisfy: [ :prefix | packageName beginsWith: prefix ] ]
 ]
 
-{ #category : 'private - critiques' }
+{ #category : 'private - json' }
 PIFSBackend >> jsonTextFor: anObject [
 
 	^ STONJSON toString: anObject
@@ -720,18 +602,6 @@ PIFSBackend >> makeTonelPackageDirectoryNamed: packageName originalPath: aString
 	self assertPackageIsVisibleNamed: packageName originalPath: aString.
 	self assertRepositoryOwnsPackageNamed: packageName originalPath: aString.
 	PackageOrganizer default ensurePackage: packageName
-]
-
-{ #category : 'private - critiques' }
-PIFSBackend >> methodCritiqueDataForClass: aClass selector: aSelector [
-
-	| data |
-	data := OrderedDictionary new.
-	(aClass includesSelector: aSelector) ifTrue: [ data at: #instance put: (self critiqueDataForCompiledMethod: aClass >> aSelector) ].
-	(aClass classSide includesSelector: aSelector) ifTrue: [
-		data at: #class put: (self critiqueDataForCompiledMethod: aClass classSide >> aSelector) ].
-	data ifEmpty: [ Error signal: 'Critique selector not found: ' , aClass name asString , '>>' , aSelector asString ].
-	^ data
 ]
 
 { #category : 'private - writing' }
@@ -1058,45 +928,19 @@ PIFSBackend >> readTonelSegments: segments originalPath: aString [
 { #category : 'private - critiques' }
 PIFSBackend >> recordCritiquesForClassNamed: className packageName: packageName methodDefinitions: methodDefinitions [
 
-	self
-		recordCritiquesForClassNamed: className
+	self critiques
+		recordForClass: (self classNamed: className originalPath: '/critiques/' , packageName , '/' , className)
 		packageName: packageName
 		methodDefinitions: methodDefinitions
-		includeClass: true
-]
-
-{ #category : 'private - critiques' }
-PIFSBackend >> recordCritiquesForClassNamed: className packageName: packageName methodDefinitions: methodDefinitions includeClass: includeClass [
-
-	| class classEntry methods packageEntry selectors |
-	class := self classNamed: className originalPath: '/critiques/' , packageName , '/' , className.
-	packageEntry := self critiqueEntries at: packageName ifAbsentPut: [ Dictionary new ].
-	classEntry := OrderedDictionary new.
-	includeClass ifTrue: [
-			| classCritiques |
-			classCritiques := self critiqueDataForBehavior: class.
-			classCritiques ifNotEmpty: [ classEntry at: #class put: classCritiques ] ].
-	methods := Dictionary new.
-	selectors := (methodDefinitions collect: [ :methodDefinition | methodDefinition selector ]) asSet asArray sorted.
-	selectors do: [ :selector |
-			| methodCritiques |
-			methodCritiques := self methodCritiqueDataForClass: class selector: selector.
-			(methodCritiques values anySatisfy: [ :critiques | critiques notEmpty ]) ifTrue: [ methods at: selector put: methodCritiques ] ].
-	methods ifNotEmpty: [ classEntry at: #methods put: methods ].
-	classEntry
-		ifEmpty: [ packageEntry removeKey: className ifAbsent: [ ] ]
-		ifNotEmpty: [ packageEntry at: className put: classEntry ].
-	packageEntry ifEmpty: [ self critiqueEntries removeKey: packageName ifAbsent: [ ] ]
 ]
 
 { #category : 'private - critiques' }
 PIFSBackend >> recordCritiquesForExtensionClassNamed: className packageName: packageName methodDefinitions: methodDefinitions [
 
-	self
-		recordCritiquesForClassNamed: className
+	self critiques
+		recordExtensionForClass: (self classNamed: className originalPath: '/critiques/' , packageName , '/' , className)
 		packageName: packageName
 		methodDefinitions: methodDefinitions
-		includeClass: false
 ]
 
 { #category : 'private - writing' }
@@ -1131,8 +975,7 @@ PIFSBackend >> removeCompiledMethods: compiledMethods [
 { #category : 'private - critiques' }
 PIFSBackend >> removeCritiquesForClassNamed: className packageName: packageName [
 
-	(self critiqueEntries at: packageName ifAbsent: [ ^ self ]) removeKey: className ifAbsent: [ ].
-	(self critiqueEntries at: packageName) ifEmpty: [ self critiqueEntries removeKey: packageName ifAbsent: [ ] ]
+	self critiques removeForClassNamed: className packageName: packageName
 ]
 
 { #category : 'accessing' }
@@ -1268,12 +1111,16 @@ PIFSBackend >> renameTonelClassFileNamed: sourceFileName toFileNamed: targetFile
 				Error signal: failureMessage ]
 ]
 
-{ #category : 'private - repositories' }
-PIFSBackend >> repositoryCanExportSourceFor: aRepository [
+{ #category : 'accessing' }
+PIFSBackend >> repositories [
 
-	| directory |
-	directory := self iceRepositoryDirectoryFor: aRepository.
-	^ directory notNil and: [ directory exists ]
+	^ repositories ifNil: [ repositories := PIFSRepositories new ]
+]
+
+{ #category : 'accessing' }
+PIFSBackend >> repositories: aRepositories [
+
+	repositories := aRepositories
 ]
 
 { #category : 'private - repositories' }
@@ -1312,14 +1159,14 @@ PIFSBackend >> repositoryInfoForProjectionName: projectionName originalPath: aSt
 PIFSBackend >> repositoryInfoForRepository: repository ifPresent: presentBlock [
 
 	| directory info |
-	(self repositoryCanExportSourceFor: repository) ifFalse: [ ^ self ].
-	directory := self iceRepositoryDirectoryFor: repository.
+	(self repositories canExportSourceFor: repository) ifFalse: [ ^ self ].
+	directory := self repositories directoryFor: repository.
 	info := OrderedDictionary new.
 	info
 		at: #name put: repository name asString;
 		at: #projectionName put: (self repositoryProjectionNameFor: repository name asString);
 		at: #path put: directory pathString;
-		at: #loadedPackages put: (self repositoryLoadedPackageNamesFor: repository).
+		at: #loadedPackages put: (self repositories loadedPackageNamesFor: repository).
 	^ presentBlock value: info
 ]
 
@@ -1328,17 +1175,8 @@ PIFSBackend >> repositoryInfos [
 
 	| infos |
 	infos := OrderedCollection new.
-	self iceRepositories do: [ :repository | self repositoryInfoForRepository: repository ifPresent: [ :info | infos add: info ] ].
+	self repositories all do: [ :repository | self repositoryInfoForRepository: repository ifPresent: [ :info | infos add: info ] ].
 	^ infos asArray sorted: [ :left :right | (left at: #projectionName) <= (right at: #projectionName) ]
-]
-
-{ #category : 'private - repositories' }
-PIFSBackend >> repositoryLoadedPackageNamesFor: repository [
-
-	^ [
-		  (repository loadedPackages collect: [ :package | package packageName asString ] as: Array) sorted ]
-		  on: Error
-		  do: [ #(  ) ]
 ]
 
 { #category : 'private - repositories' }
@@ -1356,11 +1194,7 @@ PIFSBackend >> repositoryMetadataTextForFileNamed: fileName originalPath: aStrin
 { #category : 'private - repositories' }
 PIFSBackend >> repositoryOwningPackageNamed: packageName ifAbsent: absentBlock [
 
-	^ self iceRepositories
-		  detect: [ :repository |
-				  (self repositoryCanExportSourceFor: repository) and: [
-					  repository loadedPackages anySatisfy: [ :package | package packageName asString = packageName ] ] ]
-		  ifNone: absentBlock
+	^ self repositories owningPackageNamed: packageName ifAbsent: absentBlock
 ]
 
 { #category : 'private - repositories' }
@@ -1680,22 +1514,9 @@ PIFSBackend >> unloadMethodDefinitionsAbsentFrom: newMethodDefinitions in: oldMe
 ]
 
 { #category : 'private - critiques' }
-PIFSBackend >> validateBlockingCritiquesForMethodDefinition: methodDefinition originalPath: aString [
-
-	| critiques methodNode |
-	methodNode := RBParser parseMethod: methodDefinition source.
-	critiques := self blockingCritiquesForMethodNode: methodNode.
-	critiques ifEmpty: [ ^ self ].
-	Error signal:
-		'Write blocked by critiques in ' , methodDefinition className asString , '>>' , methodDefinition selector asString , ' for '
-		, aString , ': ' , (self blockingCritiqueSummaryFor: critiques)
-]
-
-{ #category : 'private - critiques' }
 PIFSBackend >> validateBlockingCritiquesForMethodDefinitions: methodDefinitions originalPath: aString [
 
-	methodDefinitions do: [ :methodDefinition |
-		self validateBlockingCritiquesForMethodDefinition: methodDefinition originalPath: aString ]
+	self critiques validateBlockingForMethodDefinitions: methodDefinitions originalPath: aString
 ]
 
 { #category : 'private - writing' }
