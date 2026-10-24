@@ -229,6 +229,24 @@ renaming, and `/critiques`; this avoids exposing a package through one path
 while hiding it through another. Update the lists on the running backend to
 change what the mount exposes on later filesystem operations.
 
+### Format written methods
+
+A write keeps the source it was given. Pharo formatting is available as an
+opt-in that reformats every method a write compiles:
+
+```smalltalk
+projection backend formatsWrittenMethods: true
+```
+
+Set `PHARO_IMAGE_FS_FORMAT` before starting the image to make formatting the
+default for every projection in it. `0`, `false`, `no`, `off`, and an empty
+value keep it off; any other value turns it on. The accessor overrides the
+variable.
+
+Formatting uses the formatter of the package being edited, the one its
+manifest answers from a class-side `formatter` method, and the image default
+when the package defines none.
+
 ### Supported code operations
 
 `/tonel` accepts full-file writes for:

@@ -93,6 +93,24 @@ PIFSBackendTest >> classTonelSourceWithExtraMethod [
 ]
 
 { #category : 'private' }
+PIFSBackendTest >> classTonelSourceWithLongMethod [
+
+	^ self classTonelSource , '
+{ #category : ''accessing'' }
+' , self originalClassName , ' >> longAnswer [
+
+	^ self veryLongReceiverName: 1 andAnother: 2 andYetAnother: 3
+]
+'
+]
+
+{ #category : 'private' }
+PIFSBackendTest >> classTonelSourceWithLongMethodForPackageNamed: packageName [
+
+	^ self classTonelSourceWithLongMethod copyReplaceAll: self fixturePackageName with: packageName
+]
+
+{ #category : 'private' }
 PIFSBackendTest >> classTonelSourceWithSlot [
 
 	^ 'Class {
@@ -159,6 +177,34 @@ PIFSBackendTest >> createReferenceUserClass [
 ]
 
 { #category : 'private' }
+PIFSBackendTest >> createTargetPackageManifestAnsweringFormatter: anExpressionString [
+
+	| manifestClass |
+	PackageOrganizer default ensurePackage: self targetPackageName.
+	manifestClass := (PackageManifest << self targetPackageManifestName asSymbol)
+		                 package: self targetPackageName;
+		                 install.
+	manifestClass class
+		compile: 'formatter
+
+	^ ' , anExpressionString
+		classified: 'formatting'.
+	^ manifestClass
+]
+
+{ #category : 'private' }
+PIFSBackendTest >> createTargetPackageManifestWithNarrowFormatter [
+
+	^ self createTargetPackageManifestAnsweringFormatter: 'EFFormatter new installNewContext: (EFContext new maxLineLength: 20)'
+]
+
+{ #category : 'private' }
+PIFSBackendTest >> createTargetPackageManifestWithUnixLineEndingFormatter [
+
+	^ self createTargetPackageManifestAnsweringFormatter: 'PIFSUnixLineEndingFormatterTestDouble new'
+]
+
+{ #category : 'private' }
 PIFSBackendTest >> decodedJsonFrom: aString [
 
 	^ STONJSON fromString: aString
@@ -215,6 +261,12 @@ PIFSBackendTest >> fixturePackageName [
 ]
 
 { #category : 'private' }
+PIFSBackendTest >> formatEnvironmentVariableName [
+
+	^ 'PHARO_IMAGE_FS_FORMAT'
+]
+
+{ #category : 'private' }
 PIFSBackendTest >> newBackend [
 
 	^ PIFSTestBackend new
@@ -264,6 +316,18 @@ PIFSBackendTest >> renamedClassTonelPath [
 ]
 
 { #category : 'private' }
+PIFSBackendTest >> setEnvironmentVariableNamed: aName to: aStringOrNil [
+
+	aStringOrNil ifNil: [ OSEnvironment current removeKey: aName ] ifNotNil: [ OSEnvironment current at: aName put: aStringOrNil ]
+]
+
+{ #category : 'private' }
+PIFSBackendTest >> targetPackageManifestName [
+
+	^ 'Manifest' , 'PIFSProjectionTargetFixture'
+]
+
+{ #category : 'private' }
 PIFSBackendTest >> targetPackageName [
 
 	^ 'PharoImageFS-ProjectionTargetFixture'
@@ -289,6 +353,7 @@ PIFSBackendTest >> tearDown [
 		self removeClassNamed: self renamedClassName.
 		self removeClassNamed: 'PIFSExtensionTarget'.
 		self removeClassNamed: self referenceUserClassName.
+		self removeClassNamed: self targetPackageManifestName.
 		self removePackageNamed: self targetPackageName ] ensure: [ super tearDown ]
 ]
 
@@ -561,6 +626,32 @@ PIFSBackendTest >> testFailedWriteDoesNotLeaveImplicitPackage [
 ]
 
 { #category : 'tests' }
+PIFSBackendTest >> testFormatsWrittenMethodsAccessorOverridesTheEnvironment [
+
+	self withFormatEnvironmentVariable: '1' do: [
+			| backend |
+			backend := self newBackend.
+			backend formatsWrittenMethods: false.
+			self deny: backend formatsWrittenMethods ]
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testFormatsWrittenMethodsFollowsEnvironmentOverride [
+
+	self withFormatEnvironmentVariable: '1' do: [ self assert: self newBackend formatsWrittenMethods ].
+	self withFormatEnvironmentVariable: 'off' do: [ self deny: self newBackend formatsWrittenMethods ].
+	self withFormatEnvironmentVariable: '' do: [ self deny: self newBackend formatsWrittenMethods ]
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testFormatsWrittenMethodsIsDisabledWithoutEnvironmentOverride [
+
+	self withFormatEnvironmentVariable: nil do: [
+			self deny: PIFSBackend formatsWrittenMethodsByDefault.
+			self deny: self newBackend formatsWrittenMethods ]
+]
+
+{ #category : 'tests' }
 PIFSBackendTest >> testIncludedPackagePrefixesRestrictTonelPaths [
 
 	| backend names |
@@ -705,6 +796,19 @@ PIFSBackendTest >> testReadMethodCritiqueFileReturnsSideKeys [
 			         '/critiques/' , self fixturePackageName , '/' , self originalClassName
 			         , '/manyArguments.second.third.fourth.fifth..json').
 	self assert: (data includesKey: 'instance')
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testReadUsesThePlatformLineEnding [
+
+	| backend text |
+	backend := self newBackend.
+	backend write: (self classTonelSourceWithUnformattedMethod withLineEndings: String cr) at: self originalClassTonelPath.
+	text := backend read: self originalClassTonelPath.
+	self assert: (text includesSubstring: 'messyAnswer').
+	self
+		assert: text = (text withLineEndings: OSPlatform current lineEnding)
+		description: 'The projection must serve the platform line ending, method bodies included'
 ]
 
 { #category : 'tests' }
@@ -986,6 +1090,53 @@ PIFSBackendTest >> testWriteCreatesPackageForNewClassWhenRepositoryOwnershipChec
 ]
 
 { #category : 'tests' }
+PIFSBackendTest >> testWriteKeepsAcceptedMethodSourceByDefault [
+
+	self withFormatEnvironmentVariable: nil do: [
+			| backend class source |
+			backend := self newBackend.
+			self deny: backend formatsWrittenMethods.
+			backend write: self classTonelSourceWithUnformattedMethod at: self originalClassTonelPath.
+			class := Smalltalk globals at: self originalClassName asSymbol.
+			source := class sourceCodeAt: #messyAnswer.
+			self assert: (source includesSubstring: '^(1+2)') ]
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testWriteKeepsTheImageLineEndingWhenFormatting [
+
+	| backend class source |
+	self createTargetPackageManifestWithUnixLineEndingFormatter.
+	backend := self newBackend.
+	backend requiresRepositoryOwnershipForWrites: false.
+	backend formatsWrittenMethods: true.
+	backend write: (self classTonelSourceForPackageNamed: self targetPackageName) at: self targetPackageTonelPath.
+	class := Smalltalk globals at: self originalClassName asSymbol.
+	source := class sourceCodeAt: #answer.
+	self
+		deny: (source includes: Character lf)
+		description: 'Formatting must not leave LF source in the image, whatever the package formatter emits'
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testWriteNormalizesLineEndingsToTheImageConvention [
+
+	{
+		String cr.
+		String lf.
+		String crlf } do: [ :lineEnding |
+			| backend class source |
+			backend := self newBackend.
+			backend write: (self classTonelSource withLineEndings: lineEnding) at: self originalClassTonelPath.
+			class := Smalltalk globals at: self originalClassName asSymbol.
+			source := class sourceCodeAt: #answer.
+			self
+				deny: (source includes: Character lf)
+				description: 'Image source must use CR whatever the written file used: ' , lineEnding asByteArray printString.
+			self removeClassNamed: self originalClassName ]
+]
+
+{ #category : 'tests' }
 PIFSBackendTest >> testWriteRecordsCritiquesForEditedMethod [
 
 	| backend classEntries data methodEntries packageEntries |
@@ -1004,15 +1155,34 @@ PIFSBackendTest >> testWriteRecordsCritiquesForEditedMethod [
 ]
 
 { #category : 'tests' }
-PIFSBackendTest >> testWriteReformatsAcceptedMethodSource [
+PIFSBackendTest >> testWriteReformatsAcceptedMethodSourceWhenFormattingIsEnabled [
 
 	| backend class source |
 	backend := self newBackend.
+	backend formatsWrittenMethods: true.
 	backend write: self classTonelSourceWithUnformattedMethod at: self originalClassTonelPath.
 	class := Smalltalk globals at: self originalClassName asSymbol.
 	source := class sourceCodeAt: #messyAnswer.
 	self assert: source equals: ((class >> #messyAnswer) ast formattedCodeIn: class).
 	self deny: (source includesSubstring: '^(1+2)')
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testWriteReformatsWithThePackageFormatter [
+
+	| backend class method source |
+	self createTargetPackageManifestWithNarrowFormatter.
+	backend := self newBackend.
+	backend requiresRepositoryOwnershipForWrites: false.
+	backend formatsWrittenMethods: true.
+	backend write: (self classTonelSourceWithLongMethodForPackageNamed: self targetPackageName) at: self targetPackageTonelPath.
+	class := Smalltalk globals at: self originalClassName asSymbol.
+	method := class >> #longAnswer.
+	source := class sourceCodeAt: #longAnswer.
+	self assert: source equals: (method ast formattedCodeIn: class).
+	self
+		deny: source = method ast formattedCode
+		description: 'Formatting must use the package manifest formatter, not the default one'
 ]
 
 { #category : 'tests' }
@@ -1042,4 +1212,14 @@ PIFSBackendTest >> testWritesToExcludedPackagesAreRejected [
 		whoseDescriptionIncludes: 'Projection path not found'
 		description: 'Writes must not bypass package visibility'.
 	self deny: (PackageOrganizer default hasPackage: self targetPackageName)
+]
+
+{ #category : 'private' }
+PIFSBackendTest >> withFormatEnvironmentVariable: aStringOrNil do: aBlock [
+
+	| name previous |
+	name := self formatEnvironmentVariableName.
+	previous := OSEnvironment current at: name ifAbsent: [ nil ].
+	self setEnvironmentVariableNamed: name to: aStringOrNil.
+	^ aBlock ensure: [ self setEnvironmentVariableNamed: name to: previous ]
 ]

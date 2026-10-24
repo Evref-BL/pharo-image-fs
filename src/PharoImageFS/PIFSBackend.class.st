@@ -8,11 +8,21 @@ Class {
 		'critiqueEntries',
 		'requiresRepositoryOwnershipForWrites',
 		'excludedPackagePrefixes',
-		'includedPackagePrefixes'
+		'includedPackagePrefixes',
+		'formatsWrittenMethods'
 	],
 	#category : 'PharoImageFS',
 	#package : 'PharoImageFS'
 }
+
+{ #category : 'defaults' }
+PIFSBackend class >> formatsWrittenMethodsByDefault [
+
+	| value |
+	value := OSEnvironment current at: 'PHARO_IMAGE_FS_FORMAT' ifAbsent: [ ^ false ].
+	value ifEmpty: [ ^ false ].
+	^ (#( '0' 'false' 'no' 'off' ) includes: value asLowercase) not
+]
 
 { #category : 'private - critiques' }
 PIFSBackend >> addSourceIntervalFromCritique: aCritique to: data [
@@ -560,6 +570,18 @@ PIFSBackend >> fileNamed: aString text: textString writable: aBoolean [
 	^ self fileNamed: aString size: textString utf8Encoded size writable: aBoolean
 ]
 
+{ #category : 'accessing' }
+PIFSBackend >> formatsWrittenMethods [
+
+	^ formatsWrittenMethods ifNil: [ self class formatsWrittenMethodsByDefault ]
+]
+
+{ #category : 'accessing' }
+PIFSBackend >> formatsWrittenMethods: aBoolean [
+
+	formatsWrittenMethods := aBoolean
+]
+
 { #category : 'private - repositories' }
 PIFSBackend >> icePackageNamed: packageName in: aRepository ifAbsent: absentBlock [
 
@@ -665,7 +687,7 @@ PIFSBackend >> loadClassDefinition: classDefinition [
 PIFSBackend >> loadMethodDefinition: methodDefinition [
 
 	PIFSCompatibility loadMonticelloDefinition: methodDefinition.
-	self reformatLoadedMethodDefinition: methodDefinition
+	self formatsWrittenMethods ifTrue: [ self reformatLoadedMethodDefinition: methodDefinition ]
 ]
 
 { #category : 'private - reading' }
@@ -1079,13 +1101,16 @@ PIFSBackend >> recordCritiquesForExtensionClassNamed: className packageName: pac
 
 { #category : 'private - writing' }
 PIFSBackend >> reformatLoadedMethodDefinition: methodDefinition [
+	"CompiledMethod>>reformat formats through the AST node class, so it resolves AST-Core's manifest formatter instead of the edited package's own.
+	Compiling here also bypasses MCMethodDefinition>>source:, which is what normally restores the image line ending."
 
-	| behavior selector |
+	| behavior method selector |
 	behavior := methodDefinition actualClass.
 	behavior ifNil: [ ^ self ].
 	selector := methodDefinition selector asSymbol.
 	(behavior includesSelector: selector) ifFalse: [ ^ self ].
-	(behavior >> selector) reformat
+	method := behavior >> selector.
+	behavior compile: (method ast formattedCodeIn: behavior) withInternalLineEndings classified: method protocol
 ]
 
 { #category : 'private - writing' }
