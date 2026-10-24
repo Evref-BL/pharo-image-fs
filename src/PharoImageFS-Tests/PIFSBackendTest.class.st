@@ -926,9 +926,9 @@ PIFSBackendTest >> testRepositoryMetadataCanBeRead [
 PIFSBackendTest >> testRepositoryOwnershipIgnoresRepositoriesWithoutDirectory [
 
 	| backend missingDirectoryRepository ownedPackage repositoryDirectory writableRepository |
-	ownedPackage := PIFSPackageTestDouble named: self fixturePackageName.
-	repositoryDirectory := FileSystem memory root / 'repository'.
+	repositoryDirectory := FileLocator temp / 'pifs-repository-ownership-test'.
 	repositoryDirectory ensureCreateDirectory.
+	ownedPackage := PIFSPackageTestDouble named: self fixturePackageName.
 	missingDirectoryRepository := PIFSRepositoryTestDouble
 		                              named: 'Missing Directory Repository'
 		                              directory: nil
@@ -937,10 +937,12 @@ PIFSBackendTest >> testRepositoryOwnershipIgnoresRepositoriesWithoutDirectory [
 		                      named: 'Writable Repository'
 		                      directory: repositoryDirectory
 		                      loadedPackages: { ownedPackage }.
-	backend := PIFSRepositoryOwnershipTestBackend new.
-	backend iceRepositories: {
-			missingDirectoryRepository.
-			writableRepository }.
+	backend := PIFSBackend new.
+	backend repositories: (PIFSRepositoriesTestDouble new
+			 all: {
+					 missingDirectoryRepository.
+					 writableRepository };
+			 yourself).
 	self assert: (backend repositoryOwningPackageNamed: self fixturePackageName ifAbsent: [ nil ]) equals: writableRepository
 ]
 
@@ -953,8 +955,10 @@ PIFSBackendTest >> testRepositoryOwnershipRejectsRepositoryWithoutDirectory [
 		                              named: 'Missing Directory Repository'
 		                              directory: nil
 		                              loadedPackages: { ownedPackage }.
-	backend := PIFSRepositoryOwnershipTestBackend new.
-	backend iceRepositories: { missingDirectoryRepository }.
+	backend := PIFSBackend new.
+	backend repositories: (PIFSRepositoriesTestDouble new
+			 all: { missingDirectoryRepository };
+			 yourself).
 	self
 		should: [
 		backend assertRepositoryOwnsPackageNamed: self fixturePackageName originalPath: '/tonel/AST-Core/ManifestASTCore.class.st' ]

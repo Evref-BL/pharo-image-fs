@@ -6,7 +6,8 @@ Class {
 	#superclass : 'Object',
 	#instVars : [
 		'configuration',
-		'critiques'
+		'critiques',
+		'repositories'
 	],
 	#category : 'PharoImageFS',
 	#package : 'PharoImageFS'
@@ -397,32 +398,9 @@ PIFSBackend >> executeClassRenameFrom: oldClassName to: newClassName [
 ]
 
 { #category : 'private - repositories' }
-PIFSBackend >> exportIcePackage: anIcePackage to: sourceDirectory [
-
-	| versionInfo |
-	versionInfo := MCVersionInfo
-		               name: anIcePackage packageName
-		               id: UUID new
-		               message: ''
-		               date: Date today
-		               time: Time now
-		               ancestors: #(  )
-		               stepChildren: #(  ).
-	TonelWriter fileOut: (MCVersion package: anIcePackage mcPackage info: versionInfo) on: sourceDirectory
-]
-
-{ #category : 'private - repositories' }
 PIFSBackend >> exportPackageNamed: packageName [
 
-	| icePackage repository |
-	repository := self repositoryOwningPackageNamed: packageName ifAbsent: [ ^ self ].
-	icePackage := self
-		              icePackageNamed: packageName
-		              in: repository
-		              ifAbsent: [ Error signal: 'Repository ' , repository name , ' does not have loaded package ' , packageName ].
-	repository codeDirectory ensureCreateDirectory.
-	self exportIcePackage: icePackage to: repository codeDirectory.
-	icePackage beClean
+	self repositories exportPackageNamed: packageName
 ]
 
 { #category : 'private - repositories' }
@@ -504,26 +482,6 @@ PIFSBackend >> formatsWrittenMethods [
 PIFSBackend >> formatsWrittenMethods: aBoolean [
 
 	self configuration formatsWrittenMethods: aBoolean
-]
-
-{ #category : 'private - repositories' }
-PIFSBackend >> icePackageNamed: packageName in: aRepository ifAbsent: absentBlock [
-
-	^ aRepository loadedPackages detect: [ :package | package packageName asString = packageName ] ifNone: absentBlock
-]
-
-{ #category : 'private - repositories' }
-PIFSBackend >> iceRepositories [
-
-	^ IceRepository repositories
-]
-
-{ #category : 'private - repositories' }
-PIFSBackend >> iceRepositoryDirectoryFor: aRepository [
-
-	| directory |
-	directory := aRepository repositoryDirectory.
-	^ directory ifNotNil: [ directory asFileReference ]
 ]
 
 { #category : 'accessing' }
@@ -1153,12 +1111,16 @@ PIFSBackend >> renameTonelClassFileNamed: sourceFileName toFileNamed: targetFile
 				Error signal: failureMessage ]
 ]
 
-{ #category : 'private - repositories' }
-PIFSBackend >> repositoryCanExportSourceFor: aRepository [
+{ #category : 'accessing' }
+PIFSBackend >> repositories [
 
-	| directory |
-	directory := self iceRepositoryDirectoryFor: aRepository.
-	^ directory notNil and: [ directory exists ]
+	^ repositories ifNil: [ repositories := PIFSRepositories new ]
+]
+
+{ #category : 'accessing' }
+PIFSBackend >> repositories: aRepositories [
+
+	repositories := aRepositories
 ]
 
 { #category : 'private - repositories' }
@@ -1197,14 +1159,14 @@ PIFSBackend >> repositoryInfoForProjectionName: projectionName originalPath: aSt
 PIFSBackend >> repositoryInfoForRepository: repository ifPresent: presentBlock [
 
 	| directory info |
-	(self repositoryCanExportSourceFor: repository) ifFalse: [ ^ self ].
-	directory := self iceRepositoryDirectoryFor: repository.
+	(self repositories canExportSourceFor: repository) ifFalse: [ ^ self ].
+	directory := self repositories directoryFor: repository.
 	info := OrderedDictionary new.
 	info
 		at: #name put: repository name asString;
 		at: #projectionName put: (self repositoryProjectionNameFor: repository name asString);
 		at: #path put: directory pathString;
-		at: #loadedPackages put: (self repositoryLoadedPackageNamesFor: repository).
+		at: #loadedPackages put: (self repositories loadedPackageNamesFor: repository).
 	^ presentBlock value: info
 ]
 
@@ -1213,17 +1175,8 @@ PIFSBackend >> repositoryInfos [
 
 	| infos |
 	infos := OrderedCollection new.
-	self iceRepositories do: [ :repository | self repositoryInfoForRepository: repository ifPresent: [ :info | infos add: info ] ].
+	self repositories all do: [ :repository | self repositoryInfoForRepository: repository ifPresent: [ :info | infos add: info ] ].
 	^ infos asArray sorted: [ :left :right | (left at: #projectionName) <= (right at: #projectionName) ]
-]
-
-{ #category : 'private - repositories' }
-PIFSBackend >> repositoryLoadedPackageNamesFor: repository [
-
-	^ [
-		  (repository loadedPackages collect: [ :package | package packageName asString ] as: Array) sorted ]
-		  on: Error
-		  do: [ #(  ) ]
 ]
 
 { #category : 'private - repositories' }
@@ -1241,11 +1194,7 @@ PIFSBackend >> repositoryMetadataTextForFileNamed: fileName originalPath: aStrin
 { #category : 'private - repositories' }
 PIFSBackend >> repositoryOwningPackageNamed: packageName ifAbsent: absentBlock [
 
-	^ self iceRepositories
-		  detect: [ :repository |
-				  (self repositoryCanExportSourceFor: repository) and: [
-					  repository loadedPackages anySatisfy: [ :package | package packageName asString = packageName ] ] ]
-		  ifNone: absentBlock
+	^ self repositories owningPackageNamed: packageName ifAbsent: absentBlock
 ]
 
 { #category : 'private - repositories' }
