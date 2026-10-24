@@ -87,15 +87,20 @@ PIFSServer
 	named: 'pharo-image-fs'
 ```
 
-A fixed port is only needed when something outside the image has to know it in
-advance:
+Anything else is set through a `PIFSConfiguration`, which carries the
+mountpoint, the volume name, the port and the write policy. Only what differs
+from the default has to be named:
 
 ```smalltalk
-PIFSServer
-	startOn: 9013
-	mountedAt: '/tmp/pharo-image-fs' asFileReference
-	named: 'pharo-image-fs'
+PIFSServer start: (PIFSConfiguration new
+		 mountPath: '/tmp/pharo-image-fs' asFileReference;
+		 mountName: 'pharo-image-fs';
+		 port: 9013;
+		 yourself)
 ```
+
+A configuration given to `start:` is applied before the mount exists, so the
+projection never serves a write under a policy you were about to change.
 
 By default, writes require the target package to belong to a loaded,
 file-backed Iceberg repository with an existing source directory. Merely having
@@ -109,10 +114,14 @@ ownership error. To allow live-image-only writes, for example in a scratch image
 disable the check on the projection backend:
 
 ```smalltalk
-| projection |
-projection := PIFSServer start.
-projection backend requiresRepositoryOwnershipForWrites: false
+PIFSServer start: (PIFSConfiguration new
+		 requiresRepositoryOwnershipForWrites: false;
+		 yourself)
 ```
+
+The same switch is reachable on a running projection as
+`projection backend requiresRepositoryOwnershipForWrites: false`, which takes
+effect on later filesystem operations.
 
 Stop it from Pharo with the projection itself, or by the port it reports:
 
@@ -208,11 +217,10 @@ broad. Set an inclusion list to expose only matching prefixes, or an exclusion
 list to hide matching prefixes. Exclusions take precedence over inclusions.
 
 ```smalltalk
-| projection |
-projection := PIFSServer start.
-projection backend
-	includedPackagePrefixes: #( 'MyProject' );
-	excludedPackagePrefixes: #( 'MyProject-Legacy' )
+PIFSServer start: (PIFSConfiguration new
+		 includedPackagePrefixes: #( 'MyProject' );
+		 excludedPackagePrefixes: #( 'MyProject-Legacy' );
+		 yourself)
 ```
 
 An empty inclusion list, the default, does not restrict packages. Filtered
@@ -227,12 +235,12 @@ A write keeps the source it was given. Pharo formatting is available as an
 opt-in that reformats every method a write compiles:
 
 ```smalltalk
-projection backend formatsWrittenMethods: true
+PIFSServer start: (PIFSConfiguration new formatsWrittenMethods: true; yourself)
 ```
 
 Set `PHARO_IMAGE_FS_FORMAT` before starting the image to make formatting the
 default for every projection in it. `0`, `false`, `no`, `off`, and an empty
-value keep it off; any other value turns it on. The accessor overrides the
+value keep it off; any other value turns it on. The configuration overrides the
 variable.
 
 Formatting uses the formatter of the package being edited, the one its
