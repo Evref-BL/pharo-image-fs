@@ -21,6 +21,21 @@ Class {
 }
 
 { #category : 'private - daemon' }
+PIFSServer class >> daemonArchiveAssetURL [
+	"github.com answers a release download with a content-security-policy header longer than ZnConstants maximumLineLength, so Zn cannot even read the redirect. The API answers short headers, so the asset is resolved and fetched through it."
+
+	| release |
+	release := STONJSON fromString: (ZnClient new
+			            url: PIFSVersion daemonReleaseApiURL;
+			            accept: 'application/vnd.github+json';
+			            get).
+	^ (release at: 'assets')
+		  detect: [ :each | (each at: 'name') = PIFSVersion daemonArchiveName ]
+		  ifFound: [ :asset | asset at: 'url' ]
+		  ifNone: [ Error signal: 'Daemon release ' , PIFSVersion releaseTag , ' has no asset named ' , PIFSVersion daemonArchiveName ]
+]
+
+{ #category : 'private - daemon' }
 PIFSServer class >> daemonExecutable [
 
 	self daemonExecutableOverride ifNotNil: [ :override | ^ override ].
@@ -70,7 +85,8 @@ PIFSServer class >> defaultMountPath [
 PIFSServer class >> downloadDaemonArchiveTo: aFileReference [
 
 	ZnClient new
-		url: PIFSVersion daemonReleaseURL;
+		url: self daemonArchiveAssetURL;
+		accept: 'application/octet-stream';
 		downloadTo: aFileReference
 ]
 
