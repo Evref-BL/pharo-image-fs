@@ -11,7 +11,8 @@ Class {
 		'loadedMethodSelectors',
 		'unloadedMethodSelectors',
 		'classTonelTextRequestCount',
-		'extensionTextRequestCount'
+		'extensionTextRequestCount',
+		'exportedFileNames'
 	],
 	#category : 'PharoImageFS-Tests',
 	#package : 'PharoImageFS-Tests'
@@ -33,10 +34,20 @@ PIFSTestBackend >> classTonelTextRequestCount [
 { #category : 'private - repositories' }
 PIFSTestBackend >> exportPackageNamed: packageName [
 
-	remainingExportFailures > 0 ifTrue: [
-			remainingExportFailures := remainingExportFailures - 1.
-			Error signal: 'Simulated export failure for ' , packageName ].
-	exportedPackageNames add: packageName
+	self recordExportOfPackageNamed: packageName
+]
+
+{ #category : 'private - repositories' }
+PIFSTestBackend >> exportPackageNamed: packageName fileNamed: fileName [
+
+	self recordExportOfPackageNamed: packageName.
+	exportedFileNames add: packageName , '/' , fileName
+]
+
+{ #category : 'accessing' }
+PIFSTestBackend >> exportedFileNames [
+
+	^ exportedFileNames asArray
 ]
 
 { #category : 'accessing' }
@@ -75,6 +86,7 @@ PIFSTestBackend >> initialize [
 
 	super initialize.
 	exportedPackageNames := OrderedCollection new.
+	exportedFileNames := OrderedCollection new.
 	remainingExportFailures := 0.
 	self resetAppliedDefinitions.
 	self resetTextRequestCounts
@@ -104,6 +116,15 @@ PIFSTestBackend >> loadedClassDefinitionCount [
 PIFSTestBackend >> loadedMethodSelectors [
 
 	^ loadedMethodSelectors asArray
+]
+
+{ #category : 'private - repositories' }
+PIFSTestBackend >> recordExportOfPackageNamed: packageName [
+
+	remainingExportFailures > 0 ifTrue: [
+			remainingExportFailures := remainingExportFailures - 1.
+			Error signal: 'Simulated export failure for ' , packageName ].
+	exportedPackageNames add: packageName
 ]
 
 { #category : 'private - repositories' }

@@ -16,6 +16,19 @@ PIFSRepositories >> all [
 	^ IceRepository repositories
 ]
 
+{ #category : 'exporting' }
+PIFSRepositories >> applyExportedFile: source to: target [
+	"The export is the image's answer for this file. A file the export no longer
+	produces is one the change removed."
+
+	source exists ifFalse: [ ^ target ensureDelete ].
+	(target exists and: [
+		 (target binaryReadStreamDo: [ :stream | stream upToEnd ]) = (source binaryReadStreamDo: [ :stream | stream upToEnd ]) ])
+		ifTrue: [ ^ self ].
+	target ensureDelete.
+	source copyTo: target
+]
+
 { #category : 'accessing' }
 PIFSRepositories >> canExportSourceFor: aRepository [
 
@@ -49,6 +62,11 @@ PIFSRepositories >> exportPackage: anIcePackage to: sourceDirectory [
 
 { #category : 'exporting' }
 PIFSRepositories >> exportPackageNamed: packageName [
+	"Write every file of the package. TonelWriter deletes and recreates the
+	directory, so this also rewrites files the change did not touch; prefer
+	exportPackageNamed:filesNamed: wherever the change owns known files. It is
+	right for a class rename, which rewrites every reference, and references
+	inside the package are allowed."
 
 	| icePackage repository |
 	repository := self owningPackageNamed: packageName ifAbsent: [ ^ self ].
@@ -58,6 +76,31 @@ PIFSRepositories >> exportPackageNamed: packageName [
 		              ifAbsent: [ Error signal: 'Repository ' , repository name , ' does not have loaded package ' , packageName ].
 	repository codeDirectory ensureCreateDirectory.
 	self exportPackage: icePackage to: repository codeDirectory.
+	icePackage beClean
+]
+
+{ #category : 'exporting' }
+PIFSRepositories >> exportPackageNamed: packageName filesNamed: fileNames [
+	"Bring only these files of the package in line with the image.
+
+	TonelWriter deletes and recreates the whole package directory, so exporting
+	a package to save one class rewrites every other file in it, and a file
+	whose methods are not in the writer's own order comes back reordered. That
+	is an unrelated diff for a change that touched one method. Export into
+	memory and take only the files the change touched."
+
+	| icePackage repository exported packageDirectory |
+	repository := self owningPackageNamed: packageName ifAbsent: [ ^ self ].
+	icePackage := self
+		              packageNamed: packageName
+		              in: repository
+		              ifAbsent: [ Error signal: 'Repository ' , repository name , ' does not have loaded package ' , packageName ].
+	exported := FileSystem memory root.
+	self exportPackage: icePackage to: exported.
+	packageDirectory := repository codeDirectory / packageName.
+	packageDirectory ensureCreateDirectory.
+	#( 'package.st' ) , fileNames do: [ :fileName |
+		self applyExportedFile: exported / packageName / fileName to: packageDirectory / fileName ].
 	icePackage beClean
 ]
 

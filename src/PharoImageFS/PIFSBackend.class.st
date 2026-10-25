@@ -291,7 +291,7 @@ PIFSBackend >> deleteTonelClassFileNamed: fileName packageName: packageName orig
 	previousText := self classTonelTextFor: class.
 	[
 		class removeFromSystem.
-		self exportPackageNamed: packageName.
+		self exportPackageNamed: packageName fileNamed: fileName.
 		self removeCritiquesForClassNamed: className packageName: packageName ]
 		on: Error
 		do: [ :error |
@@ -323,7 +323,7 @@ PIFSBackend >> deleteTonelExtensionFileNamed: fileName packageName: packageName 
 	previousText := self extensionTextForClassName: className package: package originalPath: aString.
 	[
 		self removeCompiledMethods: methods.
-		self exportPackageNamed: packageName.
+		self exportPackageNamed: packageName fileNamed: fileName.
 		self removeCritiquesForClassNamed: className packageName: packageName ]
 		on: Error
 		do: [ :error |
@@ -334,7 +334,7 @@ PIFSBackend >> deleteTonelExtensionFileNamed: fileName packageName: packageName 
 						className: className
 						packageName: packageName
 						originalPath: aString.
-					self exportPackageNamed: packageName ]
+					self exportPackageNamed: packageName fileNamed: fileName ]
 					on: Error
 					do: [ :rollbackError |
 							Error signal: 'Projection delete failed and rollback failed. Delete error: ' , failureMessage , '. Rollback error: '
@@ -404,9 +404,26 @@ PIFSBackend >> exportPackageNamed: packageName [
 ]
 
 { #category : 'private - repositories' }
+PIFSBackend >> exportPackageNamed: packageName fileNamed: fileName [
+	"A change that touches one class owns one file. Exporting the package
+	would rewrite the rest of it too, reordering any file whose methods are
+	not in the writer's own order."
+
+	self repositories exportPackageNamed: packageName filesNamed: { fileName }
+]
+
+{ #category : 'private - repositories' }
 PIFSBackend >> exportPackagesNamed: packageNames [
 
 	packageNames do: [ :packageName | self exportPackageNamed: packageName ]
+]
+
+{ #category : 'private - repositories' }
+PIFSBackend >> exportPackagesNamed: packageNames fileNamed: fileName [
+	"A move changes one file in each of two packages, and nothing else in
+	either."
+
+	packageNames do: [ :packageName | self exportPackageNamed: packageName fileNamed: fileName ]
 ]
 
 { #category : 'private - reading' }
@@ -700,9 +717,11 @@ PIFSBackend >> moveTonelClassFileNamed: fileName packageName: sourcePackageName 
 	self packageNamed: targetPackageName ifAbsent: [ self signalNotFound: targetPath ].
 	[
 		self executeClassMoveNamed: className toPackage: targetPackageName.
-		self exportPackagesNamed: {
-				sourcePackageName.
-				targetPackageName }.
+		self
+			exportPackagesNamed: {
+					sourcePackageName.
+					targetPackageName }
+			fileNamed: fileName.
 		self removeCritiquesForClassNamed: className packageName: sourcePackageName.
 		self removeCritiquesForClassNamed: className packageName: targetPackageName ]
 		on: Error
@@ -710,9 +729,11 @@ PIFSBackend >> moveTonelClassFileNamed: fileName packageName: sourcePackageName 
 				failureMessage := error messageText ifNil: [ error asString ].
 				[
 					class package name asString = targetPackageName ifTrue: [ self executeClassMoveNamed: className toPackage: sourcePackageName ].
-					self exportPackagesNamed: {
-							targetPackageName.
-							sourcePackageName } ]
+					self
+						exportPackagesNamed: {
+								targetPackageName.
+								sourcePackageName }
+						fileNamed: fileName ]
 					on: Error
 					do: [ :rollbackError |
 							Error signal: 'Projection class move failed and rollback failed. Move error: ' , failureMessage , '. Rollback error: '
@@ -751,9 +772,11 @@ PIFSBackend >> moveTonelExtensionFileNamed: fileName packageName: sourcePackageN
 			className: className
 			packageName: targetPackageName
 			originalPath: targetPath.
-		self exportPackagesNamed: {
-				sourcePackageName.
-				targetPackageName }.
+		self
+			exportPackagesNamed: {
+					sourcePackageName.
+					targetPackageName }
+			fileNamed: fileName.
 		self removeCritiquesForClassNamed: className packageName: sourcePackageName.
 		self removeCritiquesForClassNamed: className packageName: targetPackageName ]
 		on: Error
@@ -767,9 +790,11 @@ PIFSBackend >> moveTonelExtensionFileNamed: fileName packageName: sourcePackageN
 						className: className
 						packageName: sourcePackageName
 						originalPath: sourcePath.
-					self exportPackagesNamed: {
-							targetPackageName.
-							sourcePackageName } ]
+					self
+						exportPackagesNamed: {
+								targetPackageName.
+								sourcePackageName }
+						fileNamed: fileName ]
 					on: Error
 					do: [ :rollbackError |
 							Error signal: 'Projection extension move failed and rollback failed. Move error: ' , failureMessage , '. Rollback error: '
@@ -1242,7 +1267,7 @@ PIFSBackend >> restoreClassTonelText: textString className: className packageNam
 					className: className
 					packageName: packageName
 					originalPath: aString ].
-	self exportPackageNamed: packageName
+	self exportPackageNamed: packageName fileNamed: className , '.class.st'
 ]
 
 { #category : 'private - writing' }
@@ -1256,7 +1281,7 @@ PIFSBackend >> rollbackClassTonelText: previousTextString afterFailedWriteToClas
 		className: className
 		packageName: packageName
 		originalPath: aString.
-	self exportPackageNamed: packageName
+	self exportPackageNamed: packageName fileNamed: className , '.class.st'
 ]
 
 { #category : 'private - writing' }
@@ -1270,7 +1295,7 @@ PIFSBackend >> rollbackExtensionTonelText: previousTextString afterFailedWriteTo
 		className: className
 		packageName: packageName
 		originalPath: aString.
-	self exportPackageNamed: packageName
+	self exportPackageNamed: packageName fileNamed: className , '.extension.st'
 ]
 
 { #category : 'private - listing' }
@@ -1641,7 +1666,7 @@ PIFSBackend >> writeTonelClassText: textString fileName: fileName packageName: p
 						className: className
 						packageName: packageName
 						originalPath: aString ].
-		self exportPackageNamed: packageName.
+		self exportPackageNamed: packageName fileNamed: fileName.
 		self recordCritiquesForClassNamed: className packageName: packageName methodDefinitions: methodDefinitions ]
 		on: Error
 		do: [ :error |
@@ -1656,7 +1681,7 @@ PIFSBackend >> writeTonelClassText: textString fileName: fileName packageName: p
 									originalPath: aString ]
 						ifFalse: [
 								self removeClassNamed: className ifPresentInPackage: packageName.
-								self exportPackageNamed: packageName ].
+								self exportPackageNamed: packageName fileNamed: fileName ].
 					packageExists ifFalse: [ self removePackageNamedIfEmpty: packageName ] ]
 					on: Error
 					do: [ :rollbackError |
@@ -1701,7 +1726,7 @@ PIFSBackend >> writeTonelExtensionText: textString fileName: fileName packageNam
 						className: className
 						packageName: packageName
 						originalPath: aString ].
-		self exportPackageNamed: packageName.
+		self exportPackageNamed: packageName fileNamed: fileName.
 		self recordCritiquesForExtensionClassNamed: className packageName: packageName methodDefinitions: methodDefinitions ]
 		on: Error
 		do: [ :error |
@@ -1710,7 +1735,7 @@ PIFSBackend >> writeTonelExtensionText: textString fileName: fileName packageNam
 					previousText
 						ifNil: [
 								self removeMethodDefinitions: methodDefinitions.
-								self exportPackageNamed: packageName ]
+								self exportPackageNamed: packageName fileNamed: fileName ]
 						ifNotNil: [
 								self
 									rollbackExtensionTonelText: previousText

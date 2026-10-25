@@ -461,6 +461,19 @@ PIFSBackendTest >> testDeleteClearsCritiquesForEditedClass [
 ]
 
 { #category : 'tests' }
+PIFSBackendTest >> testDeleteExportsOnlyTheDeletedClassFile [
+
+	| backend fileName |
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	fileName := self fixturePackageName , '/' , self originalClassName , '.class.st'.
+	backend delete: self originalClassTonelPath.
+	self assert: backend exportedFileNames equals: {
+			fileName.
+			fileName }
+]
+
+{ #category : 'tests' }
 PIFSBackendTest >> testDeleteRemovesClassTonelFile [
 
 	| backend |
@@ -888,6 +901,23 @@ PIFSBackendTest >> testRenameClassTonelFileRenamesClassAndReferences [
 ]
 
 { #category : 'tests' }
+PIFSBackendTest >> testRenameExportsThePackageBecauseItRewritesReferences [
+	"Only the first write is scoped. The rename exports the whole package,
+	because it rewrites every reference to the class, and references inside
+	the package are allowed."
+
+	| backend |
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	self createReferenceUserClass.
+	backend rename: self originalClassTonelPath to: self renamedClassTonelPath.
+	self assert: backend exportedFileNames equals: { (self fixturePackageName , '/' , self originalClassName , '.class.st') }.
+	self assert: backend exportedPackageNames equals: {
+			self fixturePackageName.
+			self fixturePackageName }
+]
+
+{ #category : 'tests' }
 PIFSBackendTest >> testRenameExtensionTonelFileSignalsUnsupportedWrite [
 
 	self
@@ -1123,6 +1153,15 @@ PIFSBackendTest >> testWriteCreatesPackageForNewClassWhenRepositoryOwnershipChec
 	self assert: (PackageOrganizer default hasPackage: self targetPackageName).
 	class := Smalltalk at: self originalClassName asSymbol.
 	self assert: class package name equals: self targetPackageName
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testWriteExportsOnlyTheWrittenClassFile [
+
+	| backend |
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	self assert: backend exportedFileNames equals: { (self fixturePackageName , '/' , self originalClassName , '.class.st') }
 ]
 
 { #category : 'tests' }
