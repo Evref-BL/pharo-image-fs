@@ -4,7 +4,13 @@ on:
   push:
     branches:
       - main
+    paths-ignore:
+      - '**.md'
+      - LICENSE
   pull_request:
+    paths-ignore:
+      - '**.md'
+      - LICENSE
   workflow_dispatch:
 
 jobs:
@@ -17,6 +23,7 @@ jobs:
           - Pharo64-12
           - Pharo64-13
           - Pharo64-14
+          - Pharo64-15
 
     name: ${{ matrix.smalltalk }}
     steps:
