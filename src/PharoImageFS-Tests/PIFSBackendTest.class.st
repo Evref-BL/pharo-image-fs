@@ -953,6 +953,25 @@ PIFSBackendTest >> testRepositoryMetadataCanBeRead [
 ]
 
 { #category : 'tests' }
+PIFSBackendTest >> testRepositoryOwnershipAcceptsADeclaredTonelRepository [
+
+	| backend ownedPackage repositoryDirectory tonelRepository |
+	repositoryDirectory := FileLocator temp / 'pifs-tonel-ownership-test'.
+	repositoryDirectory ensureCreateDirectory.
+	ownedPackage := PIFSPackageTestDouble named: self fixturePackageName.
+	tonelRepository := PIFSRepositoryTestDouble
+		                   named: 'Tonel Repository'
+		                   directory: repositoryDirectory
+		                   loadedPackages: { ownedPackage }.
+	tonelRepository sourceFormatId: #tonel.
+	backend := PIFSBackend new.
+	backend repositories: (PIFSRepositoriesTestDouble new
+			 all: { tonelRepository };
+			 yourself).
+	self assert: (backend repositoryOwningPackageNamed: self fixturePackageName ifAbsent: [ nil ]) equals: tonelRepository
+]
+
+{ #category : 'tests' }
 PIFSBackendTest >> testRepositoryOwnershipIgnoresRepositoriesWithoutDirectory [
 
 	| backend missingDirectoryRepository ownedPackage repositoryDirectory writableRepository |
@@ -974,6 +993,29 @@ PIFSBackendTest >> testRepositoryOwnershipIgnoresRepositoriesWithoutDirectory [
 					 writableRepository };
 			 yourself).
 	self assert: (backend repositoryOwningPackageNamed: self fixturePackageName ifAbsent: [ nil ]) equals: writableRepository
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testRepositoryOwnershipRejectsASourceFormatThisProjectionDoesNotWrite [
+
+	| backend fileTreeRepository ownedPackage repositoryDirectory |
+	repositoryDirectory := FileLocator temp / 'pifs-source-format-ownership-test'.
+	repositoryDirectory ensureCreateDirectory.
+	ownedPackage := PIFSPackageTestDouble named: self fixturePackageName.
+	fileTreeRepository := PIFSRepositoryTestDouble
+		                      named: 'FileTree Repository'
+		                      directory: repositoryDirectory
+		                      loadedPackages: { ownedPackage }.
+	fileTreeRepository sourceFormatId: #filetree.
+	backend := PIFSBackend new.
+	backend repositories: (PIFSRepositoriesTestDouble new
+			 all: { fileTreeRepository };
+			 yourself).
+	self
+		should: [ backend assertRepositoryOwnsPackageNamed: self fixturePackageName originalPath: self originalClassTonelPath ]
+		raise: Error
+		whoseDescriptionIncludes: 'keeps its source as filetree'
+		description: 'Writing Tonel into a FileTree checkout would leave a second copy of the source that no load reads.'
 ]
 
 { #category : 'tests' }

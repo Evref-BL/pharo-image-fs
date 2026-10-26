@@ -4,7 +4,8 @@ Class {
 	#instVars : [
 		'name',
 		'repositoryDirectory',
-		'loadedPackages'
+		'loadedPackages',
+		'sourceFormatId'
 	],
 	#category : 'PharoImageFS-Tests-Resources',
 	#package : 'PharoImageFS-Tests-Resources'
@@ -45,6 +46,15 @@ PIFSRepositoryTestDouble >> name: aString [
 ]
 
 { #category : 'accessing' }
+PIFSRepositoryTestDouble >> properties [
+	"A repository that was not given a format answers the way one that cannot
+	say does: by failing, which is what the projection reads as unknown."
+
+	sourceFormatId ifNil: [ Error signal: 'This repository double declares no source format.' ].
+	^ PIFSSourceFormatTestDouble id: sourceFormatId
+]
+
+{ #category : 'accessing' }
 PIFSRepositoryTestDouble >> repositoryDirectory [
 
 	^ repositoryDirectory
@@ -54,4 +64,10 @@ PIFSRepositoryTestDouble >> repositoryDirectory [
 PIFSRepositoryTestDouble >> repositoryDirectory: aFileReference [
 
 	repositoryDirectory := aFileReference
+]
+
+{ #category : 'accessing' }
+PIFSRepositoryTestDouble >> sourceFormatId: aSymbol [
+
+	sourceFormatId := aSymbol
 ]
