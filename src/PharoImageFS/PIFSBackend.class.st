@@ -108,6 +108,10 @@ PIFSBackend >> assertRepositoryOwnsPackageNamed: packageName originalPath: aStri
 
 	self requiresRepositoryOwnershipForWrites ifFalse: [ ^ self ].
 	self repositoryOwningPackageNamed: packageName ifAbsent: [
+			(self repositories unsupportedSourceFormatFor: packageName) ifNotNil: [ :formatId |
+					Error signal: 'Package ' , packageName , ' belongs to a repository that keeps its source as ' , formatId asString
+						, ', and this projection writes Tonel. Writing ' , aString
+						, ' would leave a second copy of the source beside the real one, which no load reads.' ].
 			Error signal: 'Package ' , packageName
 				,
 				' is not owned by a loaded Iceberg repository. Attach it to a repository or disable repository ownership checks before writing through '

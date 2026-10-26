@@ -32,9 +32,7 @@ PIFSRepositories >> applyExportedFile: source to: target [
 { #category : 'accessing' }
 PIFSRepositories >> canExportSourceFor: aRepository [
 
-	| directory |
-	directory := self directoryFor: aRepository.
-	^ directory notNil and: [ directory exists ]
+	^ (self hasCheckoutFor: aRepository) and: [ self writesTonelFor: aRepository ]
 ]
 
 { #category : 'accessing' }
@@ -111,6 +109,14 @@ PIFSRepositories >> exportPackagesNamed: packageNames [
 ]
 
 { #category : 'accessing' }
+PIFSRepositories >> hasCheckoutFor: aRepository [
+
+	| directory |
+	directory := self directoryFor: aRepository.
+	^ directory notNil and: [ directory exists ]
+]
+
+{ #category : 'accessing' }
 PIFSRepositories >> loadedPackageNamesFor: aRepository [
 
 	^ [ (aRepository loadedPackages collect: [ :package | package packageName asString ] as: Array) sorted ]
@@ -132,4 +138,42 @@ PIFSRepositories >> owningPackageNamed: packageName ifAbsent: absentBlock [
 PIFSRepositories >> packageNamed: packageName in: aRepository ifAbsent: absentBlock [
 
 	^ aRepository loadedPackages detect: [ :package | package packageName asString = packageName ] ifNone: absentBlock
+]
+
+{ #category : 'accessing' }
+PIFSRepositories >> sourceFormatIdFor: aRepository [
+	"Which source format the repository keeps on disk, as Iceberg's own writer
+	id: #tonel, #filetree, and so on. Answer nil for a repository that cannot
+	say."
+
+	^ [ aRepository properties writerClass id ]
+		  on: Error
+		  do: [ nil ]
+]
+
+{ #category : 'accessing' }
+PIFSRepositories >> unsupportedSourceFormatFor: packageName [
+	"The format of a repository that holds this package in a checkout, but keeps
+	its source in one this projection does not write. Answer nil when there is
+	no such repository."
+
+	^ self all
+		  detect: [ :repository |
+				  (self hasCheckoutFor: repository) and: [
+						  (self writesTonelFor: repository) not and: [
+							  repository loadedPackages anySatisfy: [ :package | package packageName asString = packageName ] ] ] ]
+		  ifFound: [ :repository | self sourceFormatIdFor: repository ]
+		  ifNone: [ nil ]
+]
+
+{ #category : 'accessing' }
+PIFSRepositories >> writesTonelFor: aRepository [
+	"This projection reads and writes Tonel. Exporting into a repository that
+	keeps another format would leave a second copy of the source beside the
+	real one, and no load reads the copy.
+
+	Refuse only a format the repository names: one that cannot say keeps the
+	behaviour it always had."
+
+	^ (self sourceFormatIdFor: aRepository) ifNil: [ true ] ifNotNil: [ :formatId | formatId = #tonel ]
 ]
