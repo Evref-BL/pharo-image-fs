@@ -6,7 +6,7 @@ SmalltalkCISpec {
       #ignoreImage : true,
       #onConflict : #useIncoming,
       #onUpgrade : #useIncoming,
-      #load : [ 'Tests', 'MCP Tests' ]
+      #load : [ 'Tests', 'Tools Tests' ]
     }
   ],
   #testing : {

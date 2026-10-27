@@ -24,9 +24,11 @@ BaselineOfPharoImageFS >> baseline: spec [
 			spec package: 'PharoImageFS-MCP-Tests' with: [ spec requires: #( 'PharoImageFS-MCP' ) ].
 			spec group: 'Core' with: #( 'PharoImageFS' ).
 			spec group: 'Tests' with: #( 'PharoImageFS-Tests-Resources' 'PharoImageFS-Tests' ).
-			spec group: 'MCP' with: #( 'PharoImageFS-MCP' ).
-			spec group: 'MCP Tests' with: #( 'PharoImageFS-MCP-Tests' ).
-			"The MCP group is left out of default: a projection is useful without it, and an image that
+			"Named for what they are rather than for MCP, which is already the name of the
+			project they depend on: Metacello refuses a group and a baseline sharing one name."
+			spec group: 'Tools' with: #( 'PharoImageFS-MCP' ).
+			spec group: 'Tools Tests' with: #( 'PharoImageFS-MCP-Tests' ).
+			"They are left out of default: a projection is useful without them, and an image that
 			does not serve MCP has no use for tools it cannot register."
 			spec group: 'default' with: #( 'Core' 'Tests' ) ].
 	spec for: self pharoVersionsBefore14 do: [
