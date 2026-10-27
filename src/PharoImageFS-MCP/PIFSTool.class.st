@@ -1,7 +1,7 @@
 "
 Abstract superclass of the MCP tools PIFS serves, so that an image holding both projects offers its projections as tools rather than as code to evaluate.
 
-MCP keeps a tool defined outside its own package out of the catalog unless the tool says otherwise, which is what `shouldAutoRegister` does here.
+A tool is served because its package was loaded and it names itself, so these need say nothing: `PIFSTool` answers no `toolName` and stays out, and each concrete tool below it answers one and is in the catalog.
 "
 Class {
 	#name : 'PIFSTool',
@@ -26,13 +26,6 @@ PIFSTool class >> isAbstract [
 PIFSTool class >> projectionIconBadgeName [
 
 	^ self subclassResponsibility
-]
-
-{ #category : 'testing' }
-PIFSTool class >> shouldAutoRegister [
-	"MCP registers the tools of its own package and leaves every other one out, so a tool it did not ship has to say that it wants to be served. These are PIFS's own, and an image that loaded this package asked for them. The second half is MCP's own guard: a class being built in a live image is compiled before its methods, so it cannot name itself yet."
-
-	^ (self class lookupSelector: #toolName) isSubclassResponsibility not
 ]
 
 { #category : 'metadata' }
