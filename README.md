@@ -54,6 +54,27 @@ The baseline groups are:
 - `Core`: projection backend and HTTP endpoint
 - `Tests`: backend tests
 - `default`: `Core` and `Tests`
+- `MCP`: the projection served as MCP tools, for an image that runs an MCP
+  server; it loads [MCP](https://github.com/Evref-BL/MCP) and is left out of
+  `default`
+- `MCP Tests`: tests for those tools
+
+### Serve the projection as MCP tools
+
+An image running an MCP server can mount and unmount its projection through
+tools rather than through evaluated code. Load the `MCP` group and the catalog
+gains `pifs_start`, `pifs_stop` and `pifs_list`:
+
+```smalltalk
+Metacello new
+	baseline: 'PharoImageFS';
+	repository: 'github://Evref-BL/pharo-image-fs:main/src';
+	load: 'MCP'
+```
+
+The tools are discoverable rather than advertised, so they reach a client
+through `tool_search` and `tool_call` without taking room in the tool list
+every session starts with.
 
 ### Daemon binary
 
