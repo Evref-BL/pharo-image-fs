@@ -1,0 +1,93 @@
+name: Apply MCP release
+
+on:
+  repository_dispatch:
+    types: [component-release]
+  workflow_dispatch:
+    inputs:
+      mcp_version:
+        description: Published MCP version to apply.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  update:
+    if: github.event_name == 'workflow_dispatch' || github.event.client_payload.component == 'mcp'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ secrets.DEVNEXUS_AUTOMATION_APP_ID }}
+          private-key: ${{ secrets.DEVNEXUS_AUTOMATION_PRIVATE_KEY }}
+          owner: Evref-BL
+          repositories: pharo-image-fs
+
+      - uses: actions/checkout@v6
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Verify the published MCP release
+        id: release
+        env:
+          EVENT_VERSION: ${{ github.event.client_payload.version }}
+          INPUT_VERSION: ${{ inputs.mcp_version }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          version="${EVENT_VERSION:-$INPUT_VERSION}"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "$(gh api "repos/Evref-BL/MCP/releases/tags/v${version}" --jq .tag_name)" = "v${version}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare the update
+        id: update
+        env:
+          MCP_VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          pin_file="src/BaselineOfPharoImageFS/BaselineOfPharoImageFS.class.st"
+          current_version="$(sed -nE "s|.*github://Evref-BL/MCP:v([0-9]+\.[0-9]+\.[0-9]+)/src.*|\1|p" "$pin_file")"
+          test -n "$current_version"
+          if [[ "$current_version" == "$MCP_VERSION" ]]; then
+            exit 0
+          fi
+          sed -i -E "s|(github://Evref-BL/MCP:v)[0-9]+\.[0-9]+\.[0-9]+(/src)|\1${MCP_VERSION}\2|" "$pin_file"
+          echo "needed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Create update pull request
+        id: proposal
+        if: steps.update.outputs.needed == 'true'
+        uses: peter-evans/create-pull-request@v7
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          branch: automation/update-mcp-v${{ steps.release.outputs.version }}
+          delete-branch: true
+          commit-message: "chore: update MCP to v${{ steps.release.outputs.version }}"
+          title: "chore: update MCP to v${{ steps.release.outputs.version }}"
+          body: |
+            Automated update for the published immutable MCP release.
+
+            This only moves the pin. Releasing it is a separate version bump.
+
+      # The pin is a Metacello repository string, so nothing here can check it
+      # without loading the project. CI does that on the pull request, against
+      # every supported Pharo, which is the only check worth having.
+      - name: Merge after CI
+        if: steps.proposal.outputs.pull-request-number != ''
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR_NUMBER: ${{ steps.proposal.outputs.pull-request-number }}
+        run: |
+          for _ in {1..60}; do
+            if gh pr checks "$PR_NUMBER" --json name --jq 'length' 2>/dev/null | grep -qx '[1-9][0-9]*'; then
+              gh pr checks "$PR_NUMBER" --watch --interval 10
+              gh pr merge "$PR_NUMBER" --squash --delete-branch
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "No CI checks were reported for PR #$PR_NUMBER."
+          exit 1

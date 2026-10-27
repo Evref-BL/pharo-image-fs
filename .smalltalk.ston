@@ -6,12 +6,13 @@ SmalltalkCISpec {
       #ignoreImage : true,
       #onConflict : #useIncoming,
       #onUpgrade : #useIncoming,
-      #load : [ 'Tests' ]
+      #load : [ 'Tests', 'Tools Tests' ]
     }
   ],
   #testing : {
     #packages : [
-      'PharoImageFS-Tests'
+      'PharoImageFS-Tests',
+      'PharoImageFS-MCP-Tests'
     ]
   }
 }
