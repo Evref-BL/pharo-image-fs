@@ -166,7 +166,7 @@ PIFSCritiqueIndex >> recordForClass: aClass packageName: packageName methodDefin
 	selectors do: [ :selector |
 			| methodCritiques |
 			methodCritiques := self methodCritiqueDataForClass: aClass selector: selector.
-			(methodCritiques values anySatisfy: [ :critiques | critiques notEmpty ]) ifTrue: [ methods at: selector put: methodCritiques ] ].
+			(methodCritiques values anySatisfy: [ :critiques | critiques isNotEmpty ]) ifTrue: [ methods at: selector put: methodCritiques ] ].
 	methods ifNotEmpty: [ classEntry at: #methods put: methods ].
 	classEntry
 		ifEmpty: [ packageEntry removeKey: aClass name asString ifAbsent: [ ] ]
