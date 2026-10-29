@@ -15,7 +15,7 @@ BaselineOfPharoImageFS >> baseline: spec [
 	spec for: #common do: [
 			spec baseline: 'MCP' with: [
 					spec
-						repository: 'github://Evref-BL/MCP:v3.0.0/src';
+						repository: 'github://Evref-BL/MCP:v3.1.0/src';
 						loads: #( 'Core' ) ].
 			spec package: 'PharoImageFS' with: [ spec requires: #( 'PharoImageFS-Compatibility' ) ].
 			spec package: 'PharoImageFS-Tests-Resources' with: [ spec requires: #( 'PharoImageFS' ) ].
