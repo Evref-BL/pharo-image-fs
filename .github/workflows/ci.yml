@@ -39,3 +39,16 @@ jobs:
         run: smalltalkci -s ${{ matrix.smalltalk }}
         shell: bash
         timeout-minutes: 15
+
+  # release.yml and update-mcp.yml read these two versions out of Pharo source.
+  # Running the same script here means a method they name cannot be renamed
+  # without failing the pull request that renames it.
+  versions:
+    name: Release versions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Read the versions the release automation reads
+        run: .github/scripts/versions.sh check

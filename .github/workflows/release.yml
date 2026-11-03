@@ -39,12 +39,7 @@ jobs:
         env:
           EVENT_NAME: ${{ github.event_name }}
         run: |
-          version="$(sed -nE "s/^\t\^ '([0-9]+\.[0-9]+\.[0-9]+)'$/\1/p" src/PharoImageFS/PIFSVersion.class.st)"
-          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "PIFSVersion current must be a release SemVer version: ${version:-<unreadable>}" >&2
-            exit 1
-          fi
-
+          version="$(.github/scripts/versions.sh pifs)"
           tag="v$version"
           if git ls-remote --exit-code --refs origin "refs/tags/$tag" >/dev/null; then
             if [ "$EVENT_NAME" = "workflow_run" ]; then

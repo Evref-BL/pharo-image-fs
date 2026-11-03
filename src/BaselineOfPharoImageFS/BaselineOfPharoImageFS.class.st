@@ -15,7 +15,7 @@ BaselineOfPharoImageFS >> baseline: spec [
 	spec for: #common do: [
 			spec baseline: 'MCP' with: [
 					spec
-						repository: 'github://Evref-BL/MCP:v3.3.1/src';
+						repository: 'github://Evref-BL/MCP:v' , self mcpVersion , '/src';
 						loads: #( 'Core' ) ].
 			spec package: 'PharoImageFS' with: [ spec requires: #( 'PharoImageFS-Compatibility' ) ].
 			spec package: 'PharoImageFS-Tests-Resources' with: [ spec requires: #( 'PharoImageFS' ) ].
@@ -43,6 +43,13 @@ BaselineOfPharoImageFS >> baseline: spec [
 BaselineOfPharoImageFS >> currentPharoVersionSpec [
 
 	^ ('pharo' , SystemVersion current major asString , '.x') asSymbol
+]
+
+{ #category : 'baseline' }
+BaselineOfPharoImageFS >> mcpVersion [
+	"Its own method so that the release automation reads a pin that no edit to #baseline: can move."
+
+	^ '3.3.1'
 ]
 
 { #category : 'baseline' }

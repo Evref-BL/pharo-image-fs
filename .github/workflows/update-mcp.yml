@@ -48,13 +48,10 @@ jobs:
         env:
           MCP_VERSION: ${{ steps.release.outputs.version }}
         run: |
-          pin_file="src/BaselineOfPharoImageFS/BaselineOfPharoImageFS.class.st"
-          current_version="$(sed -nE "s|.*github://Evref-BL/MCP:v([0-9]+\.[0-9]+\.[0-9]+)/src.*|\1|p" "$pin_file")"
-          test -n "$current_version"
-          if [[ "$current_version" == "$MCP_VERSION" ]]; then
+          if [[ "$(.github/scripts/versions.sh mcp)" == "$MCP_VERSION" ]]; then
             exit 0
           fi
-          sed -i -E "s|(github://Evref-BL/MCP:v)[0-9]+\.[0-9]+\.[0-9]+(/src)|\1${MCP_VERSION}\2|" "$pin_file"
+          .github/scripts/versions.sh set-mcp "$MCP_VERSION"
           echo "needed=true" >> "$GITHUB_OUTPUT"
 
       - name: Create update pull request
@@ -72,9 +69,10 @@ jobs:
 
             This only moves the pin. Releasing it is a separate version bump.
 
-      # The pin is a Metacello repository string, so nothing here can check it
-      # without loading the project. CI does that on the pull request, against
-      # every supported Pharo, which is the only check worth having.
+      # Reading the pin is checked here and on every pull request, but only
+      # loading proves the version it names exists and still loads. CI does
+      # that against every supported Pharo, which is the check worth waiting
+      # for.
       - name: Merge after CI
         if: steps.proposal.outputs.pull-request-number != ''
         env:
