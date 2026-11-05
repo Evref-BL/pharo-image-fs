@@ -127,6 +127,15 @@ PIFSServer class >> extractDaemonArchive: archiveReference into: directoryRefere
 ]
 
 { #category : 'private - daemon' }
+PIFSServer class >> isMountPoint: aFileReference [
+	"Whether mount lists something mounted at aFileReference. mount prints physical paths, so the parent is resolved; the path itself is not, because a mount whose daemon is gone fails every lookup."
+
+	^ (LibC system:
+		   'd=$(cd ' , (self shellQuote: aFileReference parent pathString)
+		   , ' 2>/dev/null && pwd -P) && mount | grep -F -q -- " on ${d%/}/"' , (self shellQuote: aFileReference basename) , '" "') = 0
+]
+
+{ #category : 'private - daemon' }
 PIFSServer class >> makeDaemonExecutable: aFileReference [
 
 	| command |
@@ -275,6 +284,27 @@ PIFSServer >> daemonCommandMountedAt: aFileReference named: aString [
 ]
 
 { #category : 'private - daemon' }
+PIFSServer >> daemonIsRunning [
+
+	| pid |
+	(daemonPidFile isNotNil and: [ daemonPidFile exists ]) ifFalse: [ ^ false ].
+	pid := daemonPidFile contents trimBoth.
+	pid ifEmpty: [ ^ false ].
+	^ (LibC system: 'kill -0 ' , (self shellQuote: pid) , ' 2>/dev/null') = 0
+]
+
+{ #category : 'private - daemon' }
+PIFSServer >> daemonLogExcerpt [
+	"The end of the daemon's log, where it says why it failed, for an error about it."
+
+	| text |
+	(daemonLogFile isNotNil and: [ daemonLogFile exists ]) ifFalse: [ ^ '.' ].
+	text := daemonLogFile contents trimBoth.
+	text ifEmpty: [ ^ '.' ].
+	^ '. The daemon logged: ' , (text last: (text size min: 500))
+]
+
+{ #category : 'private - daemon' }
 PIFSServer >> daemonLogFile [
 
 	^ daemonLogFile
@@ -411,6 +441,10 @@ PIFSServer >> startDaemonMountedAt: aPath named: aString [
 
 	| command executable |
 	OSPlatform current isMacOS ifFalse: [ Error signal: 'pharo-image-fs daemon startup is currently supported only on macOS.' ].
+	"The daemon would fail to mount over it, and what is there is not this projection's to unmount."
+	(self class isMountPoint: aPath asFileReference) ifTrue: [
+			Error signal:
+				'Something is already mounted at ' , aPath asFileReference pathString , '. Unmount it before mounting a projection there.' ].
 	executable := self class ensureDaemonExecutable.
 	mountPath := aPath asFileReference.
 	mountName := aString.
@@ -418,7 +452,8 @@ PIFSServer >> startDaemonMountedAt: aPath named: aString [
 	daemonPidFile := FileLocator temp / ('pharo-image-fs-' , port asString , '.pid').
 	daemonLogFile := FileLocator temp / ('pharo-image-fs-' , port asString , '.log').
 	command := self daemonCommandMountedAt: mountPath named: mountName.
-	(LibC system: command) = 0 ifFalse: [ Error signal: 'Failed to start pharo-image-fs daemon.' ]
+	(LibC system: command) = 0 ifFalse: [ Error signal: 'Failed to start pharo-image-fs daemon.' ].
+	self waitForMountWithin: backend configuration mountTimeout
 ]
 
 { #category : 'running' }
@@ -478,6 +513,22 @@ PIFSServer >> stopDaemon [
 PIFSServer >> valueAt: aKey in: aDictionary [
 
 	^ aDictionary at: aKey ifAbsent: [ aDictionary at: aKey asString ]
+]
+
+{ #category : 'private - daemon' }
+PIFSServer >> waitForMountWithin: aDuration [
+	"The daemon is launched in the background, so the shell that launched it says nothing about the mount: wait for the mount itself. A daemon whose mount failed logs why and may keep running, so its log is what the failure reports."
+
+	| deadline |
+	deadline := DateAndTime now + aDuration.
+	[ self class isMountPoint: mountPath ] whileFalse: [
+			self daemonIsRunning ifFalse: [
+				^ Error signal: 'pharo-image-fs daemon exited before mounting ' , mountPath pathString , self daemonLogExcerpt ].
+			DateAndTime now > deadline ifTrue: [
+					^ Error signal:
+						  'pharo-image-fs did not mount ' , mountPath pathString , ' within ' , aDuration humanReadablePrintString
+						  , self daemonLogExcerpt ].
+			(Delay forMilliseconds: 100) wait ]
 ]
 
 { #category : 'private - running' }
