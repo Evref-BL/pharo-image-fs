@@ -8,11 +8,59 @@ Class {
 	#package : 'PharoImageFS-Tests'
 }
 
+{ #category : 'private' }
+PIFSServerTest >> daemonDirectory [
+
+	^ (FileLocator temp / 'pifs-server-test-daemon') asFileReference
+		  ensureDeleteAll;
+		  ensureCreateDirectory;
+		  yourself
+]
+
+{ #category : 'private' }
+PIFSServerTest >> fakeDaemonIn: aDirectory running: shellLines [
+	"A stand-in for the daemon. PIFSServer runs the executable named like the real one, from the directory PHARO_IMAGE_FS_DAEMON points into. The lines are joined with lf by hand: a string literal spanning lines holds the image's cr."
+
+	| daemon |
+	daemon := aDirectory / PIFSServer daemonExecutableName.
+	daemon writeStreamDo: [ :stream |
+			stream nextPutAll: '#!/bin/sh'.
+			shellLines do: [ :line |
+					stream
+						lf;
+						nextPutAll: line ].
+			stream lf ].
+	LibC system: 'chmod +x ' , (PIFSServer shellQuote: daemon pathString).
+	^ daemon
+]
+
 { #category : 'running' }
 PIFSServerTest >> setUp [
 
 	super setUp.
 	PIFSServer stopAll
+]
+
+{ #category : 'private' }
+PIFSServerTest >> startWithDaemon: aDaemon mountedAt: aPath [
+	"Start a projection served by aDaemon, and answer the error starting it signals, or nil."
+
+	| previous |
+	previous := OSEnvironment current at: 'PHARO_IMAGE_FS_DAEMON' ifAbsent: [ nil ].
+	OSEnvironment current at: 'PHARO_IMAGE_FS_DAEMON' put: aDaemon pathString.
+	^ [
+		  [
+			  PIFSServer start: (PIFSConfiguration new
+					   mountPath: aPath;
+					   mountName: 'pifs-server-test';
+					   mountTimeout: 1 second;
+					   yourself).
+			  nil ]
+			  on: Error
+			  do: [ :error | error ] ] ensure: [
+			  previous
+				  ifNil: [ OSEnvironment current removeKey: 'PHARO_IMAGE_FS_DAEMON' ]
+				  ifNotNil: [ OSEnvironment current at: 'PHARO_IMAGE_FS_DAEMON' put: previous ] ]
 ]
 
 { #category : 'running' }
@@ -53,6 +101,15 @@ PIFSServerTest >> testDefaultMountPathUsesDefaultMountNameInTemp [
 		assert: PIFSServer defaultMountPath basename
 		equals: PIFSServer defaultMountName.
 	self assert: PIFSServer defaultMountName isEmpty not
+]
+
+{ #category : 'tests' }
+PIFSServerTest >> testMountPointsAreThePathsMountLists [
+
+	| directory |
+	self assert: (PIFSServer isMountPoint: '/dev' asFileReference).
+	directory := self daemonDirectory.
+	[ self deny: (PIFSServer isMountPoint: directory) ] ensure: [ directory ensureDeleteAll ]
 ]
 
 { #category : 'private' }
@@ -100,6 +157,60 @@ PIFSServerTest >> testStartEndpointOnRegistersServerByPort [
 	projectionServer := PIFSServer startEndpointOn: self testPort.
 	self assert: (PIFSServer serverOn: self testPort) equals: projectionServer.
 	self assert: projectionServer port equals: self testPort
+]
+
+{ #category : 'tests' }
+PIFSServerTest >> testStartFailsWhenTheDaemonDoesNotMount [
+	"A daemon whose mount fails logs why and may keep running. It is launched in the background, so start used to answer a port over a mount that never came."
+
+	| directory error |
+	OSPlatform current isMacOS ifFalse: [ ^ self skip: 'The daemon is started on macOS only.' ].
+	directory := self daemonDirectory.
+	[
+		error := self
+			         startWithDaemon:
+			         (self fakeDaemonIn: directory running: #( 'echo "fuse: mount failed with error: -1"'
+			             'exec sleep 30' ))
+			         mountedAt: directory / 'mount'.
+		self assert: error isNotNil.
+		self assert: (error messageText includesSubstring: 'did not mount').
+		self assert: (error messageText includesSubstring: 'fuse: mount failed with error: -1').
+		self assert: PIFSServer serversByPort isEmpty ] ensure: [ directory ensureDeleteAll ]
+]
+
+{ #category : 'tests' }
+PIFSServerTest >> testStartFailsWhenTheDaemonExitsBeforeMounting [
+
+	| directory error |
+	OSPlatform current isMacOS ifFalse: [ ^ self skip: 'The daemon is started on macOS only.' ].
+	directory := self daemonDirectory.
+	[
+		error := self
+			         startWithDaemon: (self fakeDaemonIn: directory running: #( 'echo "fuse-t is not installed"'
+			             'exit 1' ))
+			         mountedAt: directory / 'mount'.
+		self assert: error isNotNil.
+		self assert: (error messageText includesSubstring: 'exited before mounting').
+		self assert: (error messageText includesSubstring: 'fuse-t is not installed').
+		self assert: PIFSServer serversByPort isEmpty ] ensure: [ directory ensureDeleteAll ]
+]
+
+{ #category : 'tests' }
+PIFSServerTest >> testStartRefusesAPathSomethingIsMountedAt [
+	"The daemon would fail to mount there, and what is mounted is not the projection's to unmount."
+
+	| error |
+	OSPlatform current isMacOS ifFalse: [ ^ self skip: 'The daemon is started on macOS only.' ].
+	error := [
+		         PIFSServer start: (PIFSConfiguration new
+				          mountPath: '/dev' asFileReference;
+				          yourself).
+		         nil ]
+		         on: Error
+		         do: [ :each | each ].
+	self assert: error isNotNil.
+	self assert: (error messageText includesSubstring: 'already mounted at /dev').
+	self assert: PIFSServer serversByPort isEmpty
 ]
 
 { #category : 'tests' }

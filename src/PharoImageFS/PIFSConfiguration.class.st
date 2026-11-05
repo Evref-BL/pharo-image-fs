@@ -13,7 +13,8 @@ Class {
 		'requiresRepositoryOwnershipForWrites',
 		'excludedPackagePrefixes',
 		'includedPackagePrefixes',
-		'formatsWrittenMethods'
+		'formatsWrittenMethods',
+		'mountTimeout'
 	],
 	#category : 'PharoImageFS',
 	#package : 'PharoImageFS'
@@ -92,6 +93,19 @@ PIFSConfiguration >> mountPath [
 PIFSConfiguration >> mountPath: aFileReference [
 
 	mountPath := aFileReference
+]
+
+{ #category : 'accessing' }
+PIFSConfiguration >> mountTimeout [
+	"How long starting waits for the daemon's mount to appear before giving up on it."
+
+	^ mountTimeout ifNil: [ 10 seconds ]
+]
+
+{ #category : 'accessing' }
+PIFSConfiguration >> mountTimeout: aDuration [
+
+	mountTimeout := aDuration
 ]
 
 { #category : 'accessing' }

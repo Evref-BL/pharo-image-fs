@@ -108,9 +108,15 @@ PIFSServer
 	named: 'pharo-image-fs'
 ```
 
+Starting answers once the mount is there. A path something is already mounted
+at is refused before anything starts. If the daemon exits before mounting, or
+the mount has not appeared within the configuration's `mountTimeout` (ten
+seconds unless set), starting stops the endpoint and signals an error carrying
+the daemon's log.
+
 Anything else is set through a `PIFSConfiguration`, which carries the
-mountpoint, the volume name, the port and the write policy. Only what differs
-from the default has to be named:
+mountpoint, the volume name, the port, how long to wait for the mount, and the
+write policy. Only what differs from the default has to be named:
 
 ```smalltalk
 PIFSServer start: (PIFSConfiguration new
