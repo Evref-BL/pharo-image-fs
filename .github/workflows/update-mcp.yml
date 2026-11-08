@@ -11,6 +11,7 @@ on:
         type: string
 
 permissions:
+  actions: write
   contents: read
 
 jobs:
@@ -60,6 +61,10 @@ jobs:
         uses: peter-evans/create-pull-request@v7
         with:
           token: ${{ steps.app-token.outputs.token }}
+          # The bot as author and committer both: left unset, the committer is
+          # github-actions[bot] and the author whoever started the run.
+          author: devnexus-automation[bot] <286661136+devnexus-automation[bot]@users.noreply.github.com>
+          committer: devnexus-automation[bot] <286661136+devnexus-automation[bot]@users.noreply.github.com>
           branch: automation/update-mcp-v${{ steps.release.outputs.version }}
           delete-branch: true
           commit-message: "chore: update MCP to v${{ steps.release.outputs.version }}"
@@ -73,15 +78,27 @@ jobs:
       # loading proves the version it names exists and still loads. CI does
       # that against every supported Pharo, which is the check worth waiting
       # for.
+      #
+      # CI runs on macOS, and when GitHub is short of macOS runners a job fails
+      # without ever starting: "The job was not acquired by Runner of type
+      # hosted". So what failed runs once more before the update gives up; a
+      # test that fails fails again.
       - name: Merge after CI
         if: steps.proposal.outputs.pull-request-number != ''
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          RERUN_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ steps.proposal.outputs.pull-request-number }}
+          BRANCH: automation/update-mcp-v${{ steps.release.outputs.version }}
         run: |
           for _ in {1..60}; do
             if gh pr checks "$PR_NUMBER" --json name --jq 'length' 2>/dev/null | grep -qx '[1-9][0-9]*'; then
-              gh pr checks "$PR_NUMBER" --watch --interval 10
+              if ! gh pr checks "$PR_NUMBER" --watch --interval 10; then
+                run_id="$(GH_TOKEN="$RERUN_TOKEN" gh run list --workflow CI --branch "$BRANCH" --limit 1 --json databaseId --jq '.[0].databaseId')"
+                GH_TOKEN="$RERUN_TOKEN" gh run rerun "$run_id" --failed
+                sleep 30
+                gh pr checks "$PR_NUMBER" --watch --interval 10
+              fi
               gh pr merge "$PR_NUMBER" --squash --delete-branch
               exit 0
             fi
