@@ -1096,24 +1096,70 @@ PIFSBackendTest >> testSelectorPathSegmentUsesFileTreeColonEncoding [
 ]
 
 { #category : 'tests' }
-PIFSBackendTest >> testStatClassTonelFileReportsRenderedSize [
+PIFSBackendTest >> testStatAfterReadRendersNothing [
 
-	"A mount reads no further than the size reported here, so stat renders the
-	class to measure it."
-
-	| backend entry text |
+	| backend text |
 	backend := self newBackend.
 	backend write: self classTonelSource at: self originalClassTonelPath.
 	text := backend read: self originalClassTonelPath.
 	backend resetTextRequestCounts.
+	self assert: (backend stat: self originalClassTonelPath) size equals: text utf8Encoded size.
+	self assert: backend classTonelTextRequestCount equals: 0
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testStatClassTonelFileReportsRenderedSize [
+	"A mount reads no further than the size reported here, so the first stat renders the class to measure it. A second stat of the unchanged class renders nothing."
+
+	| backend entry |
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	backend resetTextRequestCounts.
 	entry := backend stat: self originalClassTonelPath.
 	self assert: entry isFile.
-	self assert: entry size equals: text utf8Encoded size.
-	self assert: backend classTonelTextRequestCount equals: 1
+	self assert: backend classTonelTextRequestCount equals: 1.
+	self assert: (backend stat: self originalClassTonelPath) size equals: entry size.
+	self assert: backend classTonelTextRequestCount equals: 1.
+	self assert: entry size equals: (backend read: self originalClassTonelPath) utf8Encoded size
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testStatCritiqueFilesReportTheSizeReadAnswers [
+	"A size of 0 made the mount read critique files as empty."
+
+	| backend classPath methodPath |
+	backend := self newBackend.
+	backend write: self classTonelSourceWithExcessiveArgumentsMethod at: self originalClassTonelPath.
+	classPath := '/critiques/' , self fixturePackageName , '/' , self originalClassName , '/class-critiques.json'.
+	methodPath := '/critiques/' , self fixturePackageName , '/' , self originalClassName
+	              , '/manyArguments.second.third.fourth.fifth..json'.
+	{
+		classPath.
+		methodPath } do: [ :path |
+			self assert: (backend stat: path) size equals: (backend read: path) utf8Encoded size.
+			self assert: (backend stat: path) size > 0 ]
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testStatExtensionTonelFileMeasuresAgainOnlyAfterAChange [
+
+	| backend path |
+	self createExtensionTargetClass.
+	backend := self newBackend.
+	path := '/tonel/' , self fixturePackageName , '/PIFSExtensionTarget.extension.st'.
+	backend write: self extensionTonelSource at: path.
+	backend resetTextRequestCounts.
+	backend stat: path.
+	backend stat: path.
+	self assert: backend extensionTextRequestCount equals: 1.
+	(self class environment at: #PIFSExtensionTarget) compile: 'laterExtension ^ 4' classified: '*' , self fixturePackageName.
+	self assert: (backend stat: path) size equals: (backend read: path) utf8Encoded size.
+	self assert: backend extensionTextRequestCount equals: 3
 ]
 
 { #category : 'tests' }
 PIFSBackendTest >> testStatExtensionTonelFileReportsRenderedSize [
+	"The read rendered the file, so the stat after it reports that size without rendering again."
 
 	| backend entry path text |
 	self createExtensionTargetClass.
@@ -1125,7 +1171,28 @@ PIFSBackendTest >> testStatExtensionTonelFileReportsRenderedSize [
 	entry := backend stat: path.
 	self assert: entry isFile.
 	self assert: entry size equals: text utf8Encoded size.
-	self assert: backend extensionTextRequestCount equals: 1
+	self assert: backend extensionTextRequestCount equals: 0
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testStatMeasuresTheClassAgainAfterEachKindOfChange [
+	"A size that outlives a change would truncate or pad what the mount reads. Each change below is made outside the backend, as a tool or the IDE would."
+
+	| backend class |
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	class := self class environment at: self originalClassName asSymbol.
+	{
+		[ class compile: 'added ^ 1' classified: 'accessing' ].
+		[ class compile: 'added ^ 2' classified: 'accessing' ].
+		[ class compile: 'added ^ 2' classified: 'other accessing' ].
+		[ class class compile: 'sideAnswer ^ 3' classified: 'accessing' ].
+		[ class comment: 'A comment written after the first stat.' ].
+		[ class addInstVarNamed: 'extraSlot' ].
+		[ class removeSelector: #added ] } do: [ :change |
+			backend stat: self originalClassTonelPath.
+			change value.
+			self assert: (backend stat: self originalClassTonelPath) size equals: (backend classTonelTextFor: class) utf8Encoded size ]
 ]
 
 { #category : 'tests' }
