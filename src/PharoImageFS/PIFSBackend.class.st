@@ -7,7 +7,8 @@ Class {
 	#instVars : [
 		'configuration',
 		'critiques',
-		'repositories'
+		'repositories',
+		'renderedSizes'
 	],
 	#category : 'PharoImageFS',
 	#package : 'PharoImageFS'
@@ -126,6 +127,20 @@ PIFSBackend >> classDefinitionFrom: definitions originalPath: aString [
 	classDefinitions size = 1 ifFalse: [
 		Error signal: 'Expected exactly one class definition in ' , aString , ', got ' , classDefinitions size asString ].
 	^ classDefinitions first
+]
+
+{ #category : 'private - reading' }
+PIFSBackend >> classFingerprintFor: aClass [
+	"What a class file is rendered from, read from memory only: both sides' definitions, the comment's place in the sources, and each method's selector, protocol, source pointer and identity. Rendering reads every method's source from disk; this reads none."
+
+	^ Array streamContents: [ :stream |
+			  stream
+				  nextPut: aClass definitionString;
+				  nextPut: aClass class definitionString;
+				  nextPut: aClass commentSourcePointer.
+			  {
+				  aClass.
+				  aClass class } do: [ :behavior | self fingerprintMethods: behavior localMethods on: stream ] ]
 ]
 
 { #category : 'private - reading' }
@@ -431,6 +446,12 @@ PIFSBackend >> exportPackagesNamed: packageNames fileNamed: fileName [
 ]
 
 { #category : 'private - reading' }
+PIFSBackend >> extensionFingerprintFor: methods [
+
+	^ Array streamContents: [ :stream | self fingerprintMethods: methods on: stream ]
+]
+
+{ #category : 'private - reading' }
 PIFSBackend >> extensionMethodsForClassName: className inPackage: aPackage [
 
 	^ (aPackage extensionMethods select: [ :method | method methodClass instanceSide name asString = className ]) asArray
@@ -491,6 +512,19 @@ PIFSBackend >> fileNamed: aString text: textString writable: aBoolean [
 	"The mount serves the text as UTF-8, so the entry must report its byte size."
 
 	^ self fileNamed: aString size: textString utf8Encoded size writable: aBoolean
+]
+
+{ #category : 'private - reading' }
+PIFSBackend >> fingerprintMethods: methods on: aStream [
+	"A recompiled method gets a new source pointer, or none in an image without a changes file, so its identity is kept too."
+
+	methods do: [ :method |
+			aStream
+				nextPut: method methodClass isMeta;
+				nextPut: method selector;
+				nextPut: method protocol name;
+				nextPut: method sourcePointer;
+				nextPut: method identityHash ]
 ]
 
 { #category : 'accessing' }
@@ -924,22 +958,30 @@ PIFSBackend >> readResponseForPath: aString [
 
 { #category : 'private - reading' }
 PIFSBackend >> readTonelClassFileNamed: fileName packageName: packageName originalPath: aString [
+	"A read renders anyway, so it also records the size the next stat will report."
 
-	| class className |
+	| class className text |
 	className := self classNameFromFileName: fileName suffix: '.class.st'.
 	className ifNil: [ self signalNotFound: aString ].
 	class := self classForName: className packageName: packageName originalPath: aString.
-	^ self classTonelTextFor: class
+	text := self classTonelTextFor: class.
+	self renderedSizes at: aString fingerprint: (self classFingerprintFor: class) put: (self utf8SizeOf: text).
+	^ text
 ]
 
 { #category : 'private - reading' }
 PIFSBackend >> readTonelExtensionFileNamed: fileName packageName: packageName originalPath: aString [
 
-	| className package |
+	| className package text |
 	className := self classNameFromFileName: fileName suffix: '.extension.st'.
 	className ifNil: [ self signalNotFound: aString ].
 	package := self packageNamed: packageName ifAbsent: [ self signalNotFound: aString ].
-	^ self extensionTextForClassName: className package: package originalPath: aString
+	text := self extensionTextForClassName: className package: package originalPath: aString.
+	self renderedSizes
+		at: aString
+		fingerprint: (self extensionFingerprintFor: (self extensionMethodsForClassName: className inPackage: package))
+		put: (self utf8SizeOf: text).
+	^ text
 ]
 
 { #category : 'private - reading' }
@@ -1138,6 +1180,12 @@ PIFSBackend >> renameTonelClassFileNamed: sourceFileName toFileNamed: targetFile
 							Error signal: 'Projection rename failed and rollback failed. Rename error: ' , failureMessage , '. Rollback error: '
 								, (rollbackError messageText ifNil: [ rollbackError asString ]) ].
 				Error signal: failureMessage ]
+]
+
+{ #category : 'private - reading' }
+PIFSBackend >> renderedSizes [
+
+	^ renderedSizes ifNil: [ renderedSizes := PIFSRenderedSizes new ]
 ]
 
 { #category : 'accessing' }
@@ -1406,8 +1454,8 @@ PIFSBackend >> statCritiqueMethodFileNamed: fileName packageName: packageName cl
 
 { #category : 'private - accessing' }
 PIFSBackend >> statCritiqueSegments: segments originalPath: aString [
+	"A critique file reports the size its text has, as a Tonel file does: the mount reads no further than it."
 
-	| classEntry |
 	segments isEmpty ifTrue: [ ^ self directoryNamed: 'critiques' ].
 	self assertPackageIsVisibleNamed: segments first originalPath: aString.
 	segments size = 1 ifTrue: [
@@ -1416,20 +1464,20 @@ PIFSBackend >> statCritiqueSegments: segments originalPath: aString [
 	segments size = 2 ifTrue: [
 			self critiqueEntryForPackageNamed: segments first classNamed: segments second ifAbsent: [ self signalNotFound: aString ].
 			^ self directoryNamed: segments second ].
-	segments size = 3 ifTrue: [
-			classEntry := self
-				              critiqueEntryForPackageNamed: segments first
-				              classNamed: segments second
-				              ifAbsent: [ self signalNotFound: aString ].
-			segments third = 'class-critiques.json'
-				ifTrue: [ (classEntry includesKey: #class) ifFalse: [ self signalNotFound: aString ] ]
-				ifFalse: [
-						self
-							critiqueMethodDataIn: classEntry
-							forSelector: (self selectorFromPathSegment: segments third originalPath: aString)
-							ifAbsent: [ self signalNotFound: aString ] ].
-			^ self fileNamed: segments third size: 0 writable: false ].
-	self signalNotFound: aString
+	segments size = 3 ifFalse: [ self signalNotFound: aString ].
+	^ segments third = 'class-critiques.json'
+		  ifTrue: [
+				  self
+					  statCritiqueClassFileNamed: segments third
+					  packageName: segments first
+					  className: segments second
+					  originalPath: aString ]
+		  ifFalse: [
+				  self
+					  statCritiqueMethodFileNamed: segments third
+					  packageName: segments first
+					  className: segments second
+					  originalPath: aString ]
 ]
 
 { #category : 'private - accessing' }
@@ -1482,6 +1530,7 @@ PIFSBackend >> symlinkNamed: aString target: targetString [
 
 { #category : 'private - entries' }
 PIFSBackend >> tonelClassEntryNamed: fileName packageName: packageName originalPath: aString [
+	"The mount reads no further than the size reported here, so it must be exact. It is remembered against the class's fingerprint, so only the first stat after a change renders the class."
 
 	| className class |
 	className := self classNameFromFileName: fileName suffix: '.class.st'.
@@ -1489,7 +1538,10 @@ PIFSBackend >> tonelClassEntryNamed: fileName packageName: packageName originalP
 	class := self classForName: className packageName: packageName originalPath: aString.
 	^ self
 		  fileNamed: fileName
-		  text: (self classTonelTextFor: class)
+		  size: (self renderedSizes
+				   sizeAt: aString
+				   fingerprint: (self classFingerprintFor: class)
+				   ifAbsentPut: [ self utf8SizeOf: (self classTonelTextFor: class) ])
 		  writable: true
 ]
 
@@ -1507,17 +1559,18 @@ PIFSBackend >> tonelEntriesForPackage: aPackage [
 { #category : 'private - entries' }
 PIFSBackend >> tonelExtensionEntryNamed: fileName packageName: packageName originalPath: aString [
 
-	| className package |
+	| className methods package |
 	className := self classNameFromFileName: fileName suffix: '.extension.st'.
 	className ifNil: [ self signalNotFound: aString ].
 	package := self packageNamed: packageName ifAbsent: [ self signalNotFound: aString ].
-	(self extensionMethodsForClassName: className inPackage: package) ifEmpty: [ self signalNotFound: aString ].
+	methods := self extensionMethodsForClassName: className inPackage: package.
+	methods ifEmpty: [ self signalNotFound: aString ].
 	^ self
 		  fileNamed: fileName
-		  text: (self
-				   extensionTextForClassName: className
-				   package: package
-				   originalPath: aString)
+		  size: (self renderedSizes
+				   sizeAt: aString
+				   fingerprint: (self extensionFingerprintFor: methods)
+				   ifAbsentPut: [ self utf8SizeOf: (self extensionTextForClassName: className package: package originalPath: aString) ])
 		  writable: true
 ]
 
@@ -1540,6 +1593,13 @@ PIFSBackend >> unloadMethodDefinitionsAbsentFrom: newMethodDefinitions in: oldMe
 	newIdentities := newMethodDefinitions collect: [ :methodDefinition | self methodIdentityFor: methodDefinition ] as: Set.
 	oldMethodDefinitions do: [ :methodDefinition |
 		(newIdentities includes: (self methodIdentityFor: methodDefinition)) ifFalse: [ self unloadMethodDefinition: methodDefinition ] ]
+]
+
+{ #category : 'private - reading' }
+PIFSBackend >> utf8SizeOf: aString [
+	"The mount serves the text as UTF-8, so an entry reports its byte size."
+
+	^ aString utf8Encoded size
 ]
 
 { #category : 'private - critiques' }
