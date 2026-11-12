@@ -135,11 +135,21 @@ PIFSServer class >> extractDaemonArchive: archiveReference into: directoryRefere
 
 { #category : 'private - daemon' }
 PIFSServer class >> isMountPoint: aFileReference [
-	"Whether mount lists something mounted at aFileReference. mount prints physical paths, so the parent is resolved; the path itself is not, because a mount whose daemon is gone fails every lookup."
+	"Whether mount lists something mounted at aFileReference. mount prints physical paths, so the parent is resolved; the path itself is not, because a mount whose daemon is gone fails every lookup. What follows the path is matched too, so that a longer mounted path does not match: macOS prints ' (' after it, Linux ' type '."
 
-	^ (LibC system:
-		   'd=$(cd ' , (self shellQuote: aFileReference parent pathString)
-		   , ' 2>/dev/null && pwd -P) && mount | grep -F -q -- " on ${d%/}/"' , (self shellQuote: aFileReference basename) , '" "') = 0
+	| after |
+	after := OSPlatform current isLinux
+		         ifTrue: [ ' type ' ]
+		         ifFalse: [ ' (' ].
+	^ (LibC system: (String streamContents: [ :stream |
+				    stream
+					    nextPutAll: 'd=$(cd ';
+					    nextPutAll: (self shellQuote: aFileReference parent pathString);
+					    nextPutAll: ' 2>/dev/null && pwd -P) && mount | grep -F -q -- " on ${d%/}/"';
+					    nextPutAll: (self shellQuote: aFileReference basename);
+					    nextPutAll: '"';
+					    nextPutAll: after;
+					    nextPutAll: '"' ])) = 0
 ]
 
 { #category : 'private - daemon' }
@@ -297,8 +307,9 @@ PIFSServer >> backend: aBackend [
 
 { #category : 'private - daemon' }
 PIFSServer >> closeInheritedFileDescriptorsShellSnippet [
+	"Close the image's descriptors the shell can name: dash, the sh of Debian and Ubuntu, reads only one-digit descriptors, and a failed exec ends it. The daemon closes the others when it starts."
 
-	^ 'for fd in /dev/fd/*; do fd=${fd##*/}; case "$fd" in 0|1|2|*[!0-9]*|'''') ;; *) eval "exec $fd>&-" 2>/dev/null || true ;; esac; done; '
+	^ 'for fd in /dev/fd/*; do case "${fd##*/}" in [3-9]) eval "exec ${fd##*/}>&-" 2>/dev/null || true ;; esac; done; '
 ]
 
 { #category : 'private - daemon' }

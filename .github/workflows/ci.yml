@@ -28,7 +28,8 @@ jobs:
           - Pharo64-14
           - Pharo64-15
 
-    name: ${{ matrix.smalltalk }} on ${{ matrix.os }}
+    # The macOS jobs keep the names the main branch requires.
+    name: ${{ matrix.smalltalk }}${{ matrix.os != 'macos-26' && format(' on {0}', matrix.os) || '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6

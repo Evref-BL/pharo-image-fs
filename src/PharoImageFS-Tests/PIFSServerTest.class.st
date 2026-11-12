@@ -34,6 +34,37 @@ PIFSServerTest >> fakeDaemonIn: aDirectory running: shellLines [
 	^ daemon
 ]
 
+{ #category : 'private' }
+PIFSServerTest >> fakeMountIn: aDirectory listing: aPathString [
+	"A stand-in for mount that lists a projection at aPathString, by the physical path mount prints, as Linux and as macOS write it."
+
+	| mount |
+	mount := aDirectory / 'mount'.
+	mount writeStreamDo: [ :stream |
+			stream
+				nextPutAll: '#!/bin/sh';
+				lf;
+				nextPutAll: 'p="$(cd ';
+				nextPutAll: (PIFSServer shellQuote: aDirectory pathString);
+				nextPutAll: ' && pwd -P)/"';
+				nextPutAll: (PIFSServer shellQuote: (aPathString copyAfterLast: $/));
+				lf;
+				nextPutAll: 'echo "test on $p type fuse.pharo-image-fs (rw,nosuid,nodev)"';
+				lf;
+				nextPutAll: 'echo "127.0.0.1:/test on $p (nfs, nodev, nosuid)"';
+				lf ].
+	LibC system: 'chmod +x ' , (PIFSServer shellQuote: mount pathString)
+]
+
+{ #category : 'private' }
+PIFSServerTest >> holdingDescriptorsDo: aBlock [
+	"Run aBlock while the image holds a dozen more descriptors, which numbers some of them past 9, as a working image's are: the shell that starts the daemon inherits them."
+
+	| streams |
+	streams := (1 to: 12) collect: [ :each | '/dev/null' asFileReference binaryReadStream ].
+	^ aBlock ensure: [ streams do: [ :each | each close ] ]
+]
+
 { #category : 'running' }
 PIFSServerTest >> setUp [
 
@@ -67,6 +98,26 @@ PIFSServerTest >> startWithDaemon: aDaemon mountedAt: aPath [
 PIFSServerTest >> tearDown [
 
 	[ PIFSServer stopAll ] ensure: [ super tearDown ]
+]
+
+{ #category : 'tests' }
+PIFSServerTest >> testAPathThatBeginsAMountedOneIsNotMounted [
+	"mount prints a mount point as it is, spaces included: a projection mounted at 'Pharo 13.0 - 64bit (stable)' is not one at 'Pharo 13.0'. A stand-in for mount lists it the way Linux and macOS do."
+
+	| directory previousPath |
+	directory := self daemonDirectory.
+	previousPath := OSEnvironment current at: 'PATH'.
+	[
+		self fakeMountIn: directory listing: (directory / 'Pharo 13.0 - 64bit (stable)') pathString.
+		OSEnvironment current at: 'PATH' put: (String streamContents: [ :path |
+					 path
+						 nextPutAll: directory pathString;
+						 nextPut: $:;
+						 nextPutAll: previousPath ]).
+		self assert: (PIFSServer isMountPoint: directory / 'Pharo 13.0 - 64bit (stable)').
+		self deny: (PIFSServer isMountPoint: directory / 'Pharo 13.0') ] ensure: [
+			OSEnvironment current at: 'PATH' put: previousPath.
+			directory ensureDeleteAll ]
 ]
 
 { #category : 'tests' }
@@ -167,10 +218,12 @@ PIFSServerTest >> testStartFailsWhenTheDaemonDoesNotMount [
 	PIFSServer daemonRunsHere ifFalse: [ ^ self skip: 'The daemon runs on macOS and Linux only.' ].
 	directory := self daemonDirectory.
 	[
-		error := self
-			         startWithDaemon: (self fakeDaemonIn: directory running: #( 'echo "mount failed: permission denied"'
-			             'exec sleep 30' ))
-			         mountedAt: directory / 'mount'.
+		error := self holdingDescriptorsDo: [
+				         self
+					         startWithDaemon:
+					         (self fakeDaemonIn: directory running: #( 'echo "mount failed: permission denied"'
+					             'exec sleep 30' ))
+					         mountedAt: directory / 'mount' ].
 		self assert: error isNotNil.
 		self assert: (error messageText includesSubstring: 'did not mount').
 		self assert: (error messageText includesSubstring: 'mount failed: permission denied').
@@ -179,15 +232,17 @@ PIFSServerTest >> testStartFailsWhenTheDaemonDoesNotMount [
 
 { #category : 'tests' }
 PIFSServerTest >> testStartFailsWhenTheDaemonExitsBeforeMounting [
+	"The daemon's own words reach the error: it ran, whatever descriptors the image held."
 
 	| directory error |
 	PIFSServer daemonRunsHere ifFalse: [ ^ self skip: 'The daemon runs on macOS and Linux only.' ].
 	directory := self daemonDirectory.
 	[
-		error := self
-			         startWithDaemon: (self fakeDaemonIn: directory running: #( 'echo "FUSE needs fusermount3"'
-			             'exit 1' ))
-			         mountedAt: directory / 'mount'.
+		error := self holdingDescriptorsDo: [
+				         self
+					         startWithDaemon: (self fakeDaemonIn: directory running: #( 'echo "FUSE needs fusermount3"'
+					             'exit 1' ))
+					         mountedAt: directory / 'mount' ].
 		self assert: error isNotNil.
 		self assert: (error messageText includesSubstring: 'exited before mounting').
 		self assert: (error messageText includesSubstring: 'FUSE needs fusermount3').
