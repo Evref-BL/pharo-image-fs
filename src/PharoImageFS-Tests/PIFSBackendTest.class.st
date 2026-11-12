@@ -502,6 +502,22 @@ PIFSBackendTest >> testDeleteRemovesExtensionTonelFile [
 ]
 
 { #category : 'tests' }
+PIFSBackendTest >> testDeletingAClassTheImageLacksIsNotFoundInAnyPackage [
+	"A class file created and never written has no class behind it, so removing it removes nothing, even in a package no repository owns: not found, which the daemon takes as removed."
+
+	| backend |
+	backend := PIFSBackend new.
+	backend repositories: (PIFSRepositoriesTestDouble new
+			 all: #(  );
+			 yourself).
+	self
+		should: [ backend delete: '/tonel/' , self fixturePackageName , '/PIFSNoSuchClass.class.st' ]
+		raise: Error
+		whoseDescriptionIncludes: 'Projection path not found'
+		description: 'A missing class is not found before its package''s owner is checked'
+]
+
+{ #category : 'tests' }
 PIFSBackendTest >> testExcludedPackagePrefixesHideCritiques [
 
 	| backend |

@@ -135,19 +135,21 @@ PIFSServer class >> extractDaemonArchive: archiveReference into: directoryRefere
 
 { #category : 'private - daemon' }
 PIFSServer class >> isMountPoint: aFileReference [
-	"Whether mount lists something mounted at aFileReference. mount prints physical paths, so the parent is resolved; the path itself is not, because a mount whose daemon is gone fails every lookup. What follows the path is matched too, so that a longer mounted path does not match: macOS prints ' (' after it, Linux ' type '."
+	"Whether mount lists something mounted at aFileReference. mount prints physical paths, so the parent is resolved; the path itself is not, because a mount whose daemon is gone fails every lookup. What follows the path is matched too, so that a longer mounted path does not match: macOS prints ' (' after it, Linux ' type '. Each system's own is matched, since a sibling named like the path followed by ' (' would match the other's on Linux."
 
-	| mounted |
-	mounted := '" on ${d%/}/"' , (self shellQuote: aFileReference basename).
+	| after |
+	after := OSPlatform current isLinux
+		         ifTrue: [ ' type ' ]
+		         ifFalse: [ ' (' ].
 	^ (LibC system: (String streamContents: [ :stream |
 				    stream
 					    nextPutAll: 'd=$(cd ';
 					    nextPutAll: (self shellQuote: aFileReference parent pathString);
-					    nextPutAll: ' 2>/dev/null && pwd -P) && mount | grep -F -q -e ';
-					    nextPutAll: mounted;
-					    nextPutAll: '" (" -e ';
-					    nextPutAll: mounted;
-					    nextPutAll: '" type "' ])) = 0
+					    nextPutAll: ' 2>/dev/null && pwd -P) && mount | grep -F -q -- " on ${d%/}/"';
+					    nextPutAll: (self shellQuote: aFileReference basename);
+					    nextPutAll: '"';
+					    nextPutAll: after;
+					    nextPutAll: '"' ])) = 0
 ]
 
 { #category : 'private - daemon' }

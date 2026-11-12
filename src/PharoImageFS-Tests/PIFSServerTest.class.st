@@ -120,9 +120,10 @@ PIFSServerTest >> tearDown [
 
 { #category : 'tests' }
 PIFSServerTest >> testALeftoverMountIsWaitedFor [
-	"A projection whose image is gone unmounts itself within seconds, since its daemon watches the image, so a start at its path waits for it before refusing."
+	"A projection whose image is gone unmounts itself within seconds, since its daemon watches the image, so a start at its path waits for it to go, then launches the daemon."
 
-	| directory previousPath leftover marker |
+	| directory previousPath leftover marker error |
+	PIFSServer daemonRunsHere ifFalse: [ ^ self skip: 'The daemon runs on macOS and Linux only.' ].
 	directory := self daemonDirectory.
 	leftover := directory / 'leftover'.
 	marker := (directory / 'mounted') ensureCreateFile.
@@ -140,33 +141,34 @@ PIFSServerTest >> testALeftoverMountIsWaitedFor [
 						 nextPutAll: previousPath ]).
 		self deny: (PIFSServer waitUntilNothingIsMountedAt: leftover within: 200 milliSeconds).
 		LibC system: '(sleep 0.3; rm -f ' , (PIFSServer shellQuote: marker pathString) , ') >/dev/null 2>&1 &'.
-		self assert: (PIFSServer waitUntilNothingIsMountedAt: leftover within: 5 seconds) ] ensure: [
+		error := self
+			         startWithDaemon: (self fakeDaemonIn: directory running: #( 'echo "launched past the leftover"'
+			             'exit 1' ))
+			         mountedAt: leftover.
+		self assert: error isNotNil.
+		self deny: (error messageText includesSubstring: 'already mounted').
+		self assert: (error messageText includesSubstring: 'launched past the leftover') ] ensure: [
 			OSEnvironment current at: 'PATH' put: previousPath.
 			directory ensureDeleteAll ]
 ]
 
 { #category : 'tests' }
 PIFSServerTest >> testAPathThatBeginsAMountedOneIsNotMounted [
-	"mount prints a mount point as it is, spaces included: a projection mounted at 'Pharo 13.0 - 64bit (stable)' is not one at 'Pharo 13.0'. A stand-in for mount lists it the way Linux, then macOS, does."
+	"mount prints a mount point as it is, spaces included: a projection mounted at 'Pharo 13.0 - 64bit (stable)' is not one at 'Pharo 13.0', nor, on Linux, at 'Pharo 13.0 - 64bit'. A stand-in for mount lists it the way Linux and macOS do."
 
-	| directory previousPath mounted |
+	| directory previousPath |
 	directory := self daemonDirectory.
-	mounted := directory / 'Pharo 13.0 - 64bit (stable)'.
 	previousPath := OSEnvironment current at: 'PATH'.
 	[
+		self fakeMountIn: directory listing: (directory / 'Pharo 13.0 - 64bit (stable)') pathString.
 		OSEnvironment current at: 'PATH' put: (String streamContents: [ :path |
 					 path
 						 nextPutAll: directory pathString;
 						 nextPut: $:;
 						 nextPutAll: previousPath ]).
-		self mountLines do: [ :line |
-				self
-					fakeMountIn: directory
-					listing: mounted pathString
-					as: { line }
-					while: nil.
-				self assert: (PIFSServer isMountPoint: mounted) description: line.
-				self deny: (PIFSServer isMountPoint: directory / 'Pharo 13.0') description: line ] ] ensure: [
+		self assert: (PIFSServer isMountPoint: directory / 'Pharo 13.0 - 64bit (stable)').
+		self deny: (PIFSServer isMountPoint: directory / 'Pharo 13.0').
+		OSPlatform current isLinux ifTrue: [ self deny: (PIFSServer isMountPoint: directory / 'Pharo 13.0 - 64bit') ] ] ensure: [
 			OSEnvironment current at: 'PATH' put: previousPath.
 			directory ensureDeleteAll ]
 ]
