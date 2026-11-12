@@ -77,8 +77,9 @@ jobs:
           TAG: ${{ steps.version.outputs.tag }}
         run: |
           # PIFSVersion current resolves the daemon download, so the daemon
-          # release and both macOS assets must exist before this one does.
-          expected="pharo-image-fs-daemon-darwin-amd64.zip,pharo-image-fs-daemon-darwin-arm64.zip"
+          # release and its macOS and Linux assets must exist before this one
+          # does.
+          expected="pharo-image-fs-daemon-darwin-amd64.zip,pharo-image-fs-daemon-darwin-arm64.zip,pharo-image-fs-daemon-linux-amd64.zip,pharo-image-fs-daemon-linux-arm64.zip"
           assets() {
             gh release view "$TAG" --repo "$DAEMON_REPOSITORY" \
               --json assets --jq '[.assets[].name] | sort | join(",")' 2>/dev/null || true

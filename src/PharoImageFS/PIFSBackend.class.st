@@ -305,8 +305,9 @@ PIFSBackend >> deleteTonelClassFileNamed: fileName packageName: packageName orig
 	| class className failureMessage previousText |
 	className := self classNameFromFileName: fileName suffix: '.class.st'.
 	className ifNil: [ self signalUnsupportedWrite: aString ].
-	self assertRepositoryOwnsPackageNamed: packageName originalPath: aString.
+	"A class the image lacks is not found whoever owns its package: a class file created and never written has nothing to delete."
 	class := self classForName: className packageName: packageName originalPath: aString.
+	self assertRepositoryOwnsPackageNamed: packageName originalPath: aString.
 	previousText := self classTonelTextFor: class.
 	[
 		class removeFromSystem.

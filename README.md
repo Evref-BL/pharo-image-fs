@@ -14,27 +14,18 @@ critique runs, and repository operations.
 
 ## Requirements
 
-- macOS with [fuse-t](https://www.fuse-t.org/) installed
+- macOS, with nothing to install: the daemon serves the projection over NFS
+  and mounts it with the system's `mount_nfs`
+- or Linux with FUSE: the `fuse3` package's `fusermount3`, and `/dev/fuse`,
+  which most desktop and server installs have. Ubuntu 25.04 and later let
+  `fusermount3` mount only under the home directory, `/tmp`, `/mnt`, `/media`
+  and `/run/user`
 - a Pharo image where the `PharoImageFS` package can be loaded
-
-On macOS, fuse-t can be installed with Homebrew:
-
-```sh
-brew install --cask fuse-t
-```
-
-If fuse-t was partially uninstalled and Homebrew still considers it installed,
-restore the expected files with:
-
-```sh
-brew reinstall --cask fuse-t
-```
 
 The daemon is built and released from
 [`pharo-image-fs-daemon`](https://github.com/Evref-BL/pharo-image-fs-daemon).
-`pharo-image-fs` downloads the matching prebuilt daemon binary when needed.
-Prebuilt daemon binaries do not require Go at runtime, but the platform FUSE
-dependency is still required.
+`pharo-image-fs` downloads the matching prebuilt daemon binary when needed; it
+needs nothing else at run time.
 
 ## Usage
 
@@ -163,20 +154,20 @@ started through this API.
 The mountpoint path is created when it is missing. If the path already exists,
 it must be a directory.
 
-The daemon requires fuse-t on macOS. fuse-t provides a FUSE-compatible API
-without requiring the macFUSE kernel extension security flow.
-
-Unmount with the normal macOS unmount command:
+Stopping a projection unmounts it. To unmount one by hand, on macOS:
 
 ```sh
 umount /tmp/pharo-image-fs
 ```
 
-If macOS reports the mount as busy, use:
+On Linux:
 
 ```sh
-diskutil unmount /tmp/pharo-image-fs
+fusermount3 -u /tmp/pharo-image-fs
 ```
+
+A mount something still uses stays until it is closed; the daemon never
+forces an unmount.
 
 ### Use the mounted image
 
@@ -393,4 +384,4 @@ its expected daemon version in `PIFSVersion`.
 
 The useful next improvements are:
 
-- evaluate Linux and Windows mount backends after the macOS workflow is stable.
+- evaluate a Windows mount backend.

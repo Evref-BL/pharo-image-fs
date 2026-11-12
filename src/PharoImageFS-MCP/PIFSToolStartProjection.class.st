@@ -33,7 +33,7 @@ PIFSToolStartProjection >> buildInputSchema [
 					   schemaPropertyNamed: 'mountPath'
 					   type: 'string'
 					   description: 'Directory to mount the projection at. Defaults to this image''s own projection directory.').
-				  (self schemaPropertyNamed: 'name' type: 'string' description: 'Volume name the mounted projection shows under.') };
+				  (self schemaPropertyNamed: 'name' type: 'string' description: 'Name the mount table shows for the projection.') };
 		  required: #(  );
 		  yourself
 ]
