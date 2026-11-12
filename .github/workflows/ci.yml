@@ -15,17 +15,20 @@ on:
 
 jobs:
   test:
-    runs-on: macos-26
+    runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
+        os:
+          - macos-26
+          - ubuntu-24.04
         smalltalk:
           - Pharo64-12
           - Pharo64-13
           - Pharo64-14
           - Pharo64-15
 
-    name: ${{ matrix.smalltalk }}
+    name: ${{ matrix.smalltalk }} on ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6

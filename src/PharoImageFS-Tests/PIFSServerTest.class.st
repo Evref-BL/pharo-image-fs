@@ -164,17 +164,16 @@ PIFSServerTest >> testStartFailsWhenTheDaemonDoesNotMount [
 	"A daemon whose mount fails logs why and may keep running. It is launched in the background, so start used to answer a port over a mount that never came."
 
 	| directory error |
-	OSPlatform current isMacOS ifFalse: [ ^ self skip: 'The daemon is started on macOS only.' ].
+	PIFSServer daemonRunsHere ifFalse: [ ^ self skip: 'The daemon runs on macOS and Linux only.' ].
 	directory := self daemonDirectory.
 	[
 		error := self
-			         startWithDaemon:
-			         (self fakeDaemonIn: directory running: #( 'echo "fuse: mount failed with error: -1"'
+			         startWithDaemon: (self fakeDaemonIn: directory running: #( 'echo "mount failed: permission denied"'
 			             'exec sleep 30' ))
 			         mountedAt: directory / 'mount'.
 		self assert: error isNotNil.
 		self assert: (error messageText includesSubstring: 'did not mount').
-		self assert: (error messageText includesSubstring: 'fuse: mount failed with error: -1').
+		self assert: (error messageText includesSubstring: 'mount failed: permission denied').
 		self assert: PIFSServer serversByPort isEmpty ] ensure: [ directory ensureDeleteAll ]
 ]
 
@@ -182,16 +181,16 @@ PIFSServerTest >> testStartFailsWhenTheDaemonDoesNotMount [
 PIFSServerTest >> testStartFailsWhenTheDaemonExitsBeforeMounting [
 
 	| directory error |
-	OSPlatform current isMacOS ifFalse: [ ^ self skip: 'The daemon is started on macOS only.' ].
+	PIFSServer daemonRunsHere ifFalse: [ ^ self skip: 'The daemon runs on macOS and Linux only.' ].
 	directory := self daemonDirectory.
 	[
 		error := self
-			         startWithDaemon: (self fakeDaemonIn: directory running: #( 'echo "fuse-t is not installed"'
+			         startWithDaemon: (self fakeDaemonIn: directory running: #( 'echo "FUSE needs fusermount3"'
 			             'exit 1' ))
 			         mountedAt: directory / 'mount'.
 		self assert: error isNotNil.
 		self assert: (error messageText includesSubstring: 'exited before mounting').
-		self assert: (error messageText includesSubstring: 'fuse-t is not installed').
+		self assert: (error messageText includesSubstring: 'FUSE needs fusermount3').
 		self assert: PIFSServer serversByPort isEmpty ] ensure: [ directory ensureDeleteAll ]
 ]
 
@@ -200,7 +199,7 @@ PIFSServerTest >> testStartRefusesAPathSomethingIsMountedAt [
 	"The daemon would fail to mount there, and what is mounted is not the projection's to unmount."
 
 	| error |
-	OSPlatform current isMacOS ifFalse: [ ^ self skip: 'The daemon is started on macOS only.' ].
+	PIFSServer daemonRunsHere ifFalse: [ ^ self skip: 'The daemon runs on macOS and Linux only.' ].
 	error := [
 		         PIFSServer start: (PIFSConfiguration new
 				          mountPath: '/dev' asFileReference;
@@ -230,4 +229,19 @@ PIFSServerTest >> testStopOnUnregistersServerByPort [
 	PIFSServer startEndpointOn: self testPort.
 	PIFSServer stopOn: self testPort.
 	self assert: (PIFSServer serverOn: self testPort) isNil
+]
+
+{ #category : 'tests' }
+PIFSServerTest >> testUnmountCommandsNeverForce [
+	"Unmounting a busy projection fails until nothing uses it: a forced or lazy unmount would leave its users on a gone image."
+
+	| path |
+	path := '/tmp/an image' asFileReference.
+	{
+		(PIFSServer unmountCommandOnLinuxFor: path).
+		(PIFSServer unmountCommandOnMacOSFor: path) } do: [ :command |
+			self assert: (command includesSubstring: (PIFSServer shellQuote: path pathString)).
+			#( ' -f' ' -l' ' -z' ' -uz' 'force' ) do: [ :forcing | self deny: (command includesSubstring: forcing) ] ].
+	self assert: ((PIFSServer unmountCommandOnLinuxFor: path) beginsWith: 'fusermount3 -u ').
+	self assert: ((PIFSServer unmountCommandOnMacOSFor: path) beginsWith: 'umount ')
 ]

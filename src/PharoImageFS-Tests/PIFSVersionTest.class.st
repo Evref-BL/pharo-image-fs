@@ -33,6 +33,24 @@ PIFSVersionTest >> testDaemonArchiveNameUsesCurrentPlatform [
 ]
 
 { #category : 'tests' }
+PIFSVersionTest >> testDaemonAssetArchitectureNamesEveryVMsProcessor [
+
+	self assert: (PIFSVersion daemonAssetArchitectureFor: 'arm64') equals: 'arm64'.
+	self assert: (PIFSVersion daemonAssetArchitectureFor: 'aarch64') equals: 'arm64'.
+	self assert: (PIFSVersion daemonAssetArchitectureFor: 'x86_64') equals: 'amd64'.
+	self assert: (PIFSVersion daemonAssetArchitectureFor: 'amd64') equals: 'amd64'.
+	self should: [ PIFSVersion daemonAssetArchitectureFor: 'riscv64' ] raise: Error
+]
+
+{ #category : 'tests' }
+PIFSVersionTest >> testDaemonAssetOperatingSystemIsThisSystems [
+
+	OSPlatform current isMacOS ifTrue: [ ^ self assert: PIFSVersion daemonAssetOperatingSystem equals: 'darwin' ].
+	OSPlatform current isLinux ifTrue: [ ^ self assert: PIFSVersion daemonAssetOperatingSystem equals: 'linux' ].
+	self should: [ PIFSVersion daemonAssetOperatingSystem ] raise: Error
+]
+
+{ #category : 'tests' }
 PIFSVersionTest >> testDaemonReleaseApiURLAddressesTheCurrentReleaseTag [
 
 	self assert: (PIFSVersion daemonReleaseApiURL endsWith: '/releases/tags/' , PIFSVersion releaseTag)

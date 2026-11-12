@@ -20,12 +20,16 @@ PIFSVersion class >> daemonArchiveName [
 { #category : 'accessing' }
 PIFSVersion class >> daemonAssetArchitecture [
 
-	| architecture |
-	architecture := Smalltalk vm getSystemAttribute: 1003.
-	architecture = 'arm64' ifTrue: [ ^ 'arm64' ].
-	architecture = 'x86_64' ifTrue: [ ^ 'amd64' ].
-	architecture = 'amd64' ifTrue: [ ^ 'amd64' ].
-	Error signal: 'Unsupported daemon architecture: ' , architecture
+	^ self daemonAssetArchitectureFor: (Smalltalk vm getSystemAttribute: 1003)
+]
+
+{ #category : 'accessing' }
+PIFSVersion class >> daemonAssetArchitectureFor: aString [
+	"The daemon's name for the processor the VM names aString: a Linux arm64 VM says aarch64, a macOS one arm64."
+
+	(#( 'arm64' 'aarch64' ) includes: aString) ifTrue: [ ^ 'arm64' ].
+	(#( 'x86_64' 'amd64' ) includes: aString) ifTrue: [ ^ 'amd64' ].
+	Error signal: 'Unsupported daemon architecture: ' , aString
 ]
 
 { #category : 'accessing' }
@@ -38,6 +42,7 @@ PIFSVersion class >> daemonAssetName [
 PIFSVersion class >> daemonAssetOperatingSystem [
 
 	OSPlatform current isMacOS ifTrue: [ ^ 'darwin' ].
+	OSPlatform current isLinux ifTrue: [ ^ 'linux' ].
 	Error signal: 'Unsupported daemon operating system: ' , OSPlatform current class name
 ]
 

@@ -63,6 +63,13 @@ PIFSServer class >> daemonExecutableOverride [
 	^ pathString asFileReference
 ]
 
+{ #category : 'private - daemon' }
+PIFSServer class >> daemonRunsHere [
+	"Whether this system has a daemon to mount projections: macOS serves them over NFS, Linux over FUSE."
+
+	^ OSPlatform current isMacOS or: [ OSPlatform current isLinux ]
+]
+
 { #category : 'defaults' }
 PIFSServer class >> defaultMountName [
 
@@ -228,6 +235,44 @@ PIFSServer class >> stopAll [
 PIFSServer class >> stopOn: portNumber [
 
 	(self serverOn: portNumber) ifNotNil: [ :projectionServer | projectionServer stop ]
+]
+
+{ #category : 'private - daemon' }
+PIFSServer class >> unmountCommandFor: aFileReference [
+	"The command that unmounts what is mounted at aFileReference, as the user who mounted it, without forcing it."
+
+	^ OSPlatform current isLinux
+		  ifTrue: [ self unmountCommandOnLinuxFor: aFileReference ]
+		  ifFalse: [ self unmountCommandOnMacOSFor: aFileReference ]
+]
+
+{ #category : 'private - daemon' }
+PIFSServer class >> unmountCommandOnLinuxFor: aFileReference [
+	"A user unmounts a FUSE mount through the setuid helper: fusermount3, or fusermount where only FUSE 2 is installed."
+
+	| path |
+	path := self shellQuote: aFileReference pathString.
+	^ String streamContents: [ :stream |
+			  stream
+				  nextPutAll: 'fusermount3 -u ';
+				  nextPutAll: path;
+				  nextPutAll: ' >/dev/null 2>&1 || fusermount -u ';
+				  nextPutAll: path;
+				  nextPutAll: ' >/dev/null 2>&1' ]
+]
+
+{ #category : 'private - daemon' }
+PIFSServer class >> unmountCommandOnMacOSFor: aFileReference [
+
+	| path |
+	path := self shellQuote: aFileReference pathString.
+	^ String streamContents: [ :stream |
+			  stream
+				  nextPutAll: 'umount ';
+				  nextPutAll: path;
+				  nextPutAll: ' >/dev/null 2>&1 || diskutil unmount ';
+				  nextPutAll: path;
+				  nextPutAll: ' >/dev/null 2>&1' ]
 ]
 
 { #category : 'registry' }
@@ -440,7 +485,7 @@ PIFSServer >> signalServerStartupFailureOn: portNumber [
 PIFSServer >> startDaemonMountedAt: aPath named: aString [
 
 	| command executable |
-	OSPlatform current isMacOS ifFalse: [ Error signal: 'pharo-image-fs daemon startup is currently supported only on macOS.' ].
+	self class daemonRunsHere ifFalse: [ Error signal: 'pharo-image-fs daemon startup is supported only on macOS and Linux.' ].
 	"The daemon would fail to mount over it, and what is there is not this projection's to unmount."
 	(self class isMountPoint: aPath asFileReference) ifTrue: [
 			Error signal:
@@ -492,11 +537,11 @@ PIFSServer >> stop [
 
 { #category : 'private - daemon' }
 PIFSServer >> stopDaemon [
+	"Unmount, then signal the daemon, which also unmounts on its own once nothing keeps the mount busy."
 
 	mountPath ifNil: [ ^ self ].
-	OSPlatform current isMacOS ifTrue: [
-			LibC system: 'umount ' , (self shellQuote: mountPath pathString) , ' >/dev/null 2>&1 || diskutil unmount '
-				, (self shellQuote: mountPath pathString) , ' >/dev/null 2>&1'.
+	self class daemonRunsHere ifTrue: [
+			LibC system: (self class unmountCommandFor: mountPath).
 			daemonPidFile ifNotNil: [
 					daemonPidFile exists ifTrue: [
 							| pid |
