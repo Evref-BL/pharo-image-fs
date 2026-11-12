@@ -83,11 +83,22 @@ jobs:
             gh release view "$TAG" --repo "$DAEMON_REPOSITORY" \
               --json assets --jq '[.assets[].name] | sort | join(",")' 2>/dev/null || true
           }
+          # The release may carry assets for other platforms too; only the
+          # expected ones are required.
+          published() {
+            found=",$(assets),"
+            for asset in ${expected//,/ }; do
+              case "$found" in
+                *",$asset,"*) ;;
+                *) return 1 ;;
+              esac
+            done
+          }
 
           if ! git ls-remote --exit-code --refs "https://github.com/$DAEMON_REPOSITORY" "refs/tags/$TAG" >/dev/null; then
             # The daemon tracks this version even when its own source did not
             # change, so tag its current main. Its Release workflow builds and
-            # publishes both assets from that tag.
+            # publishes its assets from that tag.
             head_sha="$(gh api "repos/$DAEMON_REPOSITORY/git/ref/heads/main" --jq .object.sha)"
             tag_sha="$(gh api --method POST "repos/$DAEMON_REPOSITORY/git/tags" \
               -f tag="$TAG" -f message="$TAG" -f object="$head_sha" -f type=commit --jq .sha)"
@@ -105,7 +116,7 @@ jobs:
           fi
 
           for _ in {1..60}; do
-            if [ "$(assets)" = "$expected" ]; then
+            if published; then
               exit 0
             fi
             sleep 20
