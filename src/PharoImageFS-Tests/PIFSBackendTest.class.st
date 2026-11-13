@@ -33,6 +33,31 @@ PIFSBackendTest >> classTonelSourceForPackageNamed: packageName [
 ]
 
 { #category : 'private' }
+PIFSBackendTest >> classTonelSourceWithArgumentAssignment [
+
+	^ self classTonelSource , '
+{ #category : ''accessing'' }
+' , self originalClassName , ' >> doubled: aNumber [
+
+	aNumber := aNumber * 2.
+	^ aNumber
+]
+'
+]
+
+{ #category : 'private' }
+PIFSBackendTest >> classTonelSourceWithBrokenCopyOfAnswer [
+
+	^ self classTonelSource , '
+{ #category : ''accessing'' }
+' , self originalClassName , ' >> answer [
+
+	^ 42 +
+]
+'
+]
+
+{ #category : 'private' }
 PIFSBackendTest >> classTonelSourceWithBrokenExtraMethod [
 
 	^ self classTonelSource , '
@@ -111,6 +136,15 @@ PIFSBackendTest >> classTonelSourceWithLongMethodForPackageNamed: packageName [
 ]
 
 { #category : 'private' }
+PIFSBackendTest >> classTonelSourceWithOneLineSyntaxError [
+
+	^ self classTonelSource , '
+{ #category : ''accessing'' }
+' , self originalClassName , ' >> sum [ ^ 1 + ]
+'
+]
+
+{ #category : 'private' }
 PIFSBackendTest >> classTonelSourceWithSlot [
 
 	^ 'Class {
@@ -134,6 +168,48 @@ PIFSBackendTest >> classTonelSourceWithSlot [
 ' , self originalClassName , ' >> value [
 
 	^ value
+]
+'
+]
+
+{ #category : 'private' }
+PIFSBackendTest >> classTonelSourceWithUnclosedMethod [
+	"A closed method follows the unclosed one: Tonel fails only at the end of the file, past both."
+
+	^ self classTonelSource , '
+{ #category : ''accessing'' }
+' , self originalClassName , ' >> unclosedAnswer [
+
+	^ 7
+
+{ #category : ''accessing'' }
+' , self originalClassName , ' >> closedAnswer [
+
+	^ 8
+]
+'
+]
+
+{ #category : 'private' }
+PIFSBackendTest >> classTonelSourceWithUnclosedParenthesis [
+
+	^ self classTonelSource , '
+{ #category : ''accessing'' }
+' , self originalClassName , ' >> sum [
+
+	^ (1 + 2
+]
+'
+]
+
+{ #category : 'private' }
+PIFSBackendTest >> classTonelSourceWithUndeclaredVariable [
+
+	^ self classTonelSource , '
+{ #category : ''accessing'' }
+' , self originalClassName , ' >> laterAnswer [
+
+	^ PIFSClassWrittenLater new
 ]
 '
 ]
@@ -288,6 +364,15 @@ PIFSBackendTest >> originalClassTonelPath [
 PIFSBackendTest >> referenceUserClassName [
 
 	^ 'PIFS' , 'ReferenceUser'
+]
+
+{ #category : 'private' }
+PIFSBackendTest >> refusalOf: aBlock [
+
+	aBlock
+		on: Error
+		do: [ :error | ^ error messageText ].
+	self fail: 'The write was accepted.'
 ]
 
 { #category : 'private' }
@@ -837,6 +922,32 @@ PIFSBackendTest >> testMoveExtensionTonelFileAcrossPackagesMovesMethods [
 ]
 
 { #category : 'tests' }
+PIFSBackendTest >> testMoveExtensionTonelFileKeepsAMethodWithACompileError [
+	"From Pharo 14, Monticello's loader installs a method with a compile error, so the image may hold one. A move applies the image's own text, and so does its rollback: refusing that text would lose the methods."
+
+	| backend |
+	SystemVersion current major < 14 ifTrue: [ ^ self skip: 'Before Pharo 14, the loader refuses a method with a compile error.' ].
+	self ensureTargetPackage.
+	backend := self newBackend.
+	backend write: self extensionMoveTonelSource at: '/tonel/' , self fixturePackageName , '/String.extension.st'.
+	[
+		String compiler
+			permitFaulty: true;
+			protocol: '*' , self fixturePackageName;
+			install: 'pharoImageFSFaultyMoveProbe: aNumber
+
+	aNumber := 2.
+	^ aNumber'.
+		backend
+			rename: '/tonel/' , self fixturePackageName , '/String.extension.st'
+			to: '/tonel/' , self targetPackageName , '/String.extension.st'.
+		self assert: (String >> #pharoImageFSFaultyMoveProbe:) package name equals: self targetPackageName.
+		self assert: ('' perform: #pharoImageFSMoveExtensionProbe) equals: 7 ] ensure: [
+			#( #pharoImageFSFaultyMoveProbe: #pharoImageFSMoveExtensionProbe ) do: [ :each |
+				(String includesSelector: each) ifTrue: [ String removeSelector: each ] ] ]
+]
+
+{ #category : 'tests' }
 PIFSBackendTest >> testReadClassCritiqueFileReturnsCritiquesArray [
 
 	| backend data |
@@ -873,6 +984,22 @@ PIFSBackendTest >> testReadUsesThePlatformLineEnding [
 ]
 
 { #category : 'tests' }
+PIFSBackendTest >> testRemoveDirectoryRejectsExcludedPackage [
+
+	| backend |
+	self ensureTargetPackage.
+	backend := self newBackend.
+	backend requiresRepositoryOwnershipForWrites: false.
+	backend excludedPackagePrefixes: { self targetPackageName }.
+	self
+		should: [ backend removeDirectory: '/tonel/' , self targetPackageName ]
+		raise: Error
+		whoseDescriptionIncludes: 'Projection path not found'
+		description: 'rmdir must not reach a package the projection hides'.
+	self assert: (PackageOrganizer default hasPackage: self targetPackageName)
+]
+
+{ #category : 'tests' }
 PIFSBackendTest >> testRemoveDirectoryRejectsNonEmptyTonelPackage [
 
 	| backend |
@@ -888,6 +1015,23 @@ PIFSBackendTest >> testRemoveDirectoryRejectsNonEmptyTonelPackage [
 ]
 
 { #category : 'tests' }
+PIFSBackendTest >> testRemoveDirectoryRejectsUnownedPackageByDefault [
+
+	| backend |
+	self ensureTargetPackage.
+	backend := PIFSBackend new.
+	backend repositories: (PIFSRepositoriesTestDouble new
+			 all: #(  );
+			 yourself).
+	self
+		should: [ backend removeDirectory: '/tonel/' , self targetPackageName ]
+		raise: Error
+		whoseDescriptionIncludes: 'is not owned by a loaded Iceberg repository'
+		description: 'rmdir checks repository ownership as mkdir does'.
+	self assert: (PackageOrganizer default hasPackage: self targetPackageName)
+]
+
+{ #category : 'tests' }
 PIFSBackendTest >> testRemoveDirectoryRemovesEmptyTonelPackage [
 
 	| backend |
@@ -896,6 +1040,29 @@ PIFSBackendTest >> testRemoveDirectoryRemovesEmptyTonelPackage [
 	backend makeDirectory: '/tonel/' , self targetPackageName.
 	backend removeDirectory: '/tonel/' , self targetPackageName.
 	self deny: (PackageOrganizer default hasPackage: self targetPackageName)
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testRemoveDirectoryRemovesTheOwnedPackageFromItsCheckout [
+	"Once the package is gone from the image, no repository owns it, and nothing would export its removal."
+
+	| backend checkout package repository |
+	checkout := FileSystem memory root.
+	(checkout / self targetPackageName) ensureCreateDirectory.
+	checkout / self targetPackageName / 'package.st' writeStreamDo: [ :stream |
+		stream nextPutAll: 'Package { #name : ''' , self targetPackageName , ''' }' ].
+	package := PIFSPackageTestDouble named: self targetPackageName.
+	repository := PIFSRepositoryTestDouble named: 'Owner' directory: checkout loadedPackages: { package }.
+	repository sourceFormatId: #tonel.
+	backend := PIFSBackend new.
+	backend repositories: (PIFSRepositoriesTestDouble new
+			 all: { repository };
+			 yourself).
+	self ensureTargetPackage.
+	backend removeDirectory: '/tonel/' , self targetPackageName.
+	self deny: (PackageOrganizer default hasPackage: self targetPackageName).
+	self deny: (checkout / self targetPackageName) exists.
+	self assert: package isRemoved
 ]
 
 { #category : 'tests' }
@@ -1212,6 +1379,19 @@ PIFSBackendTest >> testStatMeasuresTheClassAgainAfterEachKindOfChange [
 ]
 
 { #category : 'tests' }
+PIFSBackendTest >> testWriteAcceptsAnUndeclaredVariable [
+	"The files of one change are written one at a time: what a method names may be in the next one."
+
+	| backend |
+	backend := self newBackend.
+	[
+		backend write: self classTonelSourceWithUndeclaredVariable at: self originalClassTonelPath.
+		self assert: ((Smalltalk globals at: self originalClassName asSymbol) includesSelector: #laterAnswer) ] ensure: [
+			self removeClassNamed: self originalClassName.
+			Undeclared removeKey: #PIFSClassWrittenLater ifAbsent: [ ] ]
+]
+
+{ #category : 'tests' }
 PIFSBackendTest >> testWriteBlockedByCritiqueKeepsExistingClass [
 
 	| backend class |
@@ -1383,6 +1563,85 @@ PIFSBackendTest >> testWriteReformatsWithThePackageFormatter [
 	self
 		deny: source = method ast formattedCode
 		description: 'Formatting must use the package manifest formatter, not the default one'
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testWriteRefusesADuplicatedMethodAtTheCopyThatChanged [
+	"Only the second answer changed; the first has the same selector."
+
+	| backend refusal |
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	refusal := self refusalOf: [ backend write: self classTonelSourceWithBrokenCopyOfAnswer at: self originalClassTonelPath ].
+	self assert: refusal lines allButFirst equals: {
+			'Line 17:'.
+			(String tab , '^ 42 +').
+			(String tab , '      ^') }
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testWriteRefusesASyntaxErrorAtItsLineInTheFile [
+
+	| backend |
+	backend := self newBackend.
+	self
+		assert: (self refusalOf: [ backend write: self classTonelSourceWithUnclosedParenthesis at: self originalClassTonelPath ])
+		equals: (String lf join: {
+					 ('Cannot compile ' , self originalClassName , '>>sum in ' , self originalClassTonelPath , ': '')'' expected').
+					 'Line 17:'.
+					 (String tab , '^ (1 + 2').
+					 (String tab , '        ^') }).
+	self deny: (Smalltalk globals includesKey: self originalClassName asSymbol)
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testWriteRefusesAnArgumentAssignmentAtItsLineInTheFile [
+	"From Pharo 14, Monticello's loader would install the method as one that fails when run."
+
+	| backend class |
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	self
+		assert: (self refusalOf: [ backend write: self classTonelSourceWithArgumentAssignment at: self originalClassTonelPath ])
+		equals: (String lf join: {
+					 ('Cannot compile ' , self originalClassName , '>>doubled: in ' , self originalClassTonelPath
+					  , ': aNumber is an argument, and arguments are read-only. Assign its value to a temporary variable and change that.').
+					 'Line 17:'.
+					 (String tab , 'aNumber := aNumber * 2.').
+					 (String tab , '^') }).
+	class := Smalltalk globals at: self originalClassName asSymbol.
+	self deny: (class includesSelector: #doubled:).
+	self assert: class new answer equals: 42
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testWriteRefusesAnErrorOnAMethodsHeaderLineAtItsColumn [
+	"The source drops the [ and the space before it, so the body is found from where it begins in the file."
+
+	| backend refusal |
+	backend := self newBackend.
+	refusal := self refusalOf: [ backend write: self classTonelSourceWithOneLineSyntaxError at: self originalClassTonelPath ].
+	self assert: refusal lines allButFirst equals: {
+			'Line 15:'.
+			(self originalClassName , ' >> sum [ ^ 1 + ]').
+			((String new: self originalClassName size + 15 withAll: Character space) , '^') }
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testWriteRefusesAnUnclosedMethodBodyAtItsHeader [
+	"Tonel finds the body unclosed only at the end of the file, so the refusal names the method it was reading."
+
+	| backend |
+	backend := self newBackend.
+	self
+		assert: (self refusalOf: [ backend write: self classTonelSourceWithUnclosedMethod at: self originalClassTonelPath ])
+		equals: (String lf join: {
+					 ('Cannot parse Tonel file for ' , self originalClassTonelPath , ': the body of ' , self originalClassName
+					  , ' >> unclosedAnswer is never closed: a [ in it lacks its ], or a '', a " or a #( in it is left open.').
+					 'Line 15:'.
+					 (self originalClassName , ' >> unclosedAnswer [').
+					 ((String new: self originalClassName size + 19 withAll: Character space) , '^') }).
+	self deny: (Smalltalk globals includesKey: self originalClassName asSymbol)
 ]
 
 { #category : 'tests' }

@@ -22,9 +22,17 @@ PIFSRepositoryTestDouble class >> named: aString directory: aFileReference loade
 ]
 
 { #category : 'accessing' }
-PIFSRepositoryTestDouble >> loadedPackages [
+PIFSRepositoryTestDouble >> codeDirectory [
+	"Where the checkout keeps its packages: its root, for a double."
 
-	^ loadedPackages
+	^ repositoryDirectory
+]
+
+{ #category : 'accessing' }
+PIFSRepositoryTestDouble >> loadedPackages [
+	"As Iceberg answers them: only those the image holds."
+
+	^ loadedPackages select: [ :package | PackageOrganizer default hasPackage: package packageName ]
 ]
 
 { #category : 'accessing' }

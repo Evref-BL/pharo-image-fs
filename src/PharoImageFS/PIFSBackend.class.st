@@ -31,8 +31,10 @@ PIFSBackend >> applyClassTonelText: textString replacing: previousTextString cla
 			  previousMethodDefinitions := self methodDefinitionsFrom: previousDefinitions.
 			  methodDefinitions := self methodDefinitionsFrom: definitions.
 			  changedMethodDefinitions := self methodDefinitionsChangedFrom: previousMethodDefinitions in: methodDefinitions.
+			  self validateSyntaxOfMethodDefinitions: changedMethodDefinitions text: textString originalPath: aString.
 			  self validateBlockingCritiquesForMethodDefinitions: changedMethodDefinitions originalPath: aString.
 			  classDefinition = previousClassDefinition ifFalse: [ self loadClassDefinition: classDefinition ].
+			  self validateCompilationOfMethodDefinitions: changedMethodDefinitions text: textString originalPath: aString.
 			  self unloadMethodDefinitionsAbsentFrom: methodDefinitions in: previousMethodDefinitions.
 			  changedMethodDefinitions do: [ :methodDefinition | self loadMethodDefinition: methodDefinition ] ]
 ]
@@ -52,7 +54,9 @@ PIFSBackend >> applyExtensionTonelText: textString replacing: previousTextString
 			  methodDefinitions := self methodDefinitionsFrom: definitions.
 			  previousMethodDefinitions := self methodDefinitionsFrom: previousDefinitions.
 			  changedMethodDefinitions := self methodDefinitionsChangedFrom: previousMethodDefinitions in: methodDefinitions.
+			  self validateSyntaxOfMethodDefinitions: changedMethodDefinitions text: textString originalPath: aString.
 			  self validateBlockingCritiquesForMethodDefinitions: changedMethodDefinitions originalPath: aString.
+			  self validateCompilationOfMethodDefinitions: changedMethodDefinitions text: textString originalPath: aString.
 			  self unloadMethodDefinitionsAbsentFrom: methodDefinitions in: previousMethodDefinitions.
 			  changedMethodDefinitions do: [ :methodDefinition | self loadMethodDefinition: methodDefinition ] ]
 ]
@@ -70,8 +74,10 @@ PIFSBackend >> applyNewClassTonelText: textString className: className packageNa
 				  packageName: packageName
 				  originalPath: aString.
 			  methodDefinitions := self methodDefinitionsFrom: definitions.
+			  self validateSyntaxOfMethodDefinitions: methodDefinitions text: textString originalPath: aString.
 			  self validateBlockingCritiquesForMethodDefinitions: methodDefinitions originalPath: aString.
 			  self loadClassDefinition: classDefinition.
+			  self validateCompilationOfMethodDefinitions: methodDefinitions text: textString originalPath: aString.
 			  methodDefinitions do: [ :methodDefinition | self loadMethodDefinition: methodDefinition ] ]
 ]
 
@@ -88,7 +94,9 @@ PIFSBackend >> applyNewExtensionTonelText: textString className: className packa
 				  originalPath: aString.
 			  methodDefinitions := self methodDefinitionsFrom: definitions.
 			  methodDefinitions ifEmpty: [ Error signal: 'Extension file must contain at least one method for ' , aString ].
+			  self validateSyntaxOfMethodDefinitions: methodDefinitions text: textString originalPath: aString.
 			  self validateBlockingCritiquesForMethodDefinitions: methodDefinitions originalPath: aString.
+			  self validateCompilationOfMethodDefinitions: methodDefinitions text: textString originalPath: aString.
 			  methodDefinitions do: [ :methodDefinition | self loadMethodDefinition: methodDefinition ] ]
 ]
 
@@ -349,11 +357,12 @@ PIFSBackend >> deleteTonelExtensionFileNamed: fileName packageName: packageName 
 		do: [ :error |
 				failureMessage := error messageText ifNil: [ error asString ].
 				[
-					self
-						applyNewExtensionTonelText: previousText
-						className: className
-						packageName: packageName
-						originalPath: aString.
+					self withoutMethodChecksDo: [
+							self
+								applyNewExtensionTonelText: previousText
+								className: className
+								packageName: packageName
+								originalPath: aString ].
 					self exportPackageNamed: packageName fileNamed: fileName ]
 					on: Error
 					do: [ :rollbackError |
@@ -566,6 +575,19 @@ PIFSBackend >> jsonTextFor: anObject [
 	^ STONJSON toString: anObject
 ]
 
+{ #category : 'private - errors' }
+PIFSBackend >> lineAt: anIndex in: aString do: aBlock [
+	"Evaluate aBlock with the number of the line that holds anIndex, its column there, and the line. Lines count from 1 whatever ends them: CR, LF or both. An index past the end is on the last line, after its last character."
+
+	| number |
+	number := 0.
+	aString lineIndicesDo: [ :start :endWithoutDelimiters :end |
+			number := number + 1.
+			(anIndex <= end or: [ end >= aString size ]) ifTrue: [
+				^ aBlock value: number value: anIndex - start + 1 value: (aString copyFrom: start to: endWithoutDelimiters) ] ].
+	^ aBlock value: 1 value: 1 value: ''
+]
+
 { #category : 'accessing' }
 PIFSBackend >> list: aString [
 
@@ -697,6 +719,17 @@ PIFSBackend >> methodIdentityFor: aMethodDefinition [
 		  aMethodDefinition selector }
 ]
 
+{ #category : 'private - errors' }
+PIFSBackend >> methodNameOf: aMethodDefinition [
+
+	^ String streamContents: [ :stream |
+			  stream nextPutAll: aMethodDefinition className.
+			  aMethodDefinition classIsMeta ifTrue: [ stream nextPutAll: ' class' ].
+			  stream
+				  nextPutAll: '>>';
+				  nextPutAll: aMethodDefinition selector ]
+]
+
 { #category : 'private - moving' }
 PIFSBackend >> moveAndRenameTonelClassFileNamed: sourceFileName toFileNamed: targetFileName packageName: sourcePackageName toPackageName: targetPackageName originalPath: sourcePath targetPath: targetPath [
 
@@ -806,11 +839,12 @@ PIFSBackend >> moveTonelExtensionFileNamed: fileName packageName: sourcePackageN
 		             originalPath: sourcePath.
 	[
 		self removeCompiledMethods: sourceMethods.
-		self
-			applyNewExtensionTonelText: movedText
-			className: className
-			packageName: targetPackageName
-			originalPath: targetPath.
+		self withoutMethodChecksDo: [
+				self
+					applyNewExtensionTonelText: movedText
+					className: className
+					packageName: targetPackageName
+					originalPath: targetPath ].
 		self
 			exportPackagesNamed: {
 					sourcePackageName.
@@ -824,11 +858,12 @@ PIFSBackend >> moveTonelExtensionFileNamed: fileName packageName: sourcePackageN
 				[
 					targetMethods := self extensionMethodsForClassName: className inPackage: targetPackage.
 					targetMethods ifNotEmpty: [ self removeCompiledMethods: targetMethods ].
-					self
-						applyNewExtensionTonelText: previousText
-						className: className
-						packageName: sourcePackageName
-						originalPath: sourcePath.
+					self withoutMethodChecksDo: [
+							self
+								applyNewExtensionTonelText: previousText
+								className: className
+								packageName: sourcePackageName
+								originalPath: sourcePath ].
 					self
 						exportPackagesNamed: {
 								targetPackageName.
@@ -858,9 +893,21 @@ PIFSBackend >> packageNames [
 { #category : 'private - writing' }
 PIFSBackend >> parseTonelDefinitionsFrom: textString originalPath: aString [
 
-	^ [ TonelParser parseString: textString ]
+	| parser |
+	parser := PIFSTonelParser on: textString readStream.
+	^ [ parser start ]
 		  on: Error
-		  do: [ :error | Error signal: 'Cannot parse Tonel file for ' , aString , ': ' , (error messageText ifNil: [ error asString ]) ]
+		  do: [ :error |
+				  Error signal: (String streamContents: [ :stream |
+							   stream
+								   nextPutAll: 'Cannot parse Tonel file for ';
+								   nextPutAll: aString;
+								   nextPutAll: ': '.
+							   self
+								   printParseFailure: error
+								   of: parser
+								   in: textString
+								   on: stream ]) ]
 ]
 
 { #category : 'private - paths' }
@@ -884,6 +931,114 @@ PIFSBackend >> pathSegmentForSelector: aSelector [
 PIFSBackend >> pathSegmentsFor: aString [
 
 	^ ($/ split: aString) reject: [ :each | each isEmpty ]
+]
+
+{ #category : 'private - errors' }
+PIFSBackend >> positionsOf: aMethodDefinition in: textString do: aBlock [
+	"Evaluate aBlock with where the method's source begins in the text, where its body begins in the text, and where its body begins in its source. Read again only when a method is refused."
+
+	| parser |
+	parser := PIFSTonelParser on: textString readStream.
+	parser start.
+	parser sourcePositions
+		detect: [ :each | each key = aMethodDefinition ]
+		ifFound: [ :each | aBlock valueWithArguments: each value ]
+]
+
+{ #category : 'private - errors' }
+PIFSBackend >> printLine: lineString number: lineNumber column: column on: aStream [
+	"As method_compile shows where a compile failed: the line, then a caret under the column, each tab before it kept a tab so that the caret lines up."
+
+	aStream
+		nextPut: Character lf;
+		nextPutAll: 'Line ';
+		print: lineNumber;
+		nextPut: $:;
+		nextPut: Character lf;
+		nextPutAll: lineString;
+		nextPut: Character lf.
+	(lineString first: ((column - 1 max: 0) min: lineString size)) do: [ :each |
+			aStream nextPut: (each = Character tab
+					 ifTrue: [ each ]
+					 ifFalse: [ Character space ]) ].
+	aStream nextPut: $^
+]
+
+{ #category : 'private - errors' }
+PIFSBackend >> printLineAt: anIndex in: textString on: aStream [
+
+	self lineAt: anIndex in: textString do: [ :number :column :lineString |
+			self
+				printLine: lineString
+				number: number
+				column: column
+				on: aStream ]
+]
+
+{ #category : 'private - errors' }
+PIFSBackend >> printLineAt: sourceIndex inSourceOf: aMethodDefinition text: textString on: aStream [
+	"A method's source is its selector, as the header holds it, followed by its body, as the file holds it after the [, line endings aside. An index in the selector is as far from where the source begins in the file; an index in the body is as many lines from where the body begins, and on the body's first line, as many columns."
+
+	self positionsOf: aMethodDefinition in: textString do: [ :sourcePosition :bodyPosition :bodyIndex |
+			sourceIndex < bodyIndex ifTrue: [ ^ self printLineAt: sourcePosition + sourceIndex - 1 in: textString on: aStream ].
+			self lineAt: bodyPosition in: textString do: [ :firstNumber :firstColumn :firstLine |
+					self
+						lineAt: sourceIndex - bodyIndex + 1
+						in: (aMethodDefinition source allButFirst: bodyIndex - 1)
+						do: [ :number :column :line |
+								self
+									printLine: (textString lines at: firstNumber + number - 1 ifAbsent: [ '' ])
+									number: firstNumber + number - 1
+									column: (number = 1
+											 ifTrue: [ firstColumn + column - 1 ]
+											 ifFalse: [ column ])
+									on: aStream ] ] ]
+]
+
+{ #category : 'private - errors' }
+PIFSBackend >> printNotice: aNotice on: aStream [
+	"The compiler says 'Assignment to read-only variable', on the variable assigned, and names it nowhere."
+
+	| node |
+	node := aNotice node.
+	(node isVariable and: [ node variable isNotNil and: [ node variable isWritable not ] ]) ifFalse: [
+		^ aStream nextPutAll: aNotice messageText ].
+	aStream nextPutAll: node name.
+	node variable isArgumentVariable ifTrue: [
+		^ aStream nextPutAll: ' is an argument, and arguments are read-only. Assign its value to a temporary variable and change that.' ].
+	node variable isPseudoVariable ifTrue: [ ^ aStream nextPutAll: ' is a pseudo-variable, which cannot be assigned.' ].
+	aStream nextPutAll: ' is read-only, and cannot be assigned.'
+]
+
+{ #category : 'private - errors' }
+PIFSBackend >> printParseFailure: anError of: aParser in: textString on: aStream [
+	"Where the parser stopped, which Tonel's own errors do not say."
+
+	aParser bodyPosition ifNotNil: [ :bodyPosition |
+			^ self
+				  printUnreadBodyAt: bodyPosition
+				  ofMethodAt: aParser methodPosition
+				  in: textString
+				  on: aStream ].
+	aParser methodPosition ifNotNil: [ :methodPosition |
+			aStream nextPutAll: 'the line below does not begin a method as Tonel writes one: Class >> selector [ body ].'.
+			^ self printLineAt: methodPosition in: textString on: aStream ].
+	aStream nextPutAll: (anError messageText ifNil: [ anError asString ]).
+	self printLineAt: aParser position in: textString on: aStream
+]
+
+{ #category : 'private - errors' }
+PIFSBackend >> printUnreadBodyAt: bodyPosition ofMethodAt: methodPosition in: textString on: aStream [
+	"Tonel reads a body by counting brackets outside strings, comments and literal arrays, so it finds a body unclosed only at the end of the file: the method to look at is the one whose body it was reading."
+
+	(textString at: bodyPosition ifAbsent: [ nil ]) = $[ ifFalse: [
+			aStream nextPutAll: 'the method on the line below has no [ to open its body.'.
+			^ self printLineAt: methodPosition in: textString on: aStream ].
+	aStream
+		nextPutAll: 'the body of ';
+		nextPutAll: (' ' join: (textString copyFrom: methodPosition to: bodyPosition - 1) substrings);
+		nextPutAll: ' is never closed: a [ in it lacks its ], or a '', a " or a #( in it is left open.'.
+	self printLineAt: bodyPosition in: textString on: aStream
 ]
 
 { #category : 'accessing' }
@@ -1073,6 +1228,12 @@ PIFSBackend >> removeMethodDefinitions: methodDefinitions [
 	methodDefinitions do: [ :methodDefinition | self unloadMethodDefinition: methodDefinition ]
 ]
 
+{ #category : 'private - repositories' }
+PIFSBackend >> removePackageNamed: packageName during: aBlock [
+
+	self repositories removePackageNamed: packageName during: aBlock
+]
+
 { #category : 'private - packages' }
 PIFSBackend >> removePackageNamedIfEmpty: packageName [
 
@@ -1087,8 +1248,9 @@ PIFSBackend >> removeTonelPackageDirectoryNamed: packageName originalPath: aStri
 	| package |
 	packageName ifEmpty: [ self signalUnsupportedWrite: aString ].
 	package := self packageNamed: packageName ifAbsent: [ self signalNotFound: aString ].
+	self assertRepositoryOwnsPackageNamed: packageName originalPath: aString.
 	package isEmpty ifFalse: [ Error signal: 'Cannot remove non-empty package ' , packageName , ' through ' , aString ].
-	PackageOrganizer default removePackage: package
+	self removePackageNamed: packageName during: [ PackageOrganizer default removePackage: package ]
 ]
 
 { #category : 'accessing' }
@@ -1302,24 +1464,25 @@ PIFSBackend >> restoreClassTonelText: textString className: className packageNam
 
 	| currentClass currentText |
 	currentClass := Smalltalk at: className asSymbol ifAbsent: [ nil ].
-	currentClass
-		ifNil: [
-				self
-					applyNewClassTonelText: textString
-					className: className
-					packageName: packageName
-					originalPath: aString ]
-		ifNotNil: [
-				currentClass package name asString = packageName ifFalse: [
-					Error signal:
-						'Cannot rollback class ' , className , ' because it now belongs to package ' , currentClass package name asString ].
-				currentText := self classTonelTextFor: currentClass.
-				self
-					applyClassTonelText: textString
-					replacing: currentText
-					className: className
-					packageName: packageName
-					originalPath: aString ].
+	self withoutMethodChecksDo: [
+			currentClass
+				ifNil: [
+						self
+							applyNewClassTonelText: textString
+							className: className
+							packageName: packageName
+							originalPath: aString ]
+				ifNotNil: [
+						currentClass package name asString = packageName ifFalse: [
+							Error signal:
+								'Cannot rollback class ' , className , ' because it now belongs to package ' , currentClass package name asString ].
+						currentText := self classTonelTextFor: currentClass.
+						self
+							applyClassTonelText: textString
+							replacing: currentText
+							className: className
+							packageName: packageName
+							originalPath: aString ] ].
 	self exportPackageNamed: packageName fileNamed: className , '.class.st'
 ]
 
@@ -1328,12 +1491,13 @@ PIFSBackend >> rollbackClassTonelText: previousTextString afterFailedWriteToClas
 
 	| currentText |
 	currentText := self readTonelClassFileNamed: className , '.class.st' packageName: packageName originalPath: aString.
-	self
-		applyClassTonelText: previousTextString
-		replacing: currentText
-		className: className
-		packageName: packageName
-		originalPath: aString.
+	self withoutMethodChecksDo: [
+			self
+				applyClassTonelText: previousTextString
+				replacing: currentText
+				className: className
+				packageName: packageName
+				originalPath: aString ].
 	self exportPackageNamed: packageName fileNamed: className , '.class.st'
 ]
 
@@ -1342,12 +1506,13 @@ PIFSBackend >> rollbackExtensionTonelText: previousTextString afterFailedWriteTo
 
 	| currentText |
 	currentText := self readTonelExtensionFileNamed: className , '.extension.st' packageName: packageName originalPath: aString.
-	self
-		applyExtensionTonelText: previousTextString
-		replacing: currentText
-		className: className
-		packageName: packageName
-		originalPath: aString.
+	self withoutMethodChecksDo: [
+			self
+				applyExtensionTonelText: previousTextString
+				replacing: currentText
+				className: className
+				packageName: packageName
+				originalPath: aString ].
 	self exportPackageNamed: packageName fileNamed: className , '.extension.st'
 ]
 
@@ -1403,6 +1568,28 @@ PIFSBackend >> selectorFromPathSegment: aString originalPath: originalPath [
 			   tokens do: [ :token |
 					   stream nextPutAll: (self decodedSelectorToken: token originalPath: originalPath).
 					   stream nextPut: $: ] ]) asSymbol
+]
+
+{ #category : 'private - errors' }
+PIFSBackend >> signalErrorIn: aMethodNode of: aMethodDefinition text: textString originalPath: aString [
+	"Refuse the method at its first error, where it is in the file. An undeclared variable is no error here: the files of one change are written one at a time, and a later one may declare it."
+
+	| errors |
+	errors := (aMethodNode allNotices select: [ :each | each isError and: [ each isUndeclaredNotice not ] ]) sorted.
+	errors ifEmpty: [ ^ self ].
+	Error signal: (String streamContents: [ :stream |
+				 stream
+					 nextPutAll: 'Cannot compile ';
+					 nextPutAll: (self methodNameOf: aMethodDefinition);
+					 nextPutAll: ' in ';
+					 nextPutAll: aString;
+					 nextPutAll: ': '.
+				 self printNotice: errors first on: stream.
+				 self
+					 printLineAt: errors first position
+					 inSourceOf: aMethodDefinition
+					 text: textString
+					 on: stream ])
 ]
 
 { #category : 'private - errors' }
@@ -1623,6 +1810,24 @@ PIFSBackend >> validateClassDefinition: classDefinition className: className pac
 ]
 
 { #category : 'private - writing' }
+PIFSBackend >> validateCompilationOfMethodDefinitions: methodDefinitions text: textString originalPath: aString [
+	"Once the class has the shape the file gives it, so that its variables resolve, and before any method is loaded: from Pharo 14, Monticello's loader installs a method with a compile error as one that signals the error when run, so the load alone would accept it."
+
+	PIFSMethodChecksSkipped value ifTrue: [ ^ self ].
+	methodDefinitions do: [ :each |
+			each actualClass ifNotNil: [ :behavior |
+					self
+						signalErrorIn: (behavior compiler
+								 source: each source;
+								 permitFaulty: true;
+								 permitUndeclared: true;
+								 parse)
+						of: each
+						text: textString
+						originalPath: aString ] ]
+]
+
+{ #category : 'private - writing' }
 PIFSBackend >> validateExtensionDefinitions: definitions className: className packageName: packageName originalPath: aString [
 
 	| classDefinitions methodDefinitions protocolPrefix |
@@ -1652,6 +1857,28 @@ PIFSBackend >> validateRenameReferencesForClass: aClass packageName: packageName
 	referencingPackages ifNotEmpty: [
 			Error signal: 'Projection class rename would update references outside package ' , packageName , ' for ' , aString , ': '
 				, (self commaSeparated: referencingPackages asArray sorted) ]
+]
+
+{ #category : 'private - writing' }
+PIFSBackend >> validateSyntaxOfMethodDefinitions: methodDefinitions text: textString originalPath: aString [
+	"Before anything is loaded, so that a method that does not parse never changes the class."
+
+	| parserClass |
+	PIFSMethodChecksSkipped value ifTrue: [ ^ self ].
+	parserClass := OpalCompiler new parserClass.
+	methodDefinitions do: [ :each |
+			self
+				signalErrorIn: (parserClass parseFaultyMethod: each source)
+				of: each
+				text: textString
+				originalPath: aString ]
+]
+
+{ #category : 'private - writing' }
+PIFSBackend >> withoutMethodChecksDo: aBlock [
+	"For text the image rendered itself, which holds the methods it already has."
+
+	^ PIFSMethodChecksSkipped value: true during: aBlock
 ]
 
 { #category : 'accessing' }

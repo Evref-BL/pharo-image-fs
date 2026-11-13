@@ -277,8 +277,8 @@ when the package defines none.
 
 `/tonel/<Package>` directories can be created and removed. Creating a directory
 creates a package in the live image when repository-ownership checks are
-disabled. With the default checks enabled, creating a package that has no
-file-backed repository owner is rejected with a clear error. Removing a
+disabled. With the default checks enabled, creating or removing a package that
+has no file-backed repository owner is rejected with a clear error. Removing a
 directory removes the package only when it is empty; delete class and extension
 files explicitly first.
 
@@ -292,7 +292,9 @@ methods are left untouched.
 
 Deleting projected code files is supported for `.class.st` and `.extension.st`.
 Class-file deletion removes the class from the image. Extension-file deletion
-removes only extension methods for that class/package.
+removes only extension methods for that class/package. Removing an empty package
+directory removes the package from the image, and from the checkout and Iceberg
+working copy of the repository that owns it.
 
 Moving projected `.class.st` files across package directories is supported. The
 class is moved in the live image. With the default repository-ownership check,

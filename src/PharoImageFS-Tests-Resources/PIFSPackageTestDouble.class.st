@@ -2,7 +2,8 @@ Class {
 	#name : 'PIFSPackageTestDouble',
 	#superclass : 'Object',
 	#instVars : [
-		'packageName'
+		'packageName',
+		'removed'
 	],
 	#category : 'PharoImageFS-Tests-Resources',
 	#package : 'PharoImageFS-Tests-Resources'
@@ -16,6 +17,12 @@ PIFSPackageTestDouble class >> named: aString [
 		  yourself
 ]
 
+{ #category : 'testing' }
+PIFSPackageTestDouble >> isRemoved [
+
+	^ removed = true
+]
+
 { #category : 'accessing' }
 PIFSPackageTestDouble >> packageName [
 
@@ -26,4 +33,11 @@ PIFSPackageTestDouble >> packageName [
 PIFSPackageTestDouble >> packageName: aString [
 
 	packageName := aString
+]
+
+{ #category : 'removing' }
+PIFSPackageTestDouble >> remove [
+	"As an Iceberg package removes itself from its repository's working copy."
+
+	removed := true
 ]
