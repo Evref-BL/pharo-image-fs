@@ -49,7 +49,7 @@ BaselineOfPharoImageFS >> currentPharoVersionSpec [
 BaselineOfPharoImageFS >> mcpVersion [
 	"Its own method so that the release automation reads a pin that no edit to #baseline: can move."
 
-	^ '3.7.0'
+	^ '3.8.0'
 ]
 
 { #category : 'baseline' }
