@@ -15,21 +15,21 @@ on:
 
 jobs:
   test:
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - macos-26
-          - ubuntu-24.04
-        smalltalk:
-          - Pharo64-12
-          - Pharo64-13
-          - Pharo64-14
-          - Pharo64-15
+        include:
+          - { pharo: 12, system: Linux, runner: ubuntu-24.04 }
+          - { pharo: 13, system: Linux, runner: ubuntu-24.04 }
+          - { pharo: 14, system: Linux, runner: ubuntu-24.04 }
+          - { pharo: 15, system: Linux, runner: ubuntu-24.04 }
+          # One macOS job: macOS runners queue long and are often never
+          # given, and what macOS adds over Linux is the platform code, which
+          # does not depend on the Pharo version.
+          - { pharo: 14, system: macOS, runner: macos-26 }
 
-    # The macOS jobs keep the names the main branch requires.
-    name: ${{ matrix.smalltalk }}${{ matrix.os != 'macos-26' && format(' on {0}', matrix.os) || '' }}
+    name: Pharo ${{ matrix.pharo }} on ${{ matrix.system }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -37,10 +37,10 @@ jobs:
       - name: Set up smalltalkCI
         uses: hpi-swa/setup-smalltalkCI@v1
         with:
-          smalltalk-image: ${{ matrix.smalltalk }}
+          smalltalk-image: Pharo64-${{ matrix.pharo }}
 
       - name: Test
-        run: smalltalkci -s ${{ matrix.smalltalk }}
+        run: smalltalkci -s Pharo64-${{ matrix.pharo }}
         shell: bash
         timeout-minutes: 15
 
@@ -56,3 +56,14 @@ jobs:
 
       - name: Read the versions the release automation reads
         run: .github/scripts/versions.sh check
+
+  # The one check main's ruleset requires: it fails unless every job above
+  # passed, so the rule names no job and a matrix can change without it.
+  gate:
+    name: All jobs passed
+    needs: [test, versions]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check every job
+        run: test "${{ !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') && !contains(needs.*.result, 'skipped') }}" = true
