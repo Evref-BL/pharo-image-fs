@@ -127,6 +127,16 @@ PIFSBackend >> assertRepositoryOwnsPackageNamed: packageName originalPath: aStri
 				, aString ]
 ]
 
+{ #category : 'private - renaming' }
+PIFSBackend >> bindUndeclaredReferencesToClassNamed: className [
+	"A method may name the class's new name before the rename, as a file written in the same change does, and is then bound to an undeclared variable. Defining a class binds such methods to it (SystemEnvironment >> at:put:); renaming one does not, so they are compiled again. Their source does not change."
+
+	| undeclared |
+	undeclared := Undeclared associationAt: className asSymbol ifAbsent: [ ^ self ].
+	Undeclared removeKey: className asSymbol.
+	(SystemNavigation default allReferencesTo: undeclared) do: [ :method | method recompile ]
+]
+
 { #category : 'private - writing' }
 PIFSBackend >> classDefinitionFrom: definitions originalPath: aString [
 
@@ -198,6 +208,26 @@ PIFSBackend >> classesInPackageNamed: packageName [
 
 	^ (Smalltalk globals allClasses select: [ :class | class package name asString = packageName ]) sorted: [ :left :right |
 		  left name <= right name ]
+]
+
+{ #category : 'private - renaming' }
+PIFSBackend >> classesWhoseDefinitionNames: aClass [
+	"The classes and traits whose definition names the class, so that it changes with its name: its subclasses, those using it as a pool, those using it as a trait or holding a slot of it, on either side, and those holding a class variable of it. A slot a class gets from a trait is in the trait's definition."
+
+	| classes |
+	classes := Set withAll: aClass subclasses.
+	aClass isPool ifTrue: [ classes addAll: (Smalltalk globals allClasses select: [ :each | each sharedPools includes: aClass ]) ].
+	aClass isTrait ifTrue: [
+			{
+				aClass.
+				aClass classSide } do: [ :trait | trait users do: [ :user | classes add: user instanceSide ] ] ].
+	(aClass inheritsFrom: Slot) ifTrue: [
+			classes addAll: (Smalltalk globals allClassesAndTraits select: [ :each |
+					 each localSlots , each classSide localSlots anySatisfy: [ :slot | slot class == aClass ] ]) ].
+	(aClass inheritsFrom: ClassVariable) ifTrue: [
+			classes addAll:
+				(Smalltalk globals allClasses select: [ :each | each classVariables anySatisfy: [ :variable | variable class == aClass ] ]) ].
+	^ classes
 ]
 
 { #category : 'private - writing' }
@@ -427,6 +457,13 @@ PIFSBackend >> executeClassRenameFrom: oldClassName to: newClassName [
 ]
 
 { #category : 'private - repositories' }
+PIFSBackend >> exportFilesByPackageName: aDictionary [
+
+	aDictionary keys sorted do: [ :packageName |
+		self exportPackageNamed: packageName filesNamed: (aDictionary at: packageName) asArray sorted ]
+]
+
+{ #category : 'private - repositories' }
 PIFSBackend >> exportPackageNamed: packageName [
 
 	self repositories exportPackageNamed: packageName
@@ -438,7 +475,13 @@ PIFSBackend >> exportPackageNamed: packageName fileNamed: fileName [
 	would rewrite the rest of it too, reordering any file whose methods are
 	not in the writer's own order."
 
-	self repositories exportPackageNamed: packageName filesNamed: { fileName }
+	self exportPackageNamed: packageName filesNamed: { fileName }
+]
+
+{ #category : 'private - repositories' }
+PIFSBackend >> exportPackageNamed: packageName filesNamed: fileNames [
+
+	self repositories exportPackageNamed: packageName filesNamed: fileNames
 ]
 
 { #category : 'private - repositories' }
@@ -524,6 +567,28 @@ PIFSBackend >> fileNamed: aString text: textString writable: aBoolean [
 	^ self fileNamed: aString size: textString utf8Encoded size writable: aBoolean
 ]
 
+{ #category : 'private - renaming' }
+PIFSBackend >> filesOutsidePackagesNamed: packageNames changedByRenaming: aClass to: newClassName [
+	"By package, the files a rename rewrites beyond the packages it exports whole: those holding a method that names the class, by its binding or by a symbol, which the refactoring looks up and rewrites alike, those holding a definition that names it, and its extensions, whose file takes the new name. A class using a trait holds copies of its methods, which are the trait's file."
+
+	| files add |
+	files := Dictionary new.
+	add := [ :packageName :fileName |
+	       (packageNames includes: packageName) ifFalse: [ (files at: packageName ifAbsentPut: [ Set new ]) add: fileName ] ].
+	{
+		aClass binding.
+		aClass name } do: [ :reference |
+			(SystemNavigation default allReferencesTo: reference)
+				reject: [ :method | method isFromTrait ]
+				thenDo: [ :method | add value: method package name asString value: (self tonelFileNameFor: method) ] ].
+	(self classesWhoseDefinitionNames: aClass) do: [ :each |
+		add value: each package name asString value: (self tonelFileNameForClass: each) ].
+	aClass localMethods , aClass classSide localMethods reject: [ :method | method package = aClass package ] thenDo: [ :method |
+			add value: method package name asString value: aClass name , '.extension.st'.
+			add value: method package name asString value: newClassName , '.extension.st' ].
+	^ files
+]
+
 { #category : 'private - reading' }
 PIFSBackend >> fingerprintMethods: methods on: aStream [
 	"A recompiled method gets a new source pointer, or none in an image without a changes file, so its identity is kept too."
@@ -547,6 +612,15 @@ PIFSBackend >> formatsWrittenMethods [
 PIFSBackend >> formatsWrittenMethods: aBoolean [
 
 	self configuration formatsWrittenMethods: aBoolean
+]
+
+{ #category : 'private - repositories' }
+PIFSBackend >> ifPackageNamed: packageName cannotBeWrittenDo: aBlock [
+	"Evaluate aBlock with the reason a change made through another path cannot write into the package, if it cannot."
+
+	(self isPackageVisibleNamed: packageName) ifFalse: [ ^ aBlock value: 'outside the projected packages' ].
+	self requiresRepositoryOwnershipForWrites ifFalse: [ ^ self ].
+	self repositoryOwningPackageNamed: packageName ifAbsent: [ aBlock value: 'not owned by a loaded Iceberg repository' ]
 ]
 
 { #category : 'accessing' }
@@ -733,7 +807,7 @@ PIFSBackend >> methodNameOf: aMethodDefinition [
 { #category : 'private - moving' }
 PIFSBackend >> moveAndRenameTonelClassFileNamed: sourceFileName toFileNamed: targetFileName packageName: sourcePackageName toPackageName: targetPackageName originalPath: sourcePath targetPath: targetPath [
 
-	| class failureMessage newClassName oldClassName |
+	| class failureMessage newClassName oldClassName outsideFiles |
 	oldClassName := self classNameFromFileName: sourceFileName suffix: '.class.st'.
 	newClassName := self classNameFromFileName: targetFileName suffix: '.class.st'.
 	oldClassName ifNil: [ self signalUnsupportedWrite: sourcePath ].
@@ -747,13 +821,21 @@ PIFSBackend >> moveAndRenameTonelClassFileNamed: sourceFileName toFileNamed: tar
 	self packageNamed: targetPackageName ifAbsent: [ self signalNotFound: targetPath ].
 	(Smalltalk globals includesKey: newClassName asSymbol) ifTrue: [
 		Error signal: 'Cannot rename class ' , oldClassName , ' to existing global ' , newClassName , ' for ' , targetPath ].
-	self validateRenameReferencesForClass: class packageName: sourcePackageName originalPath: sourcePath.
+	outsideFiles := self
+		                filesOutsidePackagesNamed: {
+				                sourcePackageName.
+				                targetPackageName }
+		                changedByRenaming: class
+		                to: newClassName.
+	self validateRenameOfClass: class changingPackagesNamed: outsideFiles keys originalPath: sourcePath.
 	[
 		self executeClassRenameFrom: oldClassName to: newClassName.
 		self executeClassMoveNamed: newClassName toPackage: targetPackageName.
 		self exportPackagesNamed: {
 				sourcePackageName.
-				targetPackageName } ]
+				targetPackageName }.
+		self exportFilesByPackageName: outsideFiles.
+		self bindUndeclaredReferencesToClassNamed: newClassName ]
 		on: Error
 		do: [ :error |
 				failureMessage := error messageText ifNil: [ error asString ].
@@ -765,7 +847,8 @@ PIFSBackend >> moveAndRenameTonelClassFileNamed: sourceFileName toFileNamed: tar
 							self executeClassRenameFrom: newClassName to: oldClassName ].
 					self exportPackagesNamed: {
 							targetPackageName.
-							sourcePackageName } ]
+							sourcePackageName }.
+					self exportFilesByPackageName: outsideFiles ]
 					on: Error
 					do: [ :rollbackError |
 							Error signal:
@@ -1317,7 +1400,7 @@ PIFSBackend >> renameResponseForPath: sourcePath to: targetPath [
 { #category : 'private - renaming' }
 PIFSBackend >> renameTonelClassFileNamed: sourceFileName toFileNamed: targetFileName packageName: packageName originalPath: sourcePath targetPath: targetPath [
 
-	| class failureMessage newClassName oldClassName |
+	| class failureMessage newClassName oldClassName outsideFiles |
 	oldClassName := self classNameFromFileName: sourceFileName suffix: '.class.st'.
 	newClassName := self classNameFromFileName: targetFileName suffix: '.class.st'.
 	oldClassName ifNil: [ self signalUnsupportedWrite: sourcePath ].
@@ -1326,10 +1409,13 @@ PIFSBackend >> renameTonelClassFileNamed: sourceFileName toFileNamed: targetFile
 	class := self classForName: oldClassName packageName: packageName originalPath: sourcePath.
 	(Smalltalk globals includesKey: newClassName asSymbol) ifTrue: [
 		Error signal: 'Cannot rename class ' , oldClassName , ' to existing global ' , newClassName , ' for ' , targetPath ].
-	self validateRenameReferencesForClass: class packageName: packageName originalPath: sourcePath.
+	outsideFiles := self filesOutsidePackagesNamed: { packageName } changedByRenaming: class to: newClassName.
+	self validateRenameOfClass: class changingPackagesNamed: outsideFiles keys originalPath: sourcePath.
 	[
 		self executeClassRenameFrom: oldClassName to: newClassName.
 		self exportPackageNamed: packageName.
+		self exportFilesByPackageName: outsideFiles.
+		self bindUndeclaredReferencesToClassNamed: newClassName.
 		self removeCritiquesForClassNamed: oldClassName packageName: packageName.
 		self removeCritiquesForClassNamed: newClassName packageName: packageName ]
 		on: Error
@@ -1337,7 +1423,8 @@ PIFSBackend >> renameTonelClassFileNamed: sourceFileName toFileNamed: targetFile
 				failureMessage := error messageText ifNil: [ error asString ].
 				[
 					(Smalltalk globals includesKey: newClassName asSymbol) ifTrue: [ self executeClassRenameFrom: newClassName to: oldClassName ].
-					self exportPackageNamed: packageName ]
+					self exportPackageNamed: packageName.
+					self exportFilesByPackageName: outsideFiles ]
 					on: Error
 					do: [ :rollbackError |
 							Error signal: 'Projection rename failed and rollback failed. Rename error: ' , failureMessage , '. Rollback error: '
@@ -1571,6 +1658,19 @@ PIFSBackend >> selectorFromPathSegment: aString originalPath: originalPath [
 ]
 
 { #category : 'private - errors' }
+PIFSBackend >> signalClassExists: aClass originalPath: aString [
+	"Class names are global, so a class file written into another package names a class that exists there. Only mv of its file moves it: a write would replace the class with the copy, emptying an unrelated class that shares the name and dropping what the target package extends it with. The refusal names the mv, unless the projection does not show the class."
+
+	| packageName |
+	packageName := aClass package name asString.
+	(self isPackageVisibleNamed: packageName) ifFalse: [
+		Error signal: 'Class ' , aClass name , ' already exists in package ' , packageName , ' for ' , aString ].
+	Error signal:
+		'Class ' , aClass name , ' already exists in package ' , packageName , '. To move it, mv /tonel/' , packageName , '/'
+		, aClass name , '.class.st to ' , aString
+]
+
+{ #category : 'private - errors' }
 PIFSBackend >> signalErrorIn: aMethodNode of: aMethodDefinition text: textString originalPath: aString [
 	"Refuse the method at its first error, where it is in the file. An undeclared variable is no error here: the files of one change are written one at a time, and a later one may declare it."
 
@@ -1762,6 +1862,25 @@ PIFSBackend >> tonelExtensionEntryNamed: fileName packageName: packageName origi
 		  writable: true
 ]
 
+{ #category : 'private - renaming' }
+PIFSBackend >> tonelFileNameFor: aMethod [
+	"The file holding the method: its class's or trait's own, or that class's extension file in another package."
+
+	| class |
+	class := aMethod methodClass instanceSide.
+	aMethod package = class package ifFalse: [ ^ class name , '.extension.st' ].
+	^ self tonelFileNameForClass: class
+]
+
+{ #category : 'private - renaming' }
+PIFSBackend >> tonelFileNameForClass: aClass [
+	"The file Tonel keeps the class or trait in."
+
+	^ aClass name , (aClass isTrait
+		   ifTrue: [ '.trait.st' ]
+		   ifFalse: [ '.class.st' ])
+]
+
 { #category : 'private - listing' }
 PIFSBackend >> tonelRootEntries [
 
@@ -1847,16 +1966,18 @@ PIFSBackend >> validateExtensionDefinitions: definitions className: className pa
 ]
 
 { #category : 'private - renaming' }
-PIFSBackend >> validateRenameReferencesForClass: aClass packageName: packageName originalPath: aString [
+PIFSBackend >> validateRenameOfClass: aClass changingPackagesNamed: packageNames originalPath: aString [
+	"A rename writes into these packages too, so they meet what a write asks of its own: shown by the projection, and owned by a loaded repository when ownership is required, since an export is what keeps the checkout in line with the image."
 
-	| referencingPackages |
-	referencingPackages := (SystemNavigation default allReferencesTo: aClass binding)
-		                       collect: [ :method | method package name asString ]
-		                       as: Set.
-	referencingPackages remove: packageName ifAbsent: [ ].
-	referencingPackages ifNotEmpty: [
-			Error signal: 'Projection class rename would update references outside package ' , packageName , ' for ' , aString , ': '
-				, (self commaSeparated: referencingPackages asArray sorted) ]
+	| unwritable |
+	unwritable := Array streamContents: [ :stream |
+			              packageNames asArray sorted do: [ :packageName |
+				              self
+					              ifPackageNamed: packageName
+					              cannotBeWrittenDo: [ :reason | stream nextPut: packageName , ' (' , reason , ')' ] ] ].
+	unwritable ifNotEmpty: [
+			Error signal: 'Projection class rename of ' , aClass name , ' for ' , aString , ' would change packages it cannot write: '
+				, (self commaSeparated: unwritable) ]
 ]
 
 { #category : 'private - writing' }
@@ -1939,8 +2060,7 @@ PIFSBackend >> writeTonelClassText: textString fileName: fileName packageName: p
 	packageExists := PackageOrganizer default hasPackage: packageName.
 	class := Smalltalk at: className asSymbol ifAbsent: [ nil ].
 	classExists := class notNil.
-	(classExists and: [ class package name asString ~= packageName ]) ifTrue: [
-		Error signal: 'Class ' , className , ' already exists in package ' , class package name asString , ' for ' , aString ].
+	(classExists and: [ class package name asString ~= packageName ]) ifTrue: [ self signalClassExists: class originalPath: aString ].
 	previousText := classExists ifTrue: [ self readTonelClassFileNamed: fileName packageName: packageName originalPath: aString ].
 	[
 		self makeTonelPackageDirectoryNamed: packageName originalPath: '/tonel/' , packageName.

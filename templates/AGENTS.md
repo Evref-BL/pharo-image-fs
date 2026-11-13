@@ -15,6 +15,13 @@ surface.
 - A write the image refuses fails, and the file keeps the image's version;
   your tool may say only that it could not write. Read `/errors/latest.txt`:
   it names the method and the line to fix.
+- Rename or move a class with `mv` of its `.class.st` file, into another
+  package too: the image renames or moves the class, and what refers to it
+  follows. A copy of it written into another package is refused.
+- Deleting a `.class.st` file removes the class from the image. Never delete
+  one because the write of its copy failed: the class goes with it.
+- On macOS, copy a file onto the mount with `cp -X`: the mount keeps no
+  extended attributes.
 - Inspect Pharo critique feedback under `/critiques`.
 - Commit in `/repositories/<name>`, the Git checkout writes are exported to,
   not in your own project; `/repositories/<name>.repository.json` lists the

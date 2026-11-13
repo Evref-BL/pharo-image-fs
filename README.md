@@ -275,6 +275,10 @@ when the package defines none.
   path, creating the package when repository-ownership checks are disabled;
 - new `.extension.st` files for existing classes.
 
+Class names are global, so a `.class.st` file of a class that lives in another
+package is refused. When that package is projected, the error names the move of
+the class's file that puts it there.
+
 `/tonel/<Package>` directories can be created and removed. Creating a directory
 creates a package in the live image when repository-ownership checks are
 disabled. With the default checks enabled, creating or removing a package that
@@ -301,8 +305,14 @@ class is moved in the live image. With the default repository-ownership check,
 both source and target packages must belong to loaded Iceberg repositories.
 
 Renaming projected `.class.st` files inside the same package is supported. The
-class is renamed in the live image, same-package references are updated, and the
-package is exported.
+class is renamed in the live image, its references are updated, and the package
+is exported. In other packages, the files the rename changes are exported: those
+of the methods that refer to the class or name it in a symbol, of the classes
+whose definition names it, as their superclass, a pool, a trait, or the class of
+a slot or a class variable, and its extension files, which take the new name.
+Those packages must be projected and, with the default repository-ownership
+check, belong to loaded Iceberg repositories. Methods that already named the new
+name are bound to the renamed class.
 
 Combined cross-package move plus class rename is supported.
 
