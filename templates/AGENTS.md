@@ -7,11 +7,18 @@ surface.
 
 - Read and search code under `/tonel` with normal filesystem tools such as
   `rg`, `find`, `sed`, and editors.
-- Edit only Tonel code files under `/tonel/<package>/`.
+- Edit only Tonel code files under `/tonel/<package>/`. In them, a method's
+  body is enclosed in `[ ]`; only the class definition and the method
+  categories use `{ }`.
 - Treat successful writes as applied to the live Pharo image and exported back
   to source by Pharo.
-- If a write fails, inspect `/errors/latest.txt`.
+- A write the image refuses fails, and the file keeps the image's version;
+  your tool may say only that it could not write. Read `/errors/latest.txt`:
+  it names the method and the line to fix.
 - Inspect Pharo critique feedback under `/critiques`.
+- Commit in `/repositories/<name>`, the Git checkout writes are exported to,
+  not in your own project; `/repositories/<name>.repository.json` lists the
+  packages it holds.
 
 ## Boundaries
 

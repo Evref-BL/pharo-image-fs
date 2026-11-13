@@ -140,6 +140,22 @@ PIFSRepositories >> packageNamed: packageName in: aRepository ifAbsent: absentBl
 	^ aRepository loadedPackages detect: [ :package | package packageName asString = packageName ] ifNone: absentBlock
 ]
 
+{ #category : 'exporting' }
+PIFSRepositories >> removePackageNamed: packageName during: aBlock [
+	"Remove the package from the image with aBlock, and from the repository that owns it: from its checkout, where Git sees it go, and from Iceberg's working copy, whose next commit removes it too. A package is owned only while it is loaded, so its owner is found first. The checkout goes first, as the step that can fail; if the image then keeps the package, its package.st is written back."
+
+	| icePackage repository |
+	repository := self owningPackageNamed: packageName ifAbsent: [ ^ aBlock value ].
+	icePackage := self packageNamed: packageName in: repository ifAbsent: [ ^ aBlock value ].
+	(repository codeDirectory / packageName) ensureDeleteAll.
+	[ aBlock value ]
+		on: Error
+		do: [ :error |
+				self exportPackageNamed: packageName filesNamed: #(  ).
+				error pass ].
+	icePackage remove
+]
+
 { #category : 'accessing' }
 PIFSRepositories >> sourceFormatIdFor: aRepository [
 	"Which source format the repository keeps on disk, as Iceberg's own writer

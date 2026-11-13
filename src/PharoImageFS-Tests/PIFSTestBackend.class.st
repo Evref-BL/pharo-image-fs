@@ -128,6 +128,12 @@ PIFSTestBackend >> recordExportOfPackageNamed: packageName [
 ]
 
 { #category : 'private - repositories' }
+PIFSTestBackend >> removePackageNamed: packageName during: aBlock [
+
+	aBlock value
+]
+
+{ #category : 'private - repositories' }
 PIFSTestBackend >> repositoryInfos [
 
 	^ {
