@@ -9,6 +9,23 @@ Class {
 }
 
 { #category : 'private' }
+PIFSBackendTest >> backendOwningOnlyTheFixturePackage [
+	"A backend requiring ownership, whose one repository owns the fixture package and no other."
+
+	| repository |
+	repository := PIFSRepositoryTestDouble
+		              named: 'Owner'
+		              directory: FileSystem memory root
+		              loadedPackages: { (PIFSPackageTestDouble named: self fixturePackageName) }.
+	repository sourceFormatId: #tonel.
+	^ PIFSBackend new
+		  repositories: (PIFSRepositoriesTestDouble new
+				   all: { repository };
+				   yourself);
+		  yourself
+]
+
+{ #category : 'private' }
 PIFSBackendTest >> classTonelSource [
 
 	^ 'Class {
@@ -227,6 +244,16 @@ PIFSBackendTest >> classTonelSourceWithUnformattedMethod [
 ]
 
 { #category : 'private' }
+PIFSBackendTest >> createClassVariableUserInPackageNamed: packageName [
+	"A class of packageName with a class variable of the original class: no method of that class names it, but its definition does."
+
+	^ (Object << self referenceUserClassName asSymbol)
+		  sharedVariables: { (#Probe => self createOriginalClassVariableClass) };
+		  package: packageName;
+		  install
+]
+
+{ #category : 'private' }
 PIFSBackendTest >> createExtensionTargetClass [
 
 	((Object << #PIFSExtensionTarget)
@@ -239,16 +266,71 @@ PIFSBackendTest >> createExtensionTargetClass [
 ]
 
 { #category : 'private' }
+PIFSBackendTest >> createOriginalClassVariableClass [
+	"The original class as a kind of class variable, which a class definition names in a class variable of it."
+
+	^ (ClassVariable << self originalClassName asSymbol)
+		  package: self fixturePackageName;
+		  install
+]
+
+{ #category : 'private' }
+PIFSBackendTest >> createOriginalSlotClass [
+	"The original class as a kind of slot, which a class definition names in a slot of it."
+
+	^ (InstanceVariableSlot << self originalClassName asSymbol)
+		  package: self fixturePackageName;
+		  install
+]
+
+{ #category : 'private' }
+PIFSBackendTest >> createOriginalTrait [
+	"The original class as a trait of the fixture package."
+
+	^ (Trait << self originalClassName asSymbol)
+		  package: self fixturePackageName;
+		  install
+]
+
+{ #category : 'private' }
 PIFSBackendTest >> createReferenceUserClass [
 
-	| class |
-	class := ((Object << self referenceUserClassName asSymbol)
-		          slots: {  };
-		          package: self fixturePackageName) install.
-	class
+	self createReferenceUserClassInPackageNamed: self fixturePackageName
+]
+
+{ #category : 'private' }
+PIFSBackendTest >> createReferenceUserClassInPackageNamed: packageName [
+	"A class of packageName with a method that refers to the original class."
+
+	((Object << self referenceUserClassName asSymbol)
+		 package: packageName;
+		 install)
 		compile: 'probeClass
 
 	^ ' , self originalClassName
+		classified: 'accessing'
+]
+
+{ #category : 'private' }
+PIFSBackendTest >> createSlotUserInPackageNamed: packageName [
+	"A class of packageName with a slot of the original class: no method of that class names it, but its definition does."
+
+	^ (Object << self referenceUserClassName asSymbol)
+		  slots: { (#probe => self createOriginalSlotClass) };
+		  package: packageName;
+		  install
+]
+
+{ #category : 'private' }
+PIFSBackendTest >> createSymbolReferenceUserClassInPackageNamed: packageName [
+	"A class of packageName with a method that names the original class by a symbol."
+
+	((Object << self referenceUserClassName asSymbol)
+		 package: packageName;
+		 install)
+		compile: 'probeClass
+
+	^ Smalltalk globals at: #' , self originalClassName
 		classified: 'accessing'
 ]
 
@@ -278,6 +360,16 @@ PIFSBackendTest >> createTargetPackageManifestWithNarrowFormatter [
 PIFSBackendTest >> createTargetPackageManifestWithUnixLineEndingFormatter [
 
 	^ self createTargetPackageManifestAnsweringFormatter: 'PIFSUnixLineEndingFormatterTestDouble new'
+]
+
+{ #category : 'private' }
+PIFSBackendTest >> createTraitUserInPackageNamed: packageName [
+	"A class of packageName using the original class as a trait: no method of that class names the trait, but its definition does, as its traits and its class traits."
+
+	^ (Object << self referenceUserClassName asSymbol)
+		  traits: self createOriginalTrait;
+		  package: packageName;
+		  install
 ]
 
 { #category : 'private' }
@@ -425,6 +517,31 @@ PIFSBackendTest >> targetPackageTonelPath [
 ]
 
 { #category : 'private' }
+PIFSBackendTest >> targetReferenceUserTonelPath [
+
+	^ '/tonel/' , self targetPackageName , '/' , self referenceUserClassName , '.class.st'
+]
+
+{ #category : 'private' }
+PIFSBackendTest >> targetReferenceUserTonelSourceReferringTo: className [
+	"The reference user, in the target package, as a file written through the projection holds it."
+
+	^ 'Class {
+	#name : ''' , self referenceUserClassName , ''',
+	#superclass : ''Object'',
+	#category : ''' , self targetPackageName , ''',
+	#package : ''' , self targetPackageName , '''
+}
+
+{ #category : ''accessing'' }
+' , self referenceUserClassName , ' >> probeClass [
+
+	^ ' , className , '
+]
+'
+]
+
+{ #category : 'private' }
 PIFSBackendTest >> targetRenamedClassTonelPath [
 
 	^ '/tonel/' , self targetPackageName , '/' , self renamedClassName , '.class.st'
@@ -432,14 +549,16 @@ PIFSBackendTest >> targetRenamedClassTonelPath [
 
 { #category : 'running' }
 PIFSBackendTest >> tearDown [
+	"The reference user goes first, since a test may make it a subclass of the others."
 
 	[
+		self removeClassNamed: self referenceUserClassName.
 		self removeClassNamed: self originalClassName.
 		self removeClassNamed: self renamedClassName.
 		self removeClassNamed: 'PIFSExtensionTarget'.
-		self removeClassNamed: self referenceUserClassName.
 		self removeClassNamed: self targetPackageManifestName.
-		self removePackageNamed: self targetPackageName ] ensure: [ super tearDown ]
+		self removePackageNamed: self targetPackageName.
+		Undeclared removeKey: self renamedClassName asSymbol ifAbsent: [ ] ] ensure: [ super tearDown ]
 ]
 
 { #category : 'tests' }
@@ -884,6 +1003,21 @@ PIFSBackendTest >> testMoveAndRenameClassTonelFileAcrossPackages [
 ]
 
 { #category : 'tests' }
+PIFSBackendTest >> testMoveAndRenameRewritesReferencesInTheTargetPackage [
+
+	| backend referenceUser renamedClass |
+	self ensureTargetPackage.
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	self createReferenceUserClassInPackageNamed: self targetPackageName.
+	backend rename: self originalClassTonelPath to: self targetRenamedClassTonelPath.
+	renamedClass := Smalltalk globals at: self renamedClassName asSymbol.
+	referenceUser := Smalltalk globals at: self referenceUserClassName asSymbol.
+	self assert: renamedClass package name equals: self targetPackageName.
+	self assert: referenceUser new probeClass equals: renamedClass
+]
+
+{ #category : 'tests' }
 PIFSBackendTest >> testMoveClassTonelFileAcrossPackagesMovesClass [
 
 	| backend class |
@@ -1066,6 +1200,22 @@ PIFSBackendTest >> testRemoveDirectoryRemovesTheOwnedPackageFromItsCheckout [
 ]
 
 { #category : 'tests' }
+PIFSBackendTest >> testRenameBindsReferencesWrittenToTheNewNameFirst [
+	"A file may name the class's new name before the rename, as one written in the same change does; it compiles against an undeclared variable, which the class takes over."
+
+	| backend referenceUser renamedClass |
+	self ensureTargetPackage.
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	backend write: (self targetReferenceUserTonelSourceReferringTo: self renamedClassName) at: self targetReferenceUserTonelPath.
+	backend rename: self originalClassTonelPath to: self renamedClassTonelPath.
+	renamedClass := Smalltalk globals at: self renamedClassName asSymbol.
+	referenceUser := Smalltalk globals at: self referenceUserClassName asSymbol.
+	self assert: referenceUser new probeClass equals: renamedClass.
+	self deny: (Undeclared includesKey: self renamedClassName asSymbol)
+]
+
+{ #category : 'tests' }
 PIFSBackendTest >> testRenameClassTonelFileRenamesClassAndReferences [
 
 	| backend referenceUser renamedClass |
@@ -1081,6 +1231,174 @@ PIFSBackendTest >> testRenameClassTonelFileRenamesClassAndReferences [
 	self assert: backend exportedPackageNames equals: {
 			self fixturePackageName.
 			self fixturePackageName }
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testRenameExportsAClassSideSlotUserInAnotherPackage [
+	"A class's definition holds its class-side slots too."
+
+	| backend user |
+	self ensureTargetPackage.
+	backend := self newBackend.
+	user := (Object << self referenceUserClassName asSymbol)
+		        classSlots: { (#probe => self createOriginalSlotClass) };
+		        package: self targetPackageName;
+		        install.
+	backend rename: self originalClassTonelPath to: self renamedClassTonelPath.
+	self assert: (user class slotNamed: #probe) class name equals: self renamedClassName asSymbol.
+	self assert: (backend exportedFileNames includes: self targetPackageName , '/' , self referenceUserClassName , '.class.st')
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testRenameExportsAClassSideTraitUserInAnotherPackage [
+	"A class may use a trait on its class side only: its definition names the trait as its class traits, and only the class trait has it among its users."
+
+	| backend user |
+	self ensureTargetPackage.
+	backend := self newBackend.
+	user := (Object << self referenceUserClassName asSymbol)
+		        classTraits: self createOriginalTrait classTrait;
+		        package: self targetPackageName;
+		        install.
+	backend rename: self originalClassTonelPath to: self renamedClassTonelPath.
+	self assert: (user class traits collect: [ :each | each instanceSide name ] as: Array) equals: { self renamedClassName asSymbol }.
+	self assert: (backend exportedFileNames includes: self targetPackageName , '/' , self referenceUserClassName , '.class.st')
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testRenameExportsAClassVariableUserInAnotherPackage [
+	"No method of the class holding the class variable names the variable's class, but its definition does."
+
+	| backend user |
+	self ensureTargetPackage.
+	backend := self newBackend.
+	user := self createClassVariableUserInPackageNamed: self targetPackageName.
+	backend rename: self originalClassTonelPath to: self renamedClassTonelPath.
+	self assert: (user classVariableNamed: #Probe) class name equals: self renamedClassName asSymbol.
+	self assert: (backend exportedFileNames includes: self targetPackageName , '/' , self referenceUserClassName , '.class.st')
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testRenameExportsAManifestNamingTheClassInAnotherPackage [
+	"A manifest names the classes a critique excludes by symbols deep in a literal array, which the refactoring rewrites too."
+
+	| backend manifest |
+	self ensureTargetPackage.
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	manifest := (PackageManifest << self targetPackageManifestName asSymbol)
+		            package: self targetPackageName;
+		            install.
+	manifest class
+		compile: 'ruleUncommentedClassRuleV1FalsePositive
+
+	^ #(#(#(#RGClassDefinition #(#' , self originalClassName , ')) #''2026-11-14T00:00:00.000000+01:00'') )'
+		classified: 'code-critics'.
+	backend rename: self originalClassTonelPath to: self renamedClassTonelPath.
+	self assert:
+		((manifest class >> #ruleUncommentedClassRuleV1FalsePositive) sourceCode includesSubstring: '#' , self renamedClassName , ')').
+	self assert: (backend exportedFileNames includes: self targetPackageName , '/' , self targetPackageManifestName , '.class.st')
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testRenameExportsAPoolUserInAnotherPackage [
+	"The definition of a class using the renamed one as a pool names it."
+
+	| backend |
+	self ensureTargetPackage.
+	backend := self newBackend.
+	backend
+		write: (self classTonelSource copyReplaceAll: '#superclass : ''Object''' with: '#superclass : ''SharedPool''')
+		at: self originalClassTonelPath.
+	(Object << self referenceUserClassName asSymbol)
+		sharedPools: { (Smalltalk globals at: self originalClassName asSymbol) };
+		package: self targetPackageName;
+		install.
+	backend rename: self originalClassTonelPath to: self renamedClassTonelPath.
+	self assert: (backend exportedFileNames includes: self targetPackageName , '/' , self referenceUserClassName , '.class.st')
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testRenameExportsASlotUserInAnotherPackage [
+	"No method of the class holding the slot names the slot's class, but its definition does."
+
+	| backend user |
+	self ensureTargetPackage.
+	backend := self newBackend.
+	user := self createSlotUserInPackageNamed: self targetPackageName.
+	backend rename: self originalClassTonelPath to: self renamedClassTonelPath.
+	self assert: (user slotNamed: #probe) class name equals: self renamedClassName asSymbol.
+	self assert: (backend exportedFileNames includes: self targetPackageName , '/' , self referenceUserClassName , '.class.st')
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testRenameExportsASubclassInAnotherPackage [
+	"No method of the subclass names the class, but its definition does."
+
+	| backend subclass |
+	self ensureTargetPackage.
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	subclass := ((Smalltalk globals at: self originalClassName asSymbol) << self referenceUserClassName asSymbol)
+		            package: self targetPackageName;
+		            install.
+	backend rename: self originalClassTonelPath to: self renamedClassTonelPath.
+	self assert: subclass superclass name equals: self renamedClassName asSymbol.
+	self assert: (backend exportedFileNames includes: self targetPackageName , '/' , self referenceUserClassName , '.class.st')
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testRenameExportsATraitInAnotherPackageUnderItsOwnFileName [
+	"Tonel keeps a trait in a .trait.st file. The classes using the trait hold copies of its methods, which are the trait's to export."
+
+	| backend trait |
+	self ensureTargetPackage.
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	trait := (Trait << self referenceUserClassName asSymbol)
+		         package: self targetPackageName;
+		         install.
+	trait
+		compile: 'probeClass
+
+	^ ' , self originalClassName
+		classified: 'accessing'.
+	backend rename: self originalClassTonelPath to: self renamedClassTonelPath.
+	self assert: (backend exportedFileNames includes: self targetPackageName , '/' , self referenceUserClassName , '.trait.st').
+	self deny: (backend exportedFileNames includes: self targetPackageName , '/' , self referenceUserClassName , '.class.st')
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testRenameExportsATraitUserInAnotherPackage [
+	"No method of the class using the trait names it, but its definition does."
+
+	| backend user |
+	self ensureTargetPackage.
+	backend := self newBackend.
+	user := self createTraitUserInPackageNamed: self targetPackageName.
+	backend rename: self originalClassTonelPath to: self renamedClassTonelPath.
+	self assert: (user traits collect: [ :each | each name ] as: Array) equals: { self renamedClassName asSymbol }.
+	self assert: (backend exportedFileNames includes: self targetPackageName , '/' , self referenceUserClassName , '.class.st')
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testRenameExportsAnExtensionInAnotherPackageUnderItsNewName [
+	"An extension file is named after the class it extends, so the rename removes the old file and writes the new one."
+
+	| backend |
+	self ensureTargetPackage.
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	(Smalltalk globals at: self originalClassName asSymbol)
+		compile: 'extendedAnswer
+
+	^ 7'
+		classified: '*' , self targetPackageName.
+	backend rename: self originalClassTonelPath to: self renamedClassTonelPath.
+	self assert: (Smalltalk globals at: self renamedClassName asSymbol) new extendedAnswer equals: 7.
+	self assert: (backend exportedFileNames includesAll: {
+				 (self targetPackageName , '/' , self originalClassName , '.extension.st').
+				 (self targetPackageName , '/' , self renamedClassName , '.extension.st') })
 ]
 
 { #category : 'tests' }
@@ -1111,6 +1429,177 @@ PIFSBackendTest >> testRenameExtensionTonelFileSignalsUnsupportedWrite [
 ]
 
 { #category : 'tests' }
+PIFSBackendTest >> testRenameRefusesAClassVariableUserInAPackageItDoesNotShow [
+	"The rename would change the definition of a class the agent never saw."
+
+	| backend |
+	self ensureTargetPackage.
+	backend := self newBackend.
+	self createClassVariableUserInPackageNamed: self targetPackageName.
+	backend excludedPackagePrefixes: { self targetPackageName }.
+	self
+		should: [ backend rename: self originalClassTonelPath to: self renamedClassTonelPath ]
+		raise: Error
+		whoseDescriptionIncludes: self targetPackageName , ' (outside the projected packages)'
+		description: 'A rename must not change a filtered package'.
+	self assert: (Smalltalk globals includesKey: self originalClassName asSymbol).
+	self deny: (Smalltalk globals includesKey: self renamedClassName asSymbol)
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testRenameRefusesAClassVariableUserInAPackageNoRepositoryOwns [
+	"The definition of the class holding the class variable would change in the image and in no checkout."
+
+	self ensureTargetPackage.
+	self createClassVariableUserInPackageNamed: self targetPackageName.
+	self
+		should: [ self backendOwningOnlyTheFixturePackage rename: self originalClassTonelPath to: self renamedClassTonelPath ]
+		raise: Error
+		whoseDescriptionIncludes: self targetPackageName , ' (not owned by a loaded Iceberg repository)'
+		description: 'A rename must not change a package it cannot export'.
+	self assert: (Smalltalk globals includesKey: self originalClassName asSymbol).
+	self deny: (Smalltalk globals includesKey: self renamedClassName asSymbol)
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testRenameRefusesASlotUserInAPackageItDoesNotShow [
+	"The rename would change the definition of a class the agent never saw."
+
+	| backend |
+	self ensureTargetPackage.
+	backend := self newBackend.
+	self createSlotUserInPackageNamed: self targetPackageName.
+	backend excludedPackagePrefixes: { self targetPackageName }.
+	self
+		should: [ backend rename: self originalClassTonelPath to: self renamedClassTonelPath ]
+		raise: Error
+		whoseDescriptionIncludes: self targetPackageName , ' (outside the projected packages)'
+		description: 'A rename must not change a filtered package'.
+	self assert: (Smalltalk globals includesKey: self originalClassName asSymbol).
+	self deny: (Smalltalk globals includesKey: self renamedClassName asSymbol)
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testRenameRefusesASlotUserInAPackageNoRepositoryOwns [
+	"The definition of the class holding the slot would change in the image and in no checkout."
+
+	self ensureTargetPackage.
+	self createSlotUserInPackageNamed: self targetPackageName.
+	self
+		should: [ self backendOwningOnlyTheFixturePackage rename: self originalClassTonelPath to: self renamedClassTonelPath ]
+		raise: Error
+		whoseDescriptionIncludes: self targetPackageName , ' (not owned by a loaded Iceberg repository)'
+		description: 'A rename must not change a package it cannot export'.
+	self assert: (Smalltalk globals includesKey: self originalClassName asSymbol).
+	self deny: (Smalltalk globals includesKey: self renamedClassName asSymbol)
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testRenameRefusesATraitUserInAPackageItDoesNotShow [
+	"The rename would change the definition of a class the agent never saw."
+
+	| backend |
+	self ensureTargetPackage.
+	backend := self newBackend.
+	self createTraitUserInPackageNamed: self targetPackageName.
+	backend excludedPackagePrefixes: { self targetPackageName }.
+	self
+		should: [ backend rename: self originalClassTonelPath to: self renamedClassTonelPath ]
+		raise: Error
+		whoseDescriptionIncludes: self targetPackageName , ' (outside the projected packages)'
+		description: 'A rename must not change a filtered package'.
+	self assert: (Smalltalk globals includesKey: self originalClassName asSymbol).
+	self deny: (Smalltalk globals includesKey: self renamedClassName asSymbol)
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testRenameRefusesATraitUserInAPackageNoRepositoryOwns [
+	"The definition of the class using the trait would change in the image and in no checkout."
+
+	self ensureTargetPackage.
+	self createTraitUserInPackageNamed: self targetPackageName.
+	self
+		should: [ self backendOwningOnlyTheFixturePackage rename: self originalClassTonelPath to: self renamedClassTonelPath ]
+		raise: Error
+		whoseDescriptionIncludes: self targetPackageName , ' (not owned by a loaded Iceberg repository)'
+		description: 'A rename must not change a package it cannot export'.
+	self assert: (Smalltalk globals includesKey: self originalClassName asSymbol).
+	self deny: (Smalltalk globals includesKey: self renamedClassName asSymbol)
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testRenameRefusesReferencesInAPackageItDoesNotShow [
+	"A rename writes no more than a write does: an agent never saw the package's code."
+
+	| backend |
+	self ensureTargetPackage.
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	self createReferenceUserClassInPackageNamed: self targetPackageName.
+	backend excludedPackagePrefixes: { self targetPackageName }.
+	self
+		should: [ backend rename: self originalClassTonelPath to: self renamedClassTonelPath ]
+		raise: Error
+		whoseDescriptionIncludes: self targetPackageName , ' (outside the projected packages)'
+		description: 'A rename must not change a filtered package'.
+	self assert: (Smalltalk globals includesKey: self originalClassName asSymbol).
+	self deny: (Smalltalk globals includesKey: self renamedClassName asSymbol)
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testRenameRefusesReferencesInAPackageNoRepositoryOwns [
+	"Its references would change in the image and in no checkout."
+
+	self ensureTargetPackage.
+	self newBackend write: self classTonelSource at: self originalClassTonelPath.
+	self createReferenceUserClassInPackageNamed: self targetPackageName.
+	self
+		should: [ self backendOwningOnlyTheFixturePackage rename: self originalClassTonelPath to: self renamedClassTonelPath ]
+		raise: Error
+		whoseDescriptionIncludes: self targetPackageName , ' (not owned by a loaded Iceberg repository)'
+		description: 'A rename must not change a package it cannot export'.
+	self assert: (Smalltalk globals includesKey: self originalClassName asSymbol).
+	self deny: (Smalltalk globals includesKey: self renamedClassName asSymbol)
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testRenameRefusesSymbolReferencesInAPackageItDoesNotShow [
+	"The refactoring would rewrite the symbol in a package the agent never saw."
+
+	| backend |
+	self ensureTargetPackage.
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	self createSymbolReferenceUserClassInPackageNamed: self targetPackageName.
+	backend excludedPackagePrefixes: { self targetPackageName }.
+	self
+		should: [ backend rename: self originalClassTonelPath to: self renamedClassTonelPath ]
+		raise: Error
+		whoseDescriptionIncludes: self targetPackageName , ' (outside the projected packages)'
+		description: 'A rename must not change a filtered package'.
+	self assert: (Smalltalk globals includesKey: self originalClassName asSymbol).
+	self deny: (Smalltalk globals includesKey: self renamedClassName asSymbol).
+	self assert: (((Smalltalk globals at: self referenceUserClassName asSymbol) >> #probeClass) sourceCode includesSubstring:
+			 '#' , self originalClassName)
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testRenameRefusesSymbolReferencesInAPackageNoRepositoryOwns [
+	"The rewritten symbol would change in the image and in no checkout."
+
+	self ensureTargetPackage.
+	self newBackend write: self classTonelSource at: self originalClassTonelPath.
+	self createSymbolReferenceUserClassInPackageNamed: self targetPackageName.
+	self
+		should: [ self backendOwningOnlyTheFixturePackage rename: self originalClassTonelPath to: self renamedClassTonelPath ]
+		raise: Error
+		whoseDescriptionIncludes: self targetPackageName , ' (not owned by a loaded Iceberg repository)'
+		description: 'A rename must not change a package it cannot export'.
+	self assert: (Smalltalk globals includesKey: self originalClassName asSymbol).
+	self deny: (Smalltalk globals includesKey: self renamedClassName asSymbol)
+]
+
+{ #category : 'tests' }
 PIFSBackendTest >> testRenameRejectsExcludedTargetPackage [
 
 	| backend |
@@ -1123,6 +1612,42 @@ PIFSBackendTest >> testRenameRejectsExcludedTargetPackage [
 		raise: Error
 		whoseDescriptionIncludes: 'Projection path not found'
 		description: 'Renames must not move code into a filtered package'
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testRenameRewritesAndExportsReferencesInAnotherPackage [
+	"A tests package refers to the class it tests, so a rename that stopped at its own package would refuse nearly every tested class. The other package's file holding the reference is exported, and nothing else of it."
+
+	| backend referenceUser renamedClass |
+	self ensureTargetPackage.
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	self createReferenceUserClassInPackageNamed: self targetPackageName.
+	backend rename: self originalClassTonelPath to: self renamedClassTonelPath.
+	renamedClass := Smalltalk globals at: self renamedClassName asSymbol.
+	referenceUser := Smalltalk globals at: self referenceUserClassName asSymbol.
+	self assert: referenceUser new probeClass equals: renamedClass.
+	self assert: ((referenceUser >> #probeClass) sourceCode includesSubstring: self renamedClassName).
+	self assert: backend exportedFileNames equals: {
+			(self fixturePackageName , '/' , self originalClassName , '.class.st').
+			(self targetPackageName , '/' , self referenceUserClassName , '.class.st') }
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testRenameRewritesAndExportsSymbolReferencesInAnotherPackage [
+	"The refactoring rewrites a symbol naming the class as it rewrites a reference to it, so the file holding the symbol is exported."
+
+	| backend referenceUser |
+	self ensureTargetPackage.
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	self createSymbolReferenceUserClassInPackageNamed: self targetPackageName.
+	backend rename: self originalClassTonelPath to: self renamedClassTonelPath.
+	referenceUser := Smalltalk globals at: self referenceUserClassName asSymbol.
+	self assert: referenceUser new probeClass equals: (Smalltalk globals at: self renamedClassName asSymbol).
+	self assert: backend exportedFileNames equals: {
+			(self fixturePackageName , '/' , self originalClassName , '.class.st').
+			(self targetPackageName , '/' , self referenceUserClassName , '.class.st') }
 ]
 
 { #category : 'tests' }
@@ -1671,6 +2196,91 @@ PIFSBackendTest >> testWritesToExcludedPackagesAreRejected [
 		whoseDescriptionIncludes: 'Projection path not found'
 		description: 'Writes must not bypass package visibility'.
 	self deny: (PackageOrganizer default hasPackage: self targetPackageName)
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testWritingAClassIntoAnotherPackageIsRefusedNamingTheMove [
+	"Class names are global, so the file names the class of another package, which only mv moves: a write would replace the class with the copy, which holds none of the target package's extensions of it."
+
+	| backend class |
+	self ensureTargetPackage.
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	(Smalltalk globals at: self originalClassName asSymbol)
+		compile: 'extendedAnswer
+
+	^ 7'
+		classified: '*' , self targetPackageName.
+	self
+		assert:
+		(self refusalOf: [
+			 backend write: (self classTonelSourceForPackageNamed: self targetPackageName) at: self targetPackageTonelPath ])
+		equals: 'Class ' , self originalClassName , ' already exists in package ' , self fixturePackageName , '. To move it, mv '
+			, self originalClassTonelPath , ' to ' , self targetPackageTonelPath.
+	class := Smalltalk globals at: self originalClassName asSymbol.
+	self assert: class package name equals: self fixturePackageName.
+	self assert: class new answer equals: 42.
+	self assert: (class >> #extendedAnswer) protocolName equals: '*' , self targetPackageName
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testWritingAClassIntoAnotherPackageNamesNoMoveOfAHiddenClass [
+	"The projection does not show the class, so it has no file to mv."
+
+	| backend |
+	self ensureTargetPackage.
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	backend excludedPackagePrefixes: { self fixturePackageName }.
+	self
+		assert:
+		(self refusalOf: [
+			 backend write: (self classTonelSourceForPackageNamed: self targetPackageName) at: self targetPackageTonelPath ])
+		equals: 'Class ' , self originalClassName , ' already exists in package ' , self fixturePackageName , ' for '
+			, self targetPackageTonelPath.
+	self assert: (Smalltalk globals at: self originalClassName asSymbol) package name equals: self fixturePackageName
+]
+
+{ #category : 'tests' }
+PIFSBackendTest >> testWritingANewClassUnderATakenNameLeavesTheOtherClassAlone [
+	"A writer that does not know the name is taken means another class: the one that has it keeps its package and its methods."
+
+	| backend class |
+	self ensureTargetPackage.
+	backend := self newBackend.
+	backend write: self classTonelSource at: self originalClassTonelPath.
+	self
+		should: [
+		backend write: (self unrelatedClassTonelSourceForPackageNamed: self targetPackageName) at: self targetPackageTonelPath ]
+		raise: Error
+		whoseDescriptionIncludes: 'already exists in package ' , self fixturePackageName
+		description: 'A taken name is refused'.
+	class := Smalltalk globals at: self originalClassName asSymbol.
+	self assert: class package name equals: self fixturePackageName.
+	self assert: class new answer equals: 42.
+	self deny: (class includesSelector: #items)
+]
+
+{ #category : 'private' }
+PIFSBackendTest >> unrelatedClassTonelSourceForPackageNamed: packageName [
+	"Another class of the original class's name, as a writer that does not know the name is taken writes it."
+
+	^ 'Class {
+	#name : ''' , self originalClassName , ''',
+	#superclass : ''Object'',
+	#instVars : [
+		''items''
+	],
+	#category : ''' , packageName , ''',
+	#package : ''' , packageName , '''
+}
+
+{ #category : ''accessing'' }
+' , self originalClassName , ' >> items [
+
+	^ items
+]
+'
 ]
 
 { #category : 'private' }

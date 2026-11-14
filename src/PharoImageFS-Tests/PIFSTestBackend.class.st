@@ -38,10 +38,10 @@ PIFSTestBackend >> exportPackageNamed: packageName [
 ]
 
 { #category : 'private - repositories' }
-PIFSTestBackend >> exportPackageNamed: packageName fileNamed: fileName [
+PIFSTestBackend >> exportPackageNamed: packageName filesNamed: fileNames [
 
 	self recordExportOfPackageNamed: packageName.
-	exportedFileNames add: packageName , '/' , fileName
+	fileNames do: [ :fileName | exportedFileNames add: packageName , '/' , fileName ]
 ]
 
 { #category : 'accessing' }
