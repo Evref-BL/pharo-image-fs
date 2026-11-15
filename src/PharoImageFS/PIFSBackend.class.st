@@ -203,13 +203,6 @@ PIFSBackend >> classTonelTextFor: aClass [
 	^ String streamContents: [ :stream | writer writeClass: aClass asClassDefinition on: stream ]
 ]
 
-{ #category : 'private - classes' }
-PIFSBackend >> classesInPackageNamed: packageName [
-
-	^ (Smalltalk globals allClasses select: [ :class | class package name asString = packageName ]) sorted: [ :left :right |
-		  left name <= right name ]
-]
-
 { #category : 'private - renaming' }
 PIFSBackend >> classesWhoseDefinitionNames: aClass [
 	"The classes and traits whose definition names the class, so that it changes with its name: its subclasses, those using it as a pool, those using it as a trait or holding a slot of it, on either side, and those holding a class variable of it. A slot a class gets from a trait is in the trait's definition."
@@ -422,12 +415,6 @@ PIFSBackend >> deleteTonelSegments: segments originalPath: aString [
 PIFSBackend >> directoryNamed: aString [
 
 	^ PIFSEntry directoryNamed: aString
-]
-
-{ #category : 'private - entries' }
-PIFSBackend >> entryNamed: aString in: entries ifAbsent: absentBlock [
-
-	^ entries detect: [ :each | each name = aString ] ifNone: absentBlock
 ]
 
 { #category : 'accessing' }
