@@ -342,18 +342,6 @@ PIFSServer >> daemonLogExcerpt [
 	^ '. The daemon logged: ' , (text last: (text size min: 500))
 ]
 
-{ #category : 'private - daemon' }
-PIFSServer >> daemonLogFile [
-
-	^ daemonLogFile
-]
-
-{ #category : 'private - daemon' }
-PIFSServer >> daemonPidFile [
-
-	^ daemonPidFile
-]
-
 { #category : 'private - running' }
 PIFSServer >> ensurePortAvailable: portNumber [
 
