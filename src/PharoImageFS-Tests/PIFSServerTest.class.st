@@ -174,6 +174,66 @@ PIFSServerTest >> testAPathThatBeginsAMountedOneIsNotMounted [
 ]
 
 { #category : 'tests' }
+PIFSServerTest >> testASaveKeepsTheProjections [
+	"A save that goes on in the same session keeps its projections: Zinc listens again on their ports."
+
+	| projectionServer |
+	projectionServer := PIFSServer startEndpointOn: 0.
+	PIFSServer startUp: false.
+	self assert: (PIFSServer serverOn: projectionServer port) equals: projectionServer.
+	self assert: projectionServer server isRunning
+]
+
+{ #category : 'tests' }
+PIFSServerTest >> testAnImageStartForgetsItsProjections [
+	"An image started from its file has none of the projections it was saved with. Zinc stopped their servers for the save; left registered, it would start them again on their old ports."
+
+	| projectionServer zincServer |
+	projectionServer := PIFSServer startEndpointOn: 0.
+	zincServer := projectionServer server.
+	zincServer stop: false.
+	PIFSServer startUp: true.
+	self assert: PIFSServer serversByPort isEmpty.
+	self deny: (ZnServer managedServers includes: zincServer).
+	self assert: projectionServer server isNil.
+	self assert: projectionServer port isNil
+]
+
+{ #category : 'tests' }
+PIFSServerTest >> testAnImageStartLeavesTheDaemonsAlone [
+	"The daemon of a projection the image was saved with unmounts itself once the image that saved it is gone, and the pid it wrote may now be another process's, so an image start forgets the projection without signalling it."
+
+	| directory pidFile previousPath pid |
+	PIFSServer daemonRunsHere ifFalse: [ ^ self skip: 'The daemon runs on macOS and Linux only.' ].
+	directory := self daemonDirectory.
+	pidFile := directory / 'daemon.pid'.
+	previousPath := OSEnvironment current at: 'PATH'.
+	[
+		self
+			fakeMountIn: directory
+			listing: (directory / 'projection') pathString
+			as: self mountLines
+			while: pidFile.
+		OSEnvironment current at: 'PATH' put: (String streamContents: [ :path |
+					 path
+						 nextPutAll: directory pathString;
+						 nextPut: $:;
+						 nextPutAll: previousPath ]).
+		self assert: (self
+				 startWithDaemon: (self fakeDaemonIn: directory running: {
+							  ('echo $$ > ' , (PIFSServer shellQuote: pidFile pathString)).
+							  'exec sleep 30' })
+				 mountedAt: directory / 'projection') isNil.
+		pid := pidFile contents trimBoth.
+		PIFSServer startUp: true.
+		self assert: PIFSServer serversByPort isEmpty.
+		self assert: (LibC system: 'kill -0 ' , pid) equals: 0 ] ensure: [
+			pid ifNotNil: [ LibC system: 'kill ' , pid , ' 2>/dev/null' ].
+			OSEnvironment current at: 'PATH' put: previousPath.
+			directory ensureDeleteAll ]
+]
+
+{ #category : 'tests' }
 PIFSServerTest >> testDaemonCommandIncludesEndpointMountPointAndMountName [
 	"exec keeps the pid the daemon's own, which stop signals."
 
@@ -328,6 +388,18 @@ PIFSServerTest >> testStopOnUnregistersServerByPort [
 ]
 
 { #category : 'tests' }
+PIFSServerTest >> testStopUnregistersAServerZincStopped [
+	"Zinc unregisters only a server that runs, and one it stopped for a save does not: left registered, Zinc would start it again after the save."
+
+	| projectionServer zincServer |
+	projectionServer := PIFSServer startEndpointOn: 0.
+	zincServer := projectionServer server.
+	zincServer stop: false.
+	projectionServer stop.
+	self deny: (ZnServer managedServers includes: zincServer)
+]
+
+{ #category : 'tests' }
 PIFSServerTest >> testUnmountCommandNeverForces [
 	"Unmounting a busy projection fails until nothing uses it: a forced or lazy unmount would leave its users on a gone image. One command serves macOS and Linux: each tool it does not have fails, and the next one runs."
 
@@ -338,4 +410,15 @@ PIFSServerTest >> testUnmountCommandNeverForces [
 	self assert: (command includesSubstring: ' || fusermount3 -u ').
 	self assert: (command includesSubstring: (PIFSServer shellQuote: path pathString)).
 	#( ' -f' ' -l' ' -z' ' -uz' 'force' ) do: [ :forcing | self deny: (command includesSubstring: forcing) ]
+]
+
+{ #category : 'tests' }
+PIFSServerTest >> testZincManagesTheServer [
+	"Zinc stops the servers it manages around every save and closes their connections, so the saved image holds no socket of this session."
+
+	| zincServer |
+	zincServer := (PIFSServer startEndpointOn: 0) server.
+	self assert: (ZnServer managedServers includes: zincServer).
+	PIFSServer stopAll.
+	self deny: (ZnServer managedServers includes: zincServer)
 ]

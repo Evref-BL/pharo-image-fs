@@ -133,6 +133,19 @@ PIFSServer class >> extractDaemonArchive: archiveReference into: directoryRefere
 		archive extractAllTo: directoryReference overwrite: true ] ensure: [ archive close ]
 ]
 
+{ #category : 'registry' }
+PIFSServer class >> forgetAll [
+
+	self serversByPort values do: [ :each | each forget ]
+]
+
+{ #category : 'class initialization' }
+PIFSServer class >> initialize [
+	"Be told when the image starts, to forget the projections it was saved with."
+
+	SessionManager default registerNetworkClassNamed: self name
+]
+
 { #category : 'private - daemon' }
 PIFSServer class >> isMountPoint: aFileReference [
 	"Whether mount lists something mounted at aFileReference. mount prints physical paths, so the parent is resolved; the path itself is not, because a mount whose daemon is gone fails every lookup. What follows the path is matched too, so that a longer mounted path does not match: macOS prints ' (' after it, Linux ' type '. Each system's own is matched, since a sibling named like the path followed by ' (' would match the other's on Linux."
@@ -232,6 +245,13 @@ PIFSServer class >> startMountedAt: aPath named: aString [
 			   mountPath: aPath;
 			   mountName: aString;
 			   yourself)
+]
+
+{ #category : 'system startup' }
+PIFSServer class >> startUp: resuming [
+	"An image started from its file has none of the projections it was saved with: each daemon watched the image that saved it, and every connection was of that session. Forget them before Zinc starts the servers it manages again, so they neither listen nor stay registered."
+
+	resuming ifTrue: [ self forgetAll ]
 ]
 
 { #category : 'registry' }
@@ -363,6 +383,25 @@ PIFSServer >> errorResponseFor: anError statusCode: statusCode [
 		  yourself
 ]
 
+{ #category : 'running' }
+PIFSServer >> forget [
+	"Stop serving, and let go of the daemon without unmounting or signalling it: an image started from its file forgets this way the projections it was saved with. Their daemons unmount themselves once the image that saved it is gone, and the pid they wrote may now be another process's."
+
+	self forgetDaemon.
+	self stopServer.
+	self class unregister: self.
+	port := nil
+]
+
+{ #category : 'private - daemon' }
+PIFSServer >> forgetDaemon [
+
+	mountPath := nil.
+	mountName := nil.
+	daemonPidFile := nil.
+	daemonLogFile := nil
+]
+
 { #category : 'private - routing' }
 PIFSServer >> handleRequest: aRequest [
 
@@ -484,12 +523,14 @@ PIFSServer >> startDaemonMountedAt: aPath named: aString [
 
 { #category : 'running' }
 PIFSServer >> startOn: portNumber [
+	"Zinc manages the server: around every save it stops the server and closes its connections, then listens again on the same port, so the saved image holds no socket of this session."
 
 	server ifNotNil: [ self stop ].
 	self ensurePortAvailable: portNumber.
 	server := ZnServer on: portNumber.
 	server bindingAddress: #[ 127 0 0 1 ].
 	server onRequestRespond: [ :request | self handleRequest: request ].
+	server register.
 	server start.
 	port := server port.
 	self waitUntilServerStartedOn: port
@@ -509,11 +550,7 @@ PIFSServer >> statusCodeForError: anError [
 PIFSServer >> stop [
 
 	self stopDaemon.
-	server ifNotNil: [
-			server stop.
-			server := nil ].
-	self class unregister: self.
-	port := nil
+	self forget
 ]
 
 { #category : 'private - daemon' }
@@ -529,10 +566,18 @@ PIFSServer >> stopDaemon [
 							pid := daemonPidFile contents trimBoth.
 							pid ifNotEmpty: [ LibC system: 'kill -TERM ' , (self shellQuote: pid) , ' >/dev/null 2>&1' ].
 							daemonPidFile delete ] ] ].
-	mountPath := nil.
-	mountName := nil.
-	daemonPidFile := nil.
-	daemonLogFile := nil
+	self forgetDaemon
+]
+
+{ #category : 'private - running' }
+PIFSServer >> stopServer [
+	"Zinc unregisters only a server that runs, and one it stopped for a save, or whose start failed, does not."
+
+	server ifNil: [ ^ self ].
+	server
+		unregister;
+		stop.
+	server := nil
 ]
 
 { #category : 'private - json' }
