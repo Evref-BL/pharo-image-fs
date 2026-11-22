@@ -32,15 +32,12 @@ PIFSToolStartProjectionTest >> testAnswersTheProjectionMountedAtTheDefaultPathWh
 PIFSToolStartProjectionTest >> testAnswersWhyTheProjectionDidNotStart [
 	"The code says which failure it was, so that a caller tells a daemon that would not mount from a path already in use without reading the text, which carries the daemon's own words."
 
-	| mountPath result |
+	| result |
 	PIFSServer daemonRunsHere ifFalse: [ ^ self skip: 'The daemon runs on macOS and Linux only.' ].
-	mountPath := (FileLocator temp / 'pifs-tool-test-unmounted') asFileReference.
-	[
-		result := self
-			          withDaemonRunning: #( 'echo "FUSE needs fusermount3"' 'exit 1' )
-			          do: [ self resultOf: PIFSToolStartProjection new arguments: { (#mountPath -> mountPath fullName) } asDictionary ].
-		self assert: result isError.
-		self assert: ((self errorDetailsFrom: result) at: #errorCode) equals: 'DaemonExitedBeforeMounting'.
-		self assert: ((self summaryFrom: result) includesSubstring: 'FUSE needs fusermount3').
-		self assertEmpty: PIFSServer serversByPort ] ensure: [ mountPath ensureDelete ]
+	result := self withDaemonRunning: #( 'echo "FUSE needs fusermount3"' 'exit 1' ) do: [ :directory |
+		          self resultOf: PIFSToolStartProjection new arguments: { (#mountPath -> (directory / 'mount') fullName) } asDictionary ].
+	self assert: result isError.
+	self assert: ((self errorDetailsFrom: result) at: #errorCode) equals: 'DaemonExitedBeforeMounting'.
+	self assert: ((self summaryFrom: result) includesSubstring: 'FUSE needs fusermount3').
+	self assertEmpty: PIFSServer serversByPort
 ]

@@ -10,9 +10,9 @@ Class {
 
 { #category : 'private' }
 PIFSServerTest >> daemonDirectory [
+	"A directory of the test's own, which it deletes: another image may be running these tests at the same time."
 
-	^ (FileLocator temp / 'pifs-server-test-daemon') asFileReference
-		  ensureDeleteAll;
+	^ (FileLocator temp / ('pifs-server-test-' , UUID new asString)) asFileReference
 		  ensureCreateDirectory;
 		  yourself
 ]
@@ -74,6 +74,15 @@ PIFSServerTest >> fakeMountIn: aDirectory listing: aPathString as: lines while: 
 						nextPut: $";
 						lf ] ].
 	LibC system: 'chmod +x ' , (PIFSServer shellQuote: mount pathString)
+]
+
+{ #category : 'private' }
+PIFSServerTest >> freePort [
+	"A port nothing listens on, for a test that has to name one: a fixed port may be taken by another image running these tests at the same time."
+
+	| socket |
+	socket := ZnNetworkingUtils serverSocketOn: 0.
+	^ [ socket localPort ] ensure: [ socket destroy ]
 ]
 
 { #category : 'private' }
@@ -238,12 +247,12 @@ PIFSServerTest >> testDaemonCommandIncludesEndpointMountPointAndMountName [
 	"exec keeps the pid the daemon's own, which stop signals."
 
 	| command projectionServer |
-	projectionServer := PIFSServer startEndpointOn: self testPort.
+	projectionServer := PIFSServer startEndpointOn: 0.
 	projectionServer instVarNamed: 'daemonPidFile' put: FileLocator temp / 'pharo-image-fs-test.pid'.
 	projectionServer instVarNamed: 'daemonLogFile' put: FileLocator temp / 'pharo-image-fs-test.log'.
 	command := projectionServer daemonCommandMountedAt: FileLocator temp / 'Pharo Image FS Test' named: 'Pharo Image'.
 	self assert: (command includesSubstring: 'exec nohup ''./pharo-image-fs''').
-	self assert: (command includesSubstring: '--endpoint ''http://127.0.0.1:19023/projection''').
+	self assert: (command includesSubstring: '--endpoint ''http://127.0.0.1:' , projectionServer port asString , '/projection''').
 	self assert: (command includesSubstring: '--mount-option ''volname=Pharo Image''').
 	self assert: (command includesSubstring: 'Pharo Image FS Test')
 ]
@@ -266,12 +275,6 @@ PIFSServerTest >> testMountPointsAreThePathsMountLists [
 	[ self deny: (PIFSServer isMountPoint: directory) ] ensure: [ directory ensureDeleteAll ]
 ]
 
-{ #category : 'private' }
-PIFSServerTest >> testPort [
-
-	^ 19023
-]
-
 { #category : 'tests' }
 PIFSServerTest >> testStartEndpointOnAvailablePortRegistersActualPort [
 
@@ -285,7 +288,7 @@ PIFSServerTest >> testStartEndpointOnAvailablePortRegistersActualPort [
 PIFSServerTest >> testStartEndpointOnDoesNotMount [
 
 	| projectionServer |
-	projectionServer := PIFSServer startEndpointOn: self testPort.
+	projectionServer := PIFSServer startEndpointOn: 0.
 	self assert: projectionServer mountPath isNil.
 	self assert: projectionServer mountName isNil
 ]
@@ -293,11 +296,12 @@ PIFSServerTest >> testStartEndpointOnDoesNotMount [
 { #category : 'tests' }
 PIFSServerTest >> testStartEndpointOnOccupiedPortSignalsClearError [
 
-	| occupyingSocket error |
-	occupyingSocket := ZnNetworkingUtils serverSocketOn: self testPort.
+	| occupyingSocket port error |
+	occupyingSocket := ZnNetworkingUtils serverSocketOn: 0.
+	port := occupyingSocket localPort.
 	[
 		error := [
-			         PIFSServer startEndpointOn: self testPort.
+			         PIFSServer startEndpointOn: port.
 			         nil ]
 			         on: PIFSError
 			         do: [ :each | each ].
@@ -306,16 +310,17 @@ PIFSServerTest >> testStartEndpointOnOccupiedPortSignalsClearError [
 			description: 'PIFS should fail clearly when the requested projection port is occupied by another server.'.
 		self assert: error errorCode equals: 'EndpointStartFailed'.
 		self assert: (error messageText includesSubstring: 'port may already be in use').
-		self assert: (PIFSServer serverOn: self testPort) isNil ] ensure: [ occupyingSocket destroy ]
+		self assert: (PIFSServer serverOn: port) isNil ] ensure: [ occupyingSocket destroy ]
 ]
 
 { #category : 'tests' }
 PIFSServerTest >> testStartEndpointOnRegistersServerByPort [
 
-	| projectionServer |
-	projectionServer := PIFSServer startEndpointOn: self testPort.
-	self assert: (PIFSServer serverOn: self testPort) equals: projectionServer.
-	self assert: projectionServer port equals: self testPort
+	| port projectionServer |
+	port := self freePort.
+	projectionServer := PIFSServer startEndpointOn: port.
+	self assert: (PIFSServer serverOn: port) equals: projectionServer.
+	self assert: projectionServer port equals: port
 ]
 
 { #category : 'tests' }
@@ -398,20 +403,22 @@ PIFSServerTest >> testStartRefusesAPathSomethingStaysMountedAt [
 { #category : 'tests' }
 PIFSServerTest >> testStartingSamePortReplacesRegisteredServer [
 
-	| firstServer secondServer |
-	firstServer := PIFSServer startEndpointOn: self testPort.
-	secondServer := PIFSServer startEndpointOn: self testPort.
+	| firstServer port secondServer |
+	firstServer := PIFSServer startEndpointOn: 0.
+	port := firstServer port.
+	secondServer := PIFSServer startEndpointOn: port.
 	self deny: firstServer == secondServer.
-	self assert: (PIFSServer serverOn: self testPort) equals: secondServer.
+	self assert: (PIFSServer serverOn: port) equals: secondServer.
 	self assert: firstServer port isNil
 ]
 
 { #category : 'tests' }
 PIFSServerTest >> testStopOnUnregistersServerByPort [
 
-	PIFSServer startEndpointOn: self testPort.
-	PIFSServer stopOn: self testPort.
-	self assert: (PIFSServer serverOn: self testPort) isNil
+	| port |
+	port := (PIFSServer startEndpointOn: 0) port.
+	PIFSServer stopOn: port.
+	self assert: (PIFSServer serverOn: port) isNil
 ]
 
 { #category : 'tests' }

@@ -1664,8 +1664,7 @@ PIFSBackendTest >> testRepositoryMetadataCanBeRead [
 PIFSBackendTest >> testRepositoryOwnershipAcceptsADeclaredTonelRepository [
 
 	| backend ownedPackage repositoryDirectory tonelRepository |
-	repositoryDirectory := FileLocator temp / 'pifs-tonel-ownership-test'.
-	repositoryDirectory ensureCreateDirectory.
+	repositoryDirectory := FileSystem memory root.
 	ownedPackage := PIFSPackageTestDouble named: self fixturePackageName.
 	tonelRepository := PIFSRepositoryTestDouble
 		                   named: 'Tonel Repository'
@@ -1683,8 +1682,7 @@ PIFSBackendTest >> testRepositoryOwnershipAcceptsADeclaredTonelRepository [
 PIFSBackendTest >> testRepositoryOwnershipIgnoresRepositoriesWithoutDirectory [
 
 	| backend missingDirectoryRepository ownedPackage repositoryDirectory writableRepository |
-	repositoryDirectory := FileLocator temp / 'pifs-repository-ownership-test'.
-	repositoryDirectory ensureCreateDirectory.
+	repositoryDirectory := FileSystem memory root.
 	ownedPackage := PIFSPackageTestDouble named: self fixturePackageName.
 	missingDirectoryRepository := PIFSRepositoryTestDouble
 		                              named: 'Missing Directory Repository'
@@ -1707,8 +1705,7 @@ PIFSBackendTest >> testRepositoryOwnershipIgnoresRepositoriesWithoutDirectory [
 PIFSBackendTest >> testRepositoryOwnershipRejectsASourceFormatThisProjectionDoesNotWrite [
 
 	| backend fileTreeRepository ownedPackage repositoryDirectory |
-	repositoryDirectory := FileLocator temp / 'pifs-source-format-ownership-test'.
-	repositoryDirectory ensureCreateDirectory.
+	repositoryDirectory := FileSystem memory root.
 	ownedPackage := PIFSPackageTestDouble named: self fixturePackageName.
 	fileTreeRepository := PIFSRepositoryTestDouble
 		                      named: 'FileTree Repository'
