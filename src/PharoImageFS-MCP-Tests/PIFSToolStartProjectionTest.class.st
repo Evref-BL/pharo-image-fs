@@ -7,7 +7,7 @@ Class {
 
 { #category : 'tests' }
 PIFSToolStartProjectionTest >> testAnswersTheProjectionAlreadyMountedAtThatPath [
-	"Asking twice has to be safe: the plugin starts a projection whenever it opens an image, and one left over from a previous run is the same projection."
+	"Asking twice has to be safe: a caller may start a projection each time it opens an image, and one left over from a previous run is the same projection."
 
 	| projectionServer result |
 	projectionServer := self projectionMountedAt: self temporaryMountPath named: 'Test Volume'.
