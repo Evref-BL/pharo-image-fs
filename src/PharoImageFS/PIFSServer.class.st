@@ -117,10 +117,18 @@ PIFSServer class >> downloadDaemonExecutable [
 
 { #category : 'private - daemon' }
 PIFSServer class >> ensureDaemonExecutable [
+	"Fetching the daemon fails in as many ways as there are steps to it, the network first among them, and the caller can act on each only by fetching it again, so they fail as one."
 
 	self daemonExecutableOverride ifNotNil: [ :override | ^ override ].
-	self daemonExecutable exists ifFalse: [ ^ self downloadDaemonExecutable ].
-	^ self daemonExecutable
+	self daemonExecutable exists ifTrue: [ ^ self daemonExecutable ].
+	^ [ self downloadDaemonExecutable ]
+		  on: Error
+		  do: [ :error |
+				  PIFSError
+					  signal:
+						  'Could not download the pharo-image-fs daemon from ' , PIFSVersion daemonReleaseURL , ' (' , error class name , '): '
+						  , error messageText
+					  errorCode: 'DaemonDownloadFailed' ]
 ]
 
 { #category : 'private - daemon' }
@@ -362,6 +370,18 @@ PIFSServer >> daemonLogExcerpt [
 	^ '. The daemon logged: ' , (text last: (text size min: 500))
 ]
 
+{ #category : 'private - daemon' }
+PIFSServer >> ensureMountDirectory [
+	"Pharo names a directory it could not create by a failed primitive, or by the path alone when a file is in the way, so the failure says what was being made."
+
+	[ mountPath ensureCreateDirectory ]
+		on: Error
+		do: [ :error |
+				PIFSError
+					signal: 'Could not create the directory ' , mountPath pathString , ' to mount the projection at (' , error class name , ').'
+					errorCode: 'MountPathCreationFailed' ]
+]
+
 { #category : 'private - running' }
 PIFSServer >> ensurePortAvailable: portNumber [
 
@@ -497,27 +517,31 @@ PIFSServer >> shellQuote: aString [
 PIFSServer >> signalServerStartupFailureOn: portNumber [
 
 	self stop.
-	Error signal:
-		'Could not start pharo-image-fs projection server on port ' , portNumber asString , '. The port may already be in use.'
+	PIFSError
+		signal: 'Could not start pharo-image-fs projection server on port ' , portNumber asString , '. The port may already be in use.'
+		errorCode: 'EndpointStartFailed'
 ]
 
 { #category : 'private - daemon' }
 PIFSServer >> startDaemonMountedAt: aPath named: aString [
 
 	| command executable |
-	self class daemonRunsHere ifFalse: [ Error signal: 'pharo-image-fs daemon startup is supported only on macOS and Linux.' ].
+	self class daemonRunsHere ifFalse: [
+		PIFSError signal: 'pharo-image-fs daemon startup is supported only on macOS and Linux.' errorCode: 'PlatformUnsupported' ].
 	"The daemon would fail to mount over it, and what is there is not this projection's to unmount."
 	(self class waitUntilNothingIsMountedAt: aPath asFileReference within: backend configuration mountTimeout) ifFalse: [
-			Error signal:
-				'Something is already mounted at ' , aPath asFileReference pathString , '. Unmount it before mounting a projection there.' ].
+			PIFSError
+				signal:
+				'Something is already mounted at ' , aPath asFileReference pathString , '. Unmount it before mounting a projection there.'
+				errorCode: 'MountPathInUse' ].
 	executable := self class ensureDaemonExecutable.
 	mountPath := aPath asFileReference.
 	mountName := aString.
-	mountPath ensureCreateDirectory.
+	self ensureMountDirectory.
 	daemonPidFile := FileLocator temp / ('pharo-image-fs-' , port asString , '.pid').
 	daemonLogFile := FileLocator temp / ('pharo-image-fs-' , port asString , '.log').
 	command := self daemonCommandMountedAt: mountPath named: mountName.
-	(LibC system: command) = 0 ifFalse: [ Error signal: 'Failed to start pharo-image-fs daemon.' ].
+	(LibC system: command) = 0 ifFalse: [ PIFSError signal: 'Failed to start pharo-image-fs daemon.' errorCode: 'DaemonStartFailed' ].
 	self waitForMountWithin: backend configuration mountTimeout
 ]
 
@@ -594,11 +618,15 @@ PIFSServer >> waitForMountWithin: aDuration [
 	deadline := DateAndTime now + aDuration.
 	[ self class isMountPoint: mountPath ] whileFalse: [
 			self daemonIsRunning ifFalse: [
-				^ Error signal: 'pharo-image-fs daemon exited before mounting ' , mountPath pathString , self daemonLogExcerpt ].
+					^ PIFSError
+						  signal: 'pharo-image-fs daemon exited before mounting ' , mountPath pathString , self daemonLogExcerpt
+						  errorCode: 'DaemonExitedBeforeMounting' ].
 			DateAndTime now > deadline ifTrue: [
-					^ Error signal:
+					^ PIFSError
+						  signal:
 						  'pharo-image-fs did not mount ' , mountPath pathString , ' within ' , aDuration humanReadablePrintString
-						  , self daemonLogExcerpt ].
+						  , self daemonLogExcerpt
+						  errorCode: 'MountTimedOut' ].
 			(Delay forMilliseconds: 100) wait ]
 ]
 

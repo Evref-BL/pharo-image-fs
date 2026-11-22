@@ -58,7 +58,9 @@ PIFSToolStartProjection >> executeWithRequest: request [
 					  data: (self projectionEntryFor: server) ]
 		  ifNone: [
 				  | started |
-				  started := PIFSServer startMountedAt: mountPath asFileReference named: mountName.
+				  started := [ PIFSServer startMountedAt: mountPath asFileReference named: mountName ]
+					             on: PIFSError
+					             do: [ :failure | ^ self failureResultFor: failure ].
 				  self
 					  successResultText: 'Mounted projection ' , mountName , ' at ' , mountPath , ' on port ' , started port asString , '.'
 					  data: (self projectionEntryFor: started) ]

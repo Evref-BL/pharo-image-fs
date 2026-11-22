@@ -293,14 +293,19 @@ PIFSServerTest >> testStartEndpointOnDoesNotMount [
 { #category : 'tests' }
 PIFSServerTest >> testStartEndpointOnOccupiedPortSignalsClearError [
 
-	| occupyingSocket |
+	| occupyingSocket error |
 	occupyingSocket := ZnNetworkingUtils serverSocketOn: self testPort.
 	[
+		error := [
+			         PIFSServer startEndpointOn: self testPort.
+			         nil ]
+			         on: PIFSError
+			         do: [ :each | each ].
 		self
-			should: [ PIFSServer startEndpointOn: self testPort ]
-			raise: Error
-			whoseDescriptionIncludes: 'port may already be in use'
+			assert: error isNotNil
 			description: 'PIFS should fail clearly when the requested projection port is occupied by another server.'.
+		self assert: error errorCode equals: 'EndpointStartFailed'.
+		self assert: (error messageText includesSubstring: 'port may already be in use').
 		self assert: (PIFSServer serverOn: self testPort) isNil ] ensure: [ occupyingSocket destroy ]
 ]
 
@@ -326,6 +331,7 @@ PIFSServerTest >> testStartFailsWhenTheDaemonDoesNotMount [
 			             'exec sleep 30' ))
 			         mountedAt: directory / 'mount'.
 		self assert: error isNotNil.
+		self assert: error errorCode equals: 'MountTimedOut'.
 		self assert: (error messageText includesSubstring: 'did not mount').
 		self assert: (error messageText includesSubstring: 'mount failed: permission denied').
 		self assert: PIFSServer serversByPort isEmpty ] ensure: [ directory ensureDeleteAll ]
@@ -344,8 +350,28 @@ PIFSServerTest >> testStartFailsWhenTheDaemonExitsBeforeMounting [
 			             'exit 1' ))
 			         mountedAt: directory / 'mount'.
 		self assert: error isNotNil.
+		self assert: error errorCode equals: 'DaemonExitedBeforeMounting'.
 		self assert: (error messageText includesSubstring: 'exited before mounting').
 		self assert: (error messageText includesSubstring: 'FUSE needs fusermount3').
+		self assert: PIFSServer serversByPort isEmpty ] ensure: [ directory ensureDeleteAll ]
+]
+
+{ #category : 'tests' }
+PIFSServerTest >> testStartRefusesAMountPathAFileIsIn [
+	"Pharo would name only the path it could not make a directory of, so the error says what it was for. The daemon is never launched."
+
+	| directory file error |
+	PIFSServer daemonRunsHere ifFalse: [ ^ self skip: 'The daemon runs on macOS and Linux only.' ].
+	directory := self daemonDirectory.
+	file := (directory / 'a-file') ensureCreateFile.
+	[
+		error := self
+			         startWithDaemon: (self fakeDaemonIn: directory running: #( 'echo "launched over a file"' 'exit 1' ))
+			         mountedAt: file.
+		self assert: error isNotNil.
+		self assert: error errorCode equals: 'MountPathCreationFailed'.
+		self assert: (error messageText includesSubstring: file pathString).
+		self deny: (error messageText includesSubstring: 'launched over a file').
 		self assert: PIFSServer serversByPort isEmpty ] ensure: [ directory ensureDeleteAll ]
 ]
 
@@ -364,6 +390,7 @@ PIFSServerTest >> testStartRefusesAPathSomethingStaysMountedAt [
 		         on: Error
 		         do: [ :each | each ].
 	self assert: error isNotNil.
+	self assert: error errorCode equals: 'MountPathInUse'.
 	self assert: (error messageText includesSubstring: 'already mounted at /dev').
 	self assert: PIFSServer serversByPort isEmpty
 ]
