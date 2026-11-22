@@ -69,3 +69,28 @@ PIFSToolTestCase >> temporaryMountPath [
 
 	^ (FileLocator temp / 'pharo-image-fs-tool-test') fullName
 ]
+
+{ #category : 'helpers' }
+PIFSToolTestCase >> withDaemonRunning: shellLines do: aBlock [
+	"What aBlock answers, given a directory of the test's own, while a stand-in for the daemon in that directory runs shellLines in its place. PIFSServer runs the executable named like the real one, from the directory PHARO_IMAGE_FS_DAEMON points into. The directory is deleted afterwards, and named for this run alone: another image may be running these tests at the same time. The lines are joined with lf by hand: a string literal spanning lines holds the image's cr."
+
+	| directory daemon previous |
+	directory := (FileLocator temp / ('pifs-tool-test-' , UUID new asString)) asFileReference.
+	directory ensureCreateDirectory.
+	daemon := directory / PIFSServer daemonExecutableName.
+	daemon writeStreamDo: [ :stream |
+			stream nextPutAll: '#!/bin/sh'.
+			shellLines do: [ :line |
+					stream
+						lf;
+						nextPutAll: line ].
+			stream lf ].
+	LibC system: 'chmod +x ' , (PIFSServer shellQuote: daemon pathString).
+	previous := OSEnvironment current at: 'PHARO_IMAGE_FS_DAEMON' ifAbsent: [ nil ].
+	OSEnvironment current at: 'PHARO_IMAGE_FS_DAEMON' put: daemon pathString.
+	^ [ aBlock value: directory ] ensure: [
+			  previous
+				  ifNil: [ OSEnvironment current removeKey: 'PHARO_IMAGE_FS_DAEMON' ]
+				  ifNotNil: [ OSEnvironment current at: 'PHARO_IMAGE_FS_DAEMON' put: previous ].
+			  directory ensureDeleteAll ]
+]

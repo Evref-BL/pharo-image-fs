@@ -67,6 +67,10 @@ The tools are discoverable rather than advertised, so they reach a client
 through `tool_search` and `tool_call` without taking room in the tool list
 every session starts with.
 
+A call that fails for a reason the tools foresee names that reason in the
+`errorCode` of its error details, such as `ProjectionNotFound`, so a program
+tells failures apart without reading the text.
+
 ### Daemon binary
 
 By default, the Pharo backend downloads the matching daemon release into its
@@ -102,8 +106,15 @@ PIFSServer
 Starting answers once the mount is there. A path something is already mounted
 at is refused before anything starts. If the daemon exits before mounting, or
 the mount has not appeared within the configuration's `mountTimeout` (ten
-seconds unless set), starting stops the endpoint and signals an error carrying
-the daemon's log.
+seconds unless set), starting stops the endpoint and signals an error that
+quotes the end of the daemon's log and names the file, which is kept so that
+the whole of it can be read. A projection stopped cleanly deletes its daemon's
+log and pid file.
+
+Each failure starting foresees is a `PIFSError`, whose `errorCode` names it in
+one word, such as `MountPathInUse` or `MountTimedOut`, and whose `details`
+hold what a program would otherwise read out of the text, such as the kept log
+as `daemonLog`.
 
 Anything else is set through a `PIFSConfiguration`, which carries the
 mountpoint, the volume name, the port, how long to wait for the mount, and the

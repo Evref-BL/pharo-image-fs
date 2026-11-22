@@ -10,11 +10,26 @@ Class {
 
 { #category : 'private' }
 PIFSServerTest >> daemonDirectory [
+	"A directory of the test's own, which it deletes: another image may be running these tests at the same time."
 
-	^ (FileLocator temp / 'pifs-server-test-daemon') asFileReference
-		  ensureDeleteAll;
+	^ (FileLocator temp / ('pifs-server-test-' , UUID new asString)) asFileReference
 		  ensureCreateDirectory;
 		  yourself
+]
+
+{ #category : 'private' }
+PIFSServerTest >> daemonFilesOf: aProjectionServer [
+	"The pid file and the log its daemon writes, which a test reads before the server forgets them."
+
+	^ #( 'daemonPidFile' 'daemonLogFile' ) collect: [ :each | aProjectionServer instVarNamed: each ]
+]
+
+{ #category : 'private' }
+PIFSServerTest >> deleteKeptLogOf: anError [
+	"A start whose daemon failed keeps the daemon's log for whoever reads the error, and the test has read it."
+
+	(anError isNil or: [ (anError isKindOf: PIFSError) not ]) ifTrue: [ ^ self ].
+	anError details at: #daemonLog ifPresent: [ :path | path asFileReference ensureDelete ]
 ]
 
 { #category : 'private' }
@@ -74,6 +89,15 @@ PIFSServerTest >> fakeMountIn: aDirectory listing: aPathString as: lines while: 
 						nextPut: $";
 						lf ] ].
 	LibC system: 'chmod +x ' , (PIFSServer shellQuote: mount pathString)
+]
+
+{ #category : 'private' }
+PIFSServerTest >> freePort [
+	"A port nothing listens on, for a test that has to name one: a fixed port may be taken by another image running these tests at the same time."
+
+	| socket |
+	socket := ZnNetworkingUtils serverSocketOn: 0.
+	^ [ socket localPort ] ensure: [ socket destroy ]
 ]
 
 { #category : 'private' }
@@ -149,6 +173,7 @@ PIFSServerTest >> testALeftoverMountIsWaitedFor [
 		self deny: (error messageText includesSubstring: 'already mounted').
 		self assert: (error messageText includesSubstring: 'launched past the leftover') ] ensure: [
 			OSEnvironment current at: 'PATH' put: previousPath.
+			self deleteKeptLogOf: error.
 			directory ensureDeleteAll ]
 ]
 
@@ -185,6 +210,43 @@ PIFSServerTest >> testASaveKeepsTheProjections [
 ]
 
 { #category : 'tests' }
+PIFSServerTest >> testAStopLeavesNoDaemonFilesBehind [
+	"A projection stopped cleanly has nothing left to say: the pid file and the log of its daemon go with it."
+
+	| directory pidFile previousPath pid daemonFiles |
+	PIFSServer daemonRunsHere ifFalse: [ ^ self skip: 'The daemon runs on macOS and Linux only.' ].
+	directory := self daemonDirectory.
+	pidFile := directory / 'daemon.pid'.
+	previousPath := OSEnvironment current at: 'PATH'.
+	[
+		self
+			fakeMountIn: directory
+			listing: (directory / 'projection') pathString
+			as: self mountLines
+			while: pidFile.
+		OSEnvironment current at: 'PATH' put: (String streamContents: [ :path |
+					 path
+						 nextPutAll: directory pathString;
+						 nextPut: $:;
+						 nextPutAll: previousPath ]).
+		self assert: (self
+				 startWithDaemon: (self fakeDaemonIn: directory running: {
+							  ('echo $$ > ' , (PIFSServer shellQuote: pidFile pathString)).
+							  'echo "serving the projection"'.
+							  'exec sleep 30' })
+				 mountedAt: directory / 'projection') isNil.
+		daemonFiles := self daemonFilesOf: PIFSServer serversByPort anyOne.
+		pid := pidFile contents trimBoth.
+		self assert: (daemonFiles allSatisfy: [ :each | each exists ]).
+		PIFSServer stopAll.
+		self deny: (daemonFiles anySatisfy: [ :each | each exists ]) ] ensure: [
+			pid ifNotNil: [ LibC system: 'kill ' , pid , ' 2>/dev/null' ].
+			OSEnvironment current at: 'PATH' put: previousPath.
+			daemonFiles ifNotNil: [ daemonFiles do: [ :each | each ensureDelete ] ].
+			directory ensureDeleteAll ]
+]
+
+{ #category : 'tests' }
 PIFSServerTest >> testAnImageStartForgetsItsProjections [
 	"An image started from its file has none of the projections it was saved with. Zinc stopped their servers for the save; left registered, it would start them again on their old ports."
 
@@ -203,7 +265,7 @@ PIFSServerTest >> testAnImageStartForgetsItsProjections [
 PIFSServerTest >> testAnImageStartLeavesTheDaemonsAlone [
 	"The daemon of a projection the image was saved with unmounts itself once the image that saved it is gone, and the pid it wrote may now be another process's, so an image start forgets the projection without signalling it."
 
-	| directory pidFile previousPath pid |
+	| directory pidFile previousPath pid daemonFiles |
 	PIFSServer daemonRunsHere ifFalse: [ ^ self skip: 'The daemon runs on macOS and Linux only.' ].
 	directory := self daemonDirectory.
 	pidFile := directory / 'daemon.pid'.
@@ -224,12 +286,14 @@ PIFSServerTest >> testAnImageStartLeavesTheDaemonsAlone [
 							  ('echo $$ > ' , (PIFSServer shellQuote: pidFile pathString)).
 							  'exec sleep 30' })
 				 mountedAt: directory / 'projection') isNil.
+		daemonFiles := self daemonFilesOf: PIFSServer serversByPort anyOne.
 		pid := pidFile contents trimBoth.
 		PIFSServer startUp: true.
 		self assert: PIFSServer serversByPort isEmpty.
 		self assert: (LibC system: 'kill -0 ' , pid) equals: 0 ] ensure: [
 			pid ifNotNil: [ LibC system: 'kill ' , pid , ' 2>/dev/null' ].
 			OSEnvironment current at: 'PATH' put: previousPath.
+			daemonFiles ifNotNil: [ daemonFiles do: [ :each | each ensureDelete ] ].
 			directory ensureDeleteAll ]
 ]
 
@@ -238,12 +302,12 @@ PIFSServerTest >> testDaemonCommandIncludesEndpointMountPointAndMountName [
 	"exec keeps the pid the daemon's own, which stop signals."
 
 	| command projectionServer |
-	projectionServer := PIFSServer startEndpointOn: self testPort.
+	projectionServer := PIFSServer startEndpointOn: 0.
 	projectionServer instVarNamed: 'daemonPidFile' put: FileLocator temp / 'pharo-image-fs-test.pid'.
 	projectionServer instVarNamed: 'daemonLogFile' put: FileLocator temp / 'pharo-image-fs-test.log'.
 	command := projectionServer daemonCommandMountedAt: FileLocator temp / 'Pharo Image FS Test' named: 'Pharo Image'.
 	self assert: (command includesSubstring: 'exec nohup ''./pharo-image-fs''').
-	self assert: (command includesSubstring: '--endpoint ''http://127.0.0.1:19023/projection''').
+	self assert: (command includesSubstring: '--endpoint ''http://127.0.0.1:' , projectionServer port asString , '/projection''').
 	self assert: (command includesSubstring: '--mount-option ''volname=Pharo Image''').
 	self assert: (command includesSubstring: 'Pharo Image FS Test')
 ]
@@ -266,12 +330,6 @@ PIFSServerTest >> testMountPointsAreThePathsMountLists [
 	[ self deny: (PIFSServer isMountPoint: directory) ] ensure: [ directory ensureDeleteAll ]
 ]
 
-{ #category : 'private' }
-PIFSServerTest >> testPort [
-
-	^ 19023
-]
-
 { #category : 'tests' }
 PIFSServerTest >> testStartEndpointOnAvailablePortRegistersActualPort [
 
@@ -285,7 +343,7 @@ PIFSServerTest >> testStartEndpointOnAvailablePortRegistersActualPort [
 PIFSServerTest >> testStartEndpointOnDoesNotMount [
 
 	| projectionServer |
-	projectionServer := PIFSServer startEndpointOn: self testPort.
+	projectionServer := PIFSServer startEndpointOn: 0.
 	self assert: projectionServer mountPath isNil.
 	self assert: projectionServer mountName isNil
 ]
@@ -293,31 +351,38 @@ PIFSServerTest >> testStartEndpointOnDoesNotMount [
 { #category : 'tests' }
 PIFSServerTest >> testStartEndpointOnOccupiedPortSignalsClearError [
 
-	| occupyingSocket |
-	occupyingSocket := ZnNetworkingUtils serverSocketOn: self testPort.
+	| occupyingSocket port error |
+	occupyingSocket := ZnNetworkingUtils serverSocketOn: 0.
+	port := occupyingSocket localPort.
 	[
+		error := [
+			         PIFSServer startEndpointOn: port.
+			         nil ]
+			         on: PIFSError
+			         do: [ :each | each ].
 		self
-			should: [ PIFSServer startEndpointOn: self testPort ]
-			raise: Error
-			whoseDescriptionIncludes: 'port may already be in use'
+			assert: error isNotNil
 			description: 'PIFS should fail clearly when the requested projection port is occupied by another server.'.
-		self assert: (PIFSServer serverOn: self testPort) isNil ] ensure: [ occupyingSocket destroy ]
+		self assert: error errorCode equals: 'EndpointStartFailed'.
+		self assert: (error messageText includesSubstring: 'port may already be in use').
+		self assert: (PIFSServer serverOn: port) isNil ] ensure: [ occupyingSocket destroy ]
 ]
 
 { #category : 'tests' }
 PIFSServerTest >> testStartEndpointOnRegistersServerByPort [
 
-	| projectionServer |
-	projectionServer := PIFSServer startEndpointOn: self testPort.
-	self assert: (PIFSServer serverOn: self testPort) equals: projectionServer.
-	self assert: projectionServer port equals: self testPort
+	| port projectionServer |
+	port := self freePort.
+	projectionServer := PIFSServer startEndpointOn: port.
+	self assert: (PIFSServer serverOn: port) equals: projectionServer.
+	self assert: projectionServer port equals: port
 ]
 
 { #category : 'tests' }
 PIFSServerTest >> testStartFailsWhenTheDaemonDoesNotMount [
 	"A daemon whose mount fails logs why and may keep running. It is launched in the background, so start used to answer a port over a mount that never came."
 
-	| directory error |
+	| directory error log |
 	PIFSServer daemonRunsHere ifFalse: [ ^ self skip: 'The daemon runs on macOS and Linux only.' ].
 	directory := self daemonDirectory.
 	[
@@ -326,16 +391,22 @@ PIFSServerTest >> testStartFailsWhenTheDaemonDoesNotMount [
 			             'exec sleep 30' ))
 			         mountedAt: directory / 'mount'.
 		self assert: error isNotNil.
+		self assert: error errorCode equals: 'MountTimedOut'.
 		self assert: (error messageText includesSubstring: 'did not mount').
 		self assert: (error messageText includesSubstring: 'mount failed: permission denied').
-		self assert: PIFSServer serversByPort isEmpty ] ensure: [ directory ensureDeleteAll ]
+		log := (error details at: #daemonLog) asFileReference.
+		self assert: log exists.
+		self assert: (error messageText includesSubstring: log pathString).
+		self assert: PIFSServer serversByPort isEmpty ] ensure: [
+			self deleteKeptLogOf: error.
+			directory ensureDeleteAll ]
 ]
 
 { #category : 'tests' }
 PIFSServerTest >> testStartFailsWhenTheDaemonExitsBeforeMounting [
-	"The daemon's own words reach the error."
+	"The daemon's own words reach the error, and its log is kept where the error says, for the rest of them."
 
-	| directory error |
+	| directory error log |
 	PIFSServer daemonRunsHere ifFalse: [ ^ self skip: 'The daemon runs on macOS and Linux only.' ].
 	directory := self daemonDirectory.
 	[
@@ -344,8 +415,33 @@ PIFSServerTest >> testStartFailsWhenTheDaemonExitsBeforeMounting [
 			             'exit 1' ))
 			         mountedAt: directory / 'mount'.
 		self assert: error isNotNil.
+		self assert: error errorCode equals: 'DaemonExitedBeforeMounting'.
 		self assert: (error messageText includesSubstring: 'exited before mounting').
 		self assert: (error messageText includesSubstring: 'FUSE needs fusermount3').
+		log := (error details at: #daemonLog) asFileReference.
+		self assert: (error messageText includesSubstring: log pathString).
+		self assert: (log contents includesSubstring: 'FUSE needs fusermount3').
+		self assert: PIFSServer serversByPort isEmpty ] ensure: [
+			self deleteKeptLogOf: error.
+			directory ensureDeleteAll ]
+]
+
+{ #category : 'tests' }
+PIFSServerTest >> testStartRefusesAMountPathAFileIsIn [
+	"Pharo would name only the path it could not make a directory of, so the error says what it was for. The daemon is never launched."
+
+	| directory file error |
+	PIFSServer daemonRunsHere ifFalse: [ ^ self skip: 'The daemon runs on macOS and Linux only.' ].
+	directory := self daemonDirectory.
+	file := (directory / 'a-file') ensureCreateFile.
+	[
+		error := self
+			         startWithDaemon: (self fakeDaemonIn: directory running: #( 'echo "launched over a file"' 'exit 1' ))
+			         mountedAt: file.
+		self assert: error isNotNil.
+		self assert: error errorCode equals: 'MountPathCreationFailed'.
+		self assert: (error messageText includesSubstring: file pathString).
+		self deny: (error messageText includesSubstring: 'launched over a file').
 		self assert: PIFSServer serversByPort isEmpty ] ensure: [ directory ensureDeleteAll ]
 ]
 
@@ -364,6 +460,7 @@ PIFSServerTest >> testStartRefusesAPathSomethingStaysMountedAt [
 		         on: Error
 		         do: [ :each | each ].
 	self assert: error isNotNil.
+	self assert: error errorCode equals: 'MountPathInUse'.
 	self assert: (error messageText includesSubstring: 'already mounted at /dev').
 	self assert: PIFSServer serversByPort isEmpty
 ]
@@ -371,20 +468,22 @@ PIFSServerTest >> testStartRefusesAPathSomethingStaysMountedAt [
 { #category : 'tests' }
 PIFSServerTest >> testStartingSamePortReplacesRegisteredServer [
 
-	| firstServer secondServer |
-	firstServer := PIFSServer startEndpointOn: self testPort.
-	secondServer := PIFSServer startEndpointOn: self testPort.
+	| firstServer port secondServer |
+	firstServer := PIFSServer startEndpointOn: 0.
+	port := firstServer port.
+	secondServer := PIFSServer startEndpointOn: port.
 	self deny: firstServer == secondServer.
-	self assert: (PIFSServer serverOn: self testPort) equals: secondServer.
+	self assert: (PIFSServer serverOn: port) equals: secondServer.
 	self assert: firstServer port isNil
 ]
 
 { #category : 'tests' }
 PIFSServerTest >> testStopOnUnregistersServerByPort [
 
-	PIFSServer startEndpointOn: self testPort.
-	PIFSServer stopOn: self testPort.
-	self assert: (PIFSServer serverOn: self testPort) isNil
+	| port |
+	port := (PIFSServer startEndpointOn: 0) port.
+	PIFSServer stopOn: port.
+	self assert: (PIFSServer serverOn: port) isNil
 ]
 
 { #category : 'tests' }

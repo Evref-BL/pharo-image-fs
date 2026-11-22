@@ -35,8 +35,18 @@ PIFSTool class >> toolIconSpec [
 	^ MCPToolIconSpec baseIconNamed: #pharoHalfScale badgeIconNamed: self projectionIconBadgeName
 ]
 
+{ #category : 'private - results' }
+PIFSTool >> failureResultFor: aPIFSError [
+	"A failure PIFS saw coming says what happened in its text, and which failure it is in its code, which MCP reads from the details as errorCode. Its own details, such as where the daemon's log is, go with them."
+
+	^ self errorResultText: aPIFSError messageText details: (aPIFSError details copy
+			   at: #errorClass put: aPIFSError class name;
+			   at: #errorCode put: aPIFSError errorCode;
+			   yourself)
+]
+
 { #category : 'private - projections' }
-PIFSTool >> missingProjectionResultText: aText [
+PIFSTool >> missingProjectionResultText: aText errorCode: anErrorCode [
 	"Nothing was mounted or unmounted, so say what the image is actually serving. The text is what an agent reads, so the answer belongs in it and not only in the details."
 
 	| entries |
@@ -46,7 +56,9 @@ PIFSTool >> missingProjectionResultText: aText [
 					   'Serving: ' , (', ' join:
 						    (entries collect: [ :each | (each at: #mountPath ifAbsent: [ 'no mount' ]) , ' on port ' , (each at: #port) asString ]))
 					   , '.' ])
-		  details: { (#projections -> entries) } asDictionary
+		  details: {
+				  (#errorCode -> anErrorCode).
+				  (#projections -> entries) } asDictionary
 ]
 
 { #category : 'private - projections' }

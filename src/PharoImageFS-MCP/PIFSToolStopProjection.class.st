@@ -30,10 +30,12 @@ PIFSToolStopProjection >> buildInputSchema [
 		  type: 'object';
 		  properties: {
 				  (self schemaPropertyNamed: 'mountPath' type: 'string' description: 'Directory the projection to stop is mounted at.').
-				  (self
-					   schemaPropertyNamed: 'port'
-					   type: 'integer'
-					   description: 'Port the projection to stop answers on, instead of naming its mount path.') };
+				  ((self
+					    schemaPropertyNamed: 'port'
+					    type: 'integer'
+					    description: 'Port the projection to stop answers on, instead of naming its mount path.')
+					   minimum: 1;
+					   yourself) };
 		  required: #(  );
 		  yourself
 ]
@@ -54,14 +56,17 @@ PIFSToolStopProjection >> executeWithRequest: request [
 			^ self
 				  projectionOnPort: port
 				  ifFound: [ :server | self stopProjection: server ]
-				  ifNone: [ self missingProjectionResultText: 'No projection answers on port ' , port asString , '.' ] ].
+				  ifNone: [
+				  self missingProjectionResultText: 'No projection answers on port ' , port asString , '.' errorCode: 'ProjectionNotFound' ] ].
 	mountPath := request stringArgumentNamed: 'mountPath' default: nil.
 	mountPath ifNil: [
-		^ self missingProjectionResultText: 'Name the projection to stop by its mountPath, or by the port it answers on.' ].
+			^ self
+				  missingProjectionResultText: 'Name the projection to stop by its mountPath, or by the port it answers on.'
+				  errorCode: 'MountPathOrPortRequired' ].
 	^ self
 		  projectionServingMountPath: mountPath
 		  ifFound: [ :server | self stopProjection: server ]
-		  ifNone: [ self missingProjectionResultText: 'No projection is mounted at ' , mountPath , '.' ]
+		  ifNone: [ self missingProjectionResultText: 'No projection is mounted at ' , mountPath , '.' errorCode: 'ProjectionNotFound' ]
 ]
 
 { #category : 'executing' }
