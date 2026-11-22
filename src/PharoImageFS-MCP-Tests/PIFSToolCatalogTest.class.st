@@ -19,14 +19,14 @@ PIFSToolCatalogTest >> testEveryProjectionToolCarriesAnIconOfItsOwn [
 
 { #category : 'tests' }
 PIFSToolCatalogTest >> testEveryProjectionToolIsDiscoveredRatherThanAdvertised [
-	"An image serves forty-odd tools and advertises fifteen. Starting and stopping a projection is the business of whatever mounts it, not something an agent needs in front of it."
+	"Starting and stopping a projection is the business of whatever mounts it, not something an agent needs in front of it, so an agent finds these tools by searching rather than in the list it is given."
 
 	PIFSTool concreteSubclasses do: [ :each | self assert: each new defaultExposure equals: 'discoverable' ]
 ]
 
 { #category : 'tests' }
 PIFSToolCatalogTest >> testEveryProjectionToolJoinsTheCatalog [
-	"MCP registers the tools of its own package and leaves every other one out, so a tool PIFS ships only reaches a client because PIFSTool says it should."
+	"A projection tool reaches a client only from the registry clients are served from."
 
 	| registered |
 	registered := MCPToolRegistry default toolNames.
