@@ -19,7 +19,7 @@ PIFSToolCatalogTest >> testEveryProjectionToolCarriesAnIconOfItsOwn [
 
 { #category : 'tests' }
 PIFSToolCatalogTest >> testEveryProjectionToolIsDiscoveredRatherThanAdvertised [
-	"An image serves forty-odd tools and advertises fifteen. A projection is the plugin's business, not something an agent needs in front of it."
+	"An image serves forty-odd tools and advertises fifteen. Starting and stopping a projection is the business of whatever mounts it, not something an agent needs in front of it."
 
 	PIFSTool concreteSubclasses do: [ :each | self assert: each new defaultExposure equals: 'discoverable' ]
 ]

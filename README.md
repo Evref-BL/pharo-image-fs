@@ -95,7 +95,7 @@ For a project-specific mountpoint and volume name:
 
 ```smalltalk
 PIFSServer
-	startMountedAt: '.pharo-agent/projection' asFileReference
+	startMountedAt: 'projection' asFileReference
 	named: 'pharo-image-fs'
 ```
 
