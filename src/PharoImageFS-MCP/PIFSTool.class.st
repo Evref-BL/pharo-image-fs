@@ -37,11 +37,12 @@ PIFSTool class >> toolIconSpec [
 
 { #category : 'private - results' }
 PIFSTool >> failureResultFor: aPIFSError [
-	"A failure PIFS saw coming says what happened in its text, and which failure it is in its code, which MCP reads from the details as errorCode."
+	"A failure PIFS saw coming says what happened in its text, and which failure it is in its code, which MCP reads from the details as errorCode. Its own details, such as where the daemon's log is, go with them."
 
-	^ self errorResultText: aPIFSError messageText details: {
-			  (#errorClass -> aPIFSError class name).
-			  (#errorCode -> aPIFSError errorCode) } asDictionary
+	^ self errorResultText: aPIFSError messageText details: (aPIFSError details copy
+			   at: #errorClass put: aPIFSError class name;
+			   at: #errorCode put: aPIFSError errorCode;
+			   yourself)
 ]
 
 { #category : 'private - projections' }
