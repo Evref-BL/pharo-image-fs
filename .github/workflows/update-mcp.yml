@@ -99,8 +99,16 @@ jobs:
                 sleep 30
                 gh pr checks "$PR_NUMBER" --watch --interval 10
               fi
-              gh pr merge "$PR_NUMBER" --squash --delete-branch
-              exit 0
+              # GitHub can refuse the merge for a few seconds after the last check
+              # passes, and fail the branch deletion after a merge that worked: the
+              # pull request's state says whether it merged.
+              for _ in {1..12}; do
+                gh pr merge "$PR_NUMBER" --squash --delete-branch || true
+                [ "$(gh pr view "$PR_NUMBER" --json state --jq .state)" = MERGED ] && exit 0
+                sleep 10
+              done
+              echo "PR #$PR_NUMBER did not merge."
+              exit 1
             fi
             sleep 5
           done
