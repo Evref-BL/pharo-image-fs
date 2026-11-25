@@ -8,7 +8,7 @@ Class {
 { #category : 'accessing' }
 PIFSVersion class >> current [
 
-	^ '0.14.3'
+	^ '0.14.4'
 ]
 
 { #category : 'accessing' }
