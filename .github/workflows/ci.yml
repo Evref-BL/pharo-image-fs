@@ -1,16 +1,13 @@
 name: CI
 
+# Every push and pull request runs the matrix, so each check the default
+# branch requires reports. A change that touches only documentation skips the
+# image steps, and the check reports success.
 on:
   push:
     branches:
       - main
-    paths-ignore:
-      - '**.md'
-      - LICENSE
   pull_request:
-    paths-ignore:
-      - '**.md'
-      - LICENSE
   workflow_dispatch:
 
 jobs:
@@ -33,13 +30,30 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Tell whether code changed
+        id: changes
+        shell: bash
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            echo 'code=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          code=$(git diff --name-only "$BASE" "$GITHUB_SHA" | grep -vE '\.md$|^LICENSE$' || true)
+          if [ -n "$code" ]; then echo 'code=true'; else echo 'code=false'; fi >> "$GITHUB_OUTPUT"
 
       - name: Set up smalltalkCI
+        if: ${{ steps.changes.outputs.code == 'true' }}
         uses: hpi-swa/setup-smalltalkCI@v1
         with:
           smalltalk-image: Pharo64-${{ matrix.pharo }}
 
       - name: Test
+        if: ${{ steps.changes.outputs.code == 'true' }}
         run: smalltalkci -s Pharo64-${{ matrix.pharo }}
         shell: bash
         timeout-minutes: 15
