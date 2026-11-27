@@ -58,17 +58,17 @@ jobs:
         shell: bash
         timeout-minutes: 15
 
-  # release.yml and update-mcp.yml read these two versions out of Pharo source.
-  # Running the same script here means a method they name cannot be renamed
-  # without failing the pull request that renames it.
+  # release.yml reads the version out of Pharo source. Running the same script
+  # here means the method it names cannot be renamed without failing the pull
+  # request that renames it.
   versions:
-    name: Release versions
+    name: Release version
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Read the versions the release automation reads
+      - name: Read the version the release reads
         run: .github/scripts/versions.sh check
 
   # The one check main's ruleset requires: it fails unless every job above
