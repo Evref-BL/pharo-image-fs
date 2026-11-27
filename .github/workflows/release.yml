@@ -18,9 +18,14 @@ concurrency:
 
 jobs:
   release:
+    # Only CI on a push to this repository's main releases. A pull request's
+    # run names its own branch, which a fork may call main.
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+      (github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == github.repository)
     runs-on: ubuntu-latest
     env:
       RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
