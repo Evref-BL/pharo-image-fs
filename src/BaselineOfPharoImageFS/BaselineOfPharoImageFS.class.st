@@ -13,9 +13,10 @@ BaselineOfPharoImageFS >> baseline: spec [
 
 	<baseline>
 	spec for: #common do: [
+			"MCP's major release rather than one release: MCP moves the tag to each of them."
 			spec baseline: 'MCP' with: [
 					spec
-						repository: 'github://Evref-BL/MCP:v' , self mcpVersion , '/src';
+						repository: 'github://Evref-BL/MCP:v4.x.x/src';
 						loads: #( 'Core' ) ].
 			spec package: 'PharoImageFS' with: [ spec requires: #( 'PharoImageFS-Compatibility' ) ].
 			spec package: 'PharoImageFS-Tests-Resources' with: [ spec requires: #( 'PharoImageFS' ) ].
@@ -43,13 +44,6 @@ BaselineOfPharoImageFS >> baseline: spec [
 BaselineOfPharoImageFS >> currentPharoVersionSpec [
 
 	^ ('pharo' , SystemVersion current major asString , '.x') asSymbol
-]
-
-{ #category : 'baseline' }
-BaselineOfPharoImageFS >> mcpVersion [
-	"Its own method so that the release automation reads a pin that no edit to #baseline: can move."
-
-	^ '4.6.1'
 ]
 
 { #category : 'baseline' }

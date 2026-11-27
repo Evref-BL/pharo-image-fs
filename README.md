@@ -50,6 +50,17 @@ The baseline groups are:
   `default`
 - `Tools Tests`: tests for those tools
 
+`Tools` loads MCP's latest 4.x release. An image that already serves MCP keeps
+its own:
+
+```smalltalk
+Metacello new
+	baseline: 'PharoImageFS';
+	repository: 'github://Evref-BL/pharo-image-fs:main/src';
+	onConflictUseLoaded;
+	load: #( 'Tools' )
+```
+
 ## Use
 
 Start the projection from the image:
